@@ -32,7 +32,7 @@ jobs:
         id: gradle_build
         run: |
           set -o pipefail
-          ./gradlew build --no-daemon 2>&1 | tee build.log
+          ./gradlew build --no-daemon --info 2>&1 | tee build.log
 
       - name: Post failure log to commit comment
         if: failure()
@@ -43,8 +43,6 @@ jobs:
           import os, subprocess
           with open("build.log", "r", errors="replace") as f:
               lines = f.readlines()
-          important = [l for l in lines if "warning: [removal]" not in l and "super.finalize()" not in l and not l.strip().startswith("^") or "error:" in l]
-          # Actually keep full context around error: lines plus tail
           out = []
           for i, l in enumerate(lines):
               if "error:" in l or "FAILURE:" in l or "What went wrong" in l or l.startswith("> Task"):
@@ -71,19 +69,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           {
-            echo "=== Task log (filtered) ==="
-            grep -E '^> Task|BUILD |actionable|error|warn' build.log | head -n 120 || true
-            echo ""
+            echo "=== Task :remapJar info ==="
+            awk '/^> Task :remapJar/,/^> Task /' build.log | head -n 120 || true
+            echo "=== Task :mcef:remapJar info ==="
+            awk '/^> Task :mcef:remapJar/,/^> Task /' build.log | head -n 80 || true
             echo "=== build/libs ==="
             ls -lh build/libs/ || true
             echo "=== build/devlibs ==="
             ls -lh build/devlibs/ || true
-            echo "=== mcef/build/libs ==="
-            ls -lh mcef/build/libs/ || true
-            echo ""
-            MAIN_JAR=$(ls build/libs/webdisplays-fabric-*.jar | grep -vE '(-sources|-dev)\.jar$' | head -n1)
-            echo "Main JAR: $MAIN_JAR"
-            unzip -l "$MAIN_JAR" | head -n 150 || true
           } > jar_summary.txt
           python3 - <<'PY'
           import os, subprocess
