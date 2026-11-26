@@ -262,38 +262,56 @@ public class MCEFBrowser extends CefBrowserOsr {
             }
         }
 
-        CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_UP, keyCode, (char) keyCode, modifiers);
+        CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_RELEASE, keyCode, (char) keyCode, modifiers);
         e.scancode = scanCode;
         sendKeyEvent(e);
     }
 
     public void sendKeyTyped(char c, int modifiers) {
+        if (browserControls) {
+            if (modifiers == GLFW_MOD_CONTROL) {
+                if ((int) c == GLFW_KEY_R) return;
+                else if ((int) c == GLFW_KEY_EQUAL) return;
+                else if ((int) c == GLFW_KEY_MINUS) return;
+                else if ((int) c == GLFW_KEY_0) return;
+            } else if (modifiers == GLFW_MOD_ALT) {
+                if ((int) c == GLFW_KEY_LEFT && canGoBack()) return;
+                else if ((int) c == GLFW_KEY_RIGHT && canGoForward()) return;
+            }
+        }
+
         CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_TYPE, c, c, modifiers);
         sendKeyEvent(e);
     }
 
     public void sendMouseMove(int mouseX, int mouseY) {
-        CefMouseEvent e = new CefMouseEvent(CefMouseEvent.MOUSE_MOVED, mouseX, mouseY, 0, 0, btnMask);
+        CefMouseEvent e = new CefMouseEvent(CefMouseEvent.MOUSE_MOVED, mouseX, mouseY, 0, 0, dragContext.getVirtualModifiers(btnMask));
         sendMouseEvent(e);
 
         if (dragContext.isDragging()) {
-            this.dragTargetDragOver(new Point(mouseX, mouseY), btnMask, dragContext.getMask());
+            this.dragTargetDragOver(new Point(mouseX, mouseY), 0, dragContext.getMask());
         }
     }
 
     public void sendMousePress(int mouseX, int mouseY, int button) {
-        if (button == GLFW_MOUSE_BUTTON_LEFT) btnMask |= CefMouseEvent.BUTTON1_MASK;
-        else if (button == GLFW_MOUSE_BUTTON_MIDDLE) btnMask |= CefMouseEvent.BUTTON2_MASK;
-        else if (button == GLFW_MOUSE_BUTTON_RIGHT) btnMask |= CefMouseEvent.BUTTON3_MASK;
+        if (button == 1) button = 2;
+        else if (button == 2) button = 1;
 
-        CefMouseEvent e = new CefMouseEvent(CefMouseEvent.MOUSE_PRESSED, mouseX, mouseY, 1, button, btnMask);
+        if (button == 0) btnMask |= CefMouseEvent.BUTTON1_MASK;
+        else if (button == 1) btnMask |= CefMouseEvent.BUTTON2_MASK;
+        else if (button == 2) btnMask |= CefMouseEvent.BUTTON3_MASK;
+
+        CefMouseEvent e = new CefMouseEvent(GLFW_PRESS, mouseX, mouseY, 1, button, btnMask);
         sendMouseEvent(e);
     }
 
     public void sendMouseRelease(int mouseX, int mouseY, int button) {
-        if (button == GLFW_MOUSE_BUTTON_LEFT && (btnMask & CefMouseEvent.BUTTON1_MASK) != 0) btnMask ^= CefMouseEvent.BUTTON1_MASK;
-        else if (button == GLFW_MOUSE_BUTTON_MIDDLE && (btnMask & CefMouseEvent.BUTTON2_MASK) != 0) btnMask ^= CefMouseEvent.BUTTON2_MASK;
-        else if (button == GLFW_MOUSE_BUTTON_RIGHT && (btnMask & CefMouseEvent.BUTTON3_MASK) != 0) btnMask ^= CefMouseEvent.BUTTON3_MASK;
+        if (button == 1) button = 2;
+        else if (button == 2) button = 1;
+
+        if (button == 0 && (btnMask & CefMouseEvent.BUTTON1_MASK) != 0) btnMask ^= CefMouseEvent.BUTTON1_MASK;
+        else if (button == 1 && (btnMask & CefMouseEvent.BUTTON2_MASK) != 0) btnMask ^= CefMouseEvent.BUTTON2_MASK;
+        else if (button == 2 && (btnMask & CefMouseEvent.BUTTON3_MASK) != 0) btnMask ^= CefMouseEvent.BUTTON3_MASK;
 
         CefMouseEvent e = new CefMouseEvent(GLFW_RELEASE, mouseX, mouseY, 1, button, btnMask);
         sendMouseEvent(e);
