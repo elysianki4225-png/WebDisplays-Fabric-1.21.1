@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "${mod_id}",
+  "version": "${mod_version}",
+  "name": "${mod_name}",
+  "description": "Optimized multi-architecture Minecraft Chromium Embedded Framework (x86_64 & ARM64).",
+  "authors": [
+    "${mod_vendor}"
+  ],
+  "contact": {
+    "homepage": "https://github.com/CinemaMod/mcef",
+    "issues": "https://github.com/CinemaMod/mcef/issues",
+    "sources": "https://github.com/CinemaMod/mcef"
+  },
+  "license": "LGPL-2.1-only",
+  "icon": "icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "client": [
+      "com.cinemamod.mcef.FabricMCEFClientMod"
+    ],
+    "main": [
+      "com.cinemamod.mcef.FabricMCEFMod"
+    ]
+  },
+  "mixins": [
+    "mcef.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${fabric_loader_version}",
+    "minecraft": "~1.21.1",
+    "java": ">=${java_version}"
+  },
+  "custom": {
+    "modmenu": {
+      "badges": [ "library" ]
+    }
+  }
+}
