@@ -70,11 +70,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ls -lh build/libs/ > jar_summary.txt
-          echo "" >> jar_summary.txt
-          MAIN_JAR=$(ls build/libs/webdisplays-fabric-*.jar | grep -vE '(-sources|-dev)\.jar$' | head -n1)
-          echo "Main JAR: $MAIN_JAR" >> jar_summary.txt
-          unzip -l "$MAIN_JAR" | grep -E 'META-INF/jars/|fabric\.mod\.json' >> jar_summary.txt || true
+          {
+            echo "=== Task log (filtered) ==="
+            grep -E '^> Task|BUILD |actionable|error|warn' build.log | head -n 120 || true
+            echo ""
+            echo "=== build/libs ==="
+            ls -lh build/libs/ || true
+            echo "=== build/devlibs ==="
+            ls -lh build/devlibs/ || true
+            echo "=== mcef/build/libs ==="
+            ls -lh mcef/build/libs/ || true
+            echo ""
+            MAIN_JAR=$(ls build/libs/webdisplays-fabric-*.jar | grep -vE '(-sources|-dev)\.jar$' | head -n1)
+            echo "Main JAR: $MAIN_JAR"
+            unzip -l "$MAIN_JAR" | head -n 150 || true
+          } > jar_summary.txt
           python3 - <<'PY'
           import os, subprocess
           with open("jar_summary.txt", "r", errors="replace") as f:
