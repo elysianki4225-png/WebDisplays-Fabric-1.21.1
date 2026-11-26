@@ -180,9 +180,9 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 		ci.cancel();
 	}
 
-	private long cachedCrosshairTick = Long.MIN_VALUE;
-	private int cachedCrosshairX = 240;
-	private int cachedCrosshairY = 240;
+	private static long cachedCrosshairTick = Long.MIN_VALUE;
+	private static int cachedCrosshairX = 240;
+	private static int cachedCrosshairY = 240;
 	
 	public class PadData {
 		
