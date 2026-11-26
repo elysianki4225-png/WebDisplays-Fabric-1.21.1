@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "id": "webdisplays",
+  "version": "${version}",
+  "name": "WebDisplays",
+  "description": "Create and interact with web browsers in Minecraft. Standalone Fabric 1.21.1 edition with bundled dependencies, rendering/performance optimizations, and ARM64 + x86_64 support.",
+  "authors": [
+    "montoyo",
+    "CinemaMod Group",
+    "GiantLuigi4",
+    "ds58",
+    "Mysticpasta1",
+    "WaterPicker",
+    "InkMorning"
+  ],
+  "contact": {
+    "homepage": "https://www.mcmod.cn/class/8643.html",
+    "sources": "https://github.com/elysianki4225-png/WebDisplays-Fabric-1.21.1"
+  },
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "net.montoyo.wd.WebDisplaysFabric"
+    ],
+    "client": [
+      "net.montoyo.wd.client.WebDisplaysFabricClient"
+    ]
+  },
+  "mixins": [
+    "webdisplays.mixins.json"
+  ],
+  "accessWidener": "webdisplays.accesswidener",
+  "depends": {
+    "fabricloader": ">=0.16.14",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "mcef": "*",
+    "cloth-config": ">=15.0.0",
+    "fabric-api-base": "*",
+    "fabric-lifecycle-events-v1": "*",
+    "fabric-networking-api-v1": "*",
+    "fabric-resource-loader-v0": "*"
+  }
+}
