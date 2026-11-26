@@ -32,7 +32,7 @@ jobs:
         id: gradle_build
         run: |
           set -o pipefail
-          ./gradlew build --no-daemon --stacktrace 2>&1 | tee build.log
+          ./gradlew build --no-daemon 2>&1 | tee build.log
 
       - name: Post failure log to commit comment
         if: failure()
@@ -40,13 +40,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 - <<'PY'
-          import json, os, subprocess
+          import os, subprocess
           with open("build.log", "r", errors="replace") as f:
               lines = f.readlines()
-          tail = "".join(lines[-250:])
-          if len(tail) > 60000:
-              tail = tail[-60000:]
-          body = "### Build failed\n```text\n" + tail + "\n```"
+          important = [l for l in lines if "warning: [removal]" not in l and "super.finalize()" not in l and not l.strip().startswith("^") or "error:" in l]
+          # Actually keep full context around error: lines plus tail
+          out = []
+          for i, l in enumerate(lines):
+              if "error:" in l or "FAILURE:" in l or "What went wrong" in l or l.startswith("> Task"):
+                  start = max(0, i - 2)
+                  end = min(len(lines), i + 8)
+                  out.extend(lines[start:end])
+          if not out:
+              out = lines[-200:]
+          body_text = "".join(out)
+          if len(body_text) > 55000:
+              body_text = body_text[-55000:]
+          body = "### Build failed\n```text\n" + body_text + "\n```"
           repo = os.environ["GITHUB_REPOSITORY"]
           sha = os.environ["GITHUB_SHA"]
           subprocess.run(
