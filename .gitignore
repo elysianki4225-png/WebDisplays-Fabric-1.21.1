@@ -1,23 +1,23 @@
 # Gradle & IDE
-.gradle/
-build/
-mcef/build/
-mcef/.gradle/
-out/
-.idea/
+/.gradle/
+/build/
+/mcef/build/
+/mcef/.gradle/
+/out/
+/.idea/
 *.iml
-.vscode/
+/.vscode/
 *.classpath
 *.project
-.settings/
+/.settings/
 
 # Minecraft runtime
-run/
-logs/
-crash-reports/
-saves/
-config/
-mods/
+/run/
+/logs/
+/crash-reports/
+/saves/
+/config/
+/mods/
 
 # OS
 .DS_Store
