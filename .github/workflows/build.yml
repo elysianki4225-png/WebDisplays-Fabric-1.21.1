@@ -118,3 +118,10 @@ jobs:
             --title "WebDisplays Fabric 1.21.1 ($TAG)" \
             --notes "Automated standalone build with bundled MCEF, Cloth Config, and Fabric API modules (ARM64 + x86_64)." \
             --prerelease || gh release upload "$TAG" "$MAIN_JAR" --clobber
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            gh release create "latest" "$MAIN_JAR" \
+              --target "${GITHUB_SHA}" \
+              --title "WebDisplays Fabric 1.21.1 Latest" \
+              --notes "Latest stable standalone build for Minecraft Fabric 1.21.1 (ARM64 + x86_64, all dependencies bundled)." \
+              || gh release upload "latest" "$MAIN_JAR" --clobber
+          fi
