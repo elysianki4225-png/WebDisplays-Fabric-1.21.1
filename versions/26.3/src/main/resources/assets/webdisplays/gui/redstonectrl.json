@@ -4,7 +4,7 @@
       "type": "Icon",
       "resourceLocation": "webdisplays:textures/gui/edges.png",
       "x": 0,
-      "y": 1,
+      "y": 2,
       "width": 16,
       "height": 16,
       "v1": 0.0,
@@ -13,23 +13,25 @@
     {
       "type": "TextField",
       "name": "tfRisingEdge",
-      "x": 20,
+      "x": 22,
       "y": 0,
-      "width": 280,
+      "width": 276,
+      "height": 20,
       "maxLength": 65535
     },
     {
       "type": "YTButton",
-      "x": 305,
+      "x": 302,
       "y": 0,
-      "width": 20,
+      "width": 24,
+      "height": 20,
       "urlField": "tfRisingEdge"
     },
     {
       "type": "Icon",
       "resourceLocation": "webdisplays:textures/gui/edges.png",
       "x": 0,
-      "y": 26,
+      "y": 28,
       "width": 16,
       "height": 16,
       "v1": 0.5,
@@ -38,35 +40,39 @@
     {
       "type": "TextField",
       "name": "tfFallingEdge",
-      "x": 20,
-      "y": 24,
-      "width": 280,
+      "x": 22,
+      "y": 26,
+      "width": 276,
+      "height": 20,
       "maxLength": 65535
     },
     {
       "type": "YTButton",
-      "x": 305,
-      "y": 24,
-      "width": 20,
+      "x": 302,
+      "y": 26,
+      "width": 24,
+      "height": 20,
       "urlField": "tfFallingEdge"
-    },
-    {
-      "type": "Button",
-      "name": "btnOk",
-      "label": "$webdisplays.gui.seturl.ok",
-      "x": 20,
-      "y": 48,
-      "width": 137
     },
     {
       "type": "Button",
       "name": "btnCancel",
       "label": "$webdisplays.gui.seturl.cancel",
-      "x": 163,
-      "y": 48,
-      "width": 137
+      "x": 22,
+      "y": 54,
+      "width": 148,
+      "height": 20,
+      "variant": "default"
+    },
+    {
+      "type": "Button",
+      "name": "btnOk",
+      "label": "$webdisplays.gui.seturl.ok",
+      "x": 178,
+      "y": 54,
+      "width": 148,
+      "height": 20,
+      "variant": "primary"
     }
-  ],
-
-  "center": true
+  ]
 }

@@ -3,23 +3,26 @@
     {
       "type": "Label",
       "label": "$webdisplays.gui.seturl.url",
+      "color": "#9AA7BC",
       "x": 0,
       "y": 0,
-      "shadowed": true
+      "shadowed": false
     },
     {
       "type": "TextField",
       "name": "tfURL",
       "x": 0,
       "y": 12,
-      "width": 272,
+      "width": 276,
+      "height": 20,
       "maxLength": 65535
     },
     {
       "type": "YTButton",
-      "x": 276,
-      "y": 13,
-      "width": 20,
+      "x": 280,
+      "y": 12,
+      "width": 24,
+      "height": 20,
       "urlField": "tfURL"
     },
     {
@@ -28,7 +31,9 @@
       "label": "$webdisplays.gui.seturl.shutdown",
       "x": 0,
       "y": 38,
-      "width": 96,
+      "width": 98,
+      "height": 20,
+      "variant": "danger",
       "visible": "isPad",
       "disabled": "1 - isPad"
     },
@@ -36,18 +41,21 @@
       "type": "Button",
       "name": "btnCancel",
       "label": "$webdisplays.gui.seturl.cancel",
-      "x": "isPad & 100 | 0",
+      "x": "isPad & 103 | 0",
       "y": 38,
-      "width": "isPad & 96 | 146"
+      "width": "isPad & 98 | 149",
+      "height": 20,
+      "variant": "default"
     },
     {
       "type": "Button",
       "name": "btnOk",
       "label": "$webdisplays.gui.seturl.ok",
-      "x": "isPad & 200 | 150",
+      "x": "isPad & 206 | 155",
       "y": 38,
-      "width": "isPad & 96 | 146"
+      "width": "isPad & 98 | 149",
+      "height": 20,
+      "variant": "primary"
     }
-  ],
-  "center": true
+  ]
 }

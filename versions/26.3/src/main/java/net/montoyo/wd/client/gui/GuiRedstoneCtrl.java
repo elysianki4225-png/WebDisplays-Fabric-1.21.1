@@ -4,6 +4,8 @@
 
 package net.montoyo.wd.client.gui;
 
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.resources.language.I18n;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -36,6 +38,8 @@ public class GuiRedstoneCtrl extends WDScreen {
     @FillControl
     private Button btnOk;
 
+    private int[] panelBounds;
+
     public GuiRedstoneCtrl(Component component, Identifier d, Vector3i p, String r, String f) {
         super(component);
         dimension = d;
@@ -48,8 +52,23 @@ public class GuiRedstoneCtrl extends WDScreen {
     public void init() {
         super.init();
         loadFrom(Identifier.fromNamespaceAndPath("webdisplays", "gui/redstonectrl.json"));
+        panelBounds = centerInPanel(12, 32, 10);
         tfRisingEdge.setText(risingEdgeURL);
         tfFallingEdge.setText(fallingEdgeURL);
+    }
+
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
+        if (panelBounds != null) {
+            WDTheme.drawGlassPanelWithHeader(
+                    graphics,
+                    font,
+                    panelBounds[0], panelBounds[1], panelBounds[2], panelBounds[3],
+                    I18n.get("block.webdisplays.redctrl"),
+                    null
+            );
+        }
+        super.extractRenderState(graphics, mouseX, mouseY, ptt);
     }
 
 //    @GuiSubscribe

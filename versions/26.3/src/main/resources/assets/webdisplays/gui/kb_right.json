@@ -2,35 +2,36 @@
   "controls": [
     {
       "type": "Label",
-      "x": 5,
-      "y": 5,
+      "x": 8,
+      "y": 8,
       "label": "$webdisplays.gui.keyboard.hooked",
-      "color": "yellow",
+      "color": "#E2E8F0",
       "name": "lblInfo",
       "visible": "1 - showWarning"
     },
     {
       "type": "Label",
       "label": "$webdisplays.gui.keyboard.warning1",
-      "color": "red",
+      "color": "#FCA5A5",
       "visible": "showWarning"
     },
     {
       "type": "Label",
       "label": "$webdisplays.gui.keyboard.warning2",
-      "color": "red",
+      "color": "#E2E8F0",
       "visible": "showWarning"
     },
     {
       "type": "Label",
       "label": "$webdisplays.gui.keyboard.warning3",
-      "color": "red",
+      "color": "#FCD34D",
       "visible": "showWarning"
     },
     {
       "type": "Button",
       "name": "btnOk",
       "label": "$webdisplays.gui.keyboard.gotcha",
+      "variant": "primary",
       "visible": "showWarning",
       "disabled": "1 - showWarning"
     }

@@ -4,6 +4,8 @@
 
 package net.montoyo.wd.client.gui;
 
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.resources.language.I18n;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
@@ -40,6 +42,7 @@ public class GuiSetURL2 extends WDScreen {
 	private final boolean isPad;
 
 	private final String screenURL;
+	private int[] panelBounds;
 
 	@FillControl
 	private TextField tfURL;
@@ -73,7 +76,24 @@ public class GuiSetURL2 extends WDScreen {
 	public void init() {
 		super.init();
 		loadFrom(Identifier.fromNamespaceAndPath("webdisplays", "gui/seturl.json"));
+		panelBounds = centerInPanel(12, 32, 10);
 		tfURL.setText(screenURL);
+		tfURL.focus();
+	}
+
+	@Override
+	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
+		if (panelBounds != null) {
+			String title = I18n.get(isPad ? "webdisplays.gui.seturl.title_pad" : "webdisplays.gui.seturl.title");
+			WDTheme.drawGlassPanelWithHeader(
+					graphics,
+					font,
+					panelBounds[0], panelBounds[1], panelBounds[2], panelBounds[3],
+					title,
+					isPad ? "minePad" : null
+			);
+		}
+		super.extractRenderState(graphics, mouseX, mouseY, ptt);
 	}
 
 	@Override

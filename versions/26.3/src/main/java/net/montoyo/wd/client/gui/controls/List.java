@@ -5,6 +5,7 @@
 package net.montoyo.wd.client.gui.controls;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.montoyo.wd.client.gui.WDTheme;
 import net.montoyo.wd.client.gui.loading.JsonOWrapper;
 
 import java.util.ArrayList;
@@ -255,10 +256,14 @@ public class List extends BasicControl {
     @Override
     public void draw(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
         if(visible) {
-            graphics.fill(x, y, x + width, y + height, COLOR_BLACK);
+            graphics.fill(x, y, x + width, y + height, WDTheme.INSET_BG);
 
             graphics.enableScissor(x + 1, y + 1, x + width - 1, y + height - 1);
             int offset = 4 - getYOffset();
+            boolean isDangerSel = (selColor & 0x00FFFFFF) == 0x00FF0000;
+            int rowBg = isDangerSel ? WDTheme.DANGER_SOFT : WDTheme.ACCENT_SOFT;
+            int rowTextSel = isDangerSel ? 0xFFFCA5A5 : 0xFF93C5FD;
+
             for(int i = 0; i < content.size(); i++) {
                 int pos = i * 12 + offset;
 
@@ -266,16 +271,28 @@ public class List extends BasicControl {
                     if(pos >= height - 1)
                         break;
 
-                    int color = (i == selected) ? selColor : COLOR_WHITE;
-                    graphics.text(font, content.get(i).text, x + 4, y + pos, color, false);
+                    if (i == selected) {
+                        graphics.fill(x + 2, y + pos - 2, x + width - 6, y + pos + 10, rowBg);
+                    } else if ((i & 1) == 1) {
+                        graphics.fill(x + 2, y + pos - 2, x + width - 6, y + pos + 10, 0x10FFFFFF);
+                    }
+
+                    int color = (i == selected) ? rowTextSel : WDTheme.TEXT_PRIMARY;
+                    graphics.text(font, content.get(i).text, x + 5, y + pos, color, false);
+                    if (i == selected && isDangerSel) {
+                        graphics.text(font, "×", x + width - 14, y + pos, 0xFFF87171, false);
+                    }
                 }
             }
             graphics.disableScissor();
 
-            drawBorder(graphics, x, y, width, height, 0xFF808080);
+            WDTheme.drawBorder(graphics, x, y, width, height, WDTheme.INSET_BORDER);
 
-            int sbY = y + 1 + (int) scrollPos;
-            fillRect(graphics, x + width - 5, sbY, 4, scrollSize, (scrolling || isInScrollbar(mouseX, mouseY)) ? 0xFF202020 : 0xFF404040);
+            if (contentH > height) {
+                int sbY = y + 2 + (int) scrollPos;
+                int sbH = Math.max(8, scrollSize - 2);
+                fillRect(graphics, x + width - 4, sbY, 2, sbH, (scrolling || isInScrollbar(mouseX, mouseY)) ? WDTheme.ACCENT : 0xFF475569);
+            }
         }
     }
 

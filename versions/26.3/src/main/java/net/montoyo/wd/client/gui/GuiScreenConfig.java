@@ -6,6 +6,7 @@ package net.montoyo.wd.client.gui;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
@@ -16,6 +17,8 @@ import net.minecraft.world.item.ItemStack;
 import net.montoyo.wd.WebDisplays;
 import net.montoyo.wd.client.gui.controls.*;
 import net.montoyo.wd.client.gui.loading.FillControl;
+import net.montoyo.wd.config.CommonConfig;
+import net.montoyo.wd.core.ScreenResolution;
 import net.montoyo.wd.core.ScreenRights;
 import net.montoyo.wd.entity.TileEntityScreen;
 import net.montoyo.wd.item.WDItem;
@@ -106,6 +109,15 @@ public class GuiScreenConfig extends WDScreen {
     private Button btnSetRes;
 
     @FillControl
+    private Button btnAutoRes;
+
+    @FillControl
+    private Button btnPresetHD;
+
+    @FillControl
+    private Button btnPresetFHD;
+
+    @FillControl
     private UpgradeGroup ugUpgrades;
 
     @FillControl
@@ -119,6 +131,7 @@ public class GuiScreenConfig extends WDScreen {
 
     private CheckBox[] friendBoxes;
     private CheckBox[] otherBoxes;
+    private int[] panelBounds;
 
     public GuiScreenConfig(Component component, TileEntityScreen tes, BlockSide side, NameUUIDPair[] friends, int fr, int or) {
         super(component);
@@ -133,6 +146,7 @@ public class GuiScreenConfig extends WDScreen {
     public void init() {
         super.init();
         loadFrom(Identifier.fromNamespaceAndPath("webdisplays", "gui/screencfg.json"));
+        panelBounds = centerInPanel(12, 30, 8);
 
         friendBoxes = new CheckBox[] { boxFResolution, boxFUpgrades, boxFOthers, boxFFriends, boxFClick, boxFSetUrl };
         boxFResolution.setUserdata(ScreenRights.MODIFY_SCREEN);
@@ -178,8 +192,40 @@ public class GuiScreenConfig extends WDScreen {
         Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI( WebDisplays.INSTANCE.soundScreenCfg, 1.0f, 1.0f));
     }
 
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
+        if (panelBounds != null) {
+            TileEntityScreen.Screen scr = tes.getScreen(side);
+            String badge = scr != null
+                    ? (scr.size.x + "×" + scr.size.y + " · " + scr.resolution.x + "×" + scr.resolution.y)
+                    : "";
+            WDTheme.drawGlassPanelWithHeader(
+                    graphics,
+                    font,
+                    panelBounds[0], panelBounds[1], panelBounds[2], panelBounds[3],
+                    I18n.get("webdisplays.gui.screencfg.title"),
+                    badge
+            );
+        }
+        super.extractRenderState(graphics, mouseX, mouseY, ptt);
+    }
+
     private void updateRotationStr() {
         btnChangeRot.setLabel(I18n.get("webdisplays.gui.screencfg.rot" + rotation.getAngleAsInt()));
+    }
+
+    private void applyAdaptivePreset(Vector2i preset) {
+        TileEntityScreen.Screen scr = tes.getScreen(side);
+        if (scr == null)
+            return;
+
+        tfResX.setText("" + preset.x);
+        tfResY.setText("" + preset.y);
+        aspectRatio = ((float) preset.x) / ((float) Math.max(1, preset.y));
+        if (preset.x != scr.resolution.x || preset.y != scr.resolution.y) {
+            WDNetworkRegistry.INSTANCE.sendToServer(C2SMessageScreenCtrl.resolution(tes, side, preset));
+        }
+        btnSetRes.setDisabled(true);
     }
 
     private void addFriend(String name) {
@@ -219,7 +265,30 @@ public class GuiScreenConfig extends WDScreen {
             addFriend(tfFriend.getText().trim());
         else if(ev.getSource() == btnSetRes)
             clickSetRes();
-        else if(ev.getSource() == btnChangeRot) {
+        else if(ev.getSource() == btnAutoRes) {
+            TileEntityScreen.Screen scr = tes.getScreen(side);
+            if (scr != null) {
+                applyAdaptivePreset(ScreenResolution.computeAdaptiveResolution(
+                        scr.size,
+                        CommonConfig.Screen.defaultPixelsPerBlock,
+                        CommonConfig.Screen.minAdaptiveEdge,
+                        CommonConfig.Screen.maxResolutionX,
+                        CommonConfig.Screen.maxResolutionY
+                ));
+            }
+        } else if(ev.getSource() == btnPresetHD) {
+            TileEntityScreen.Screen scr = tes.getScreen(side);
+            if (scr != null) {
+                applyAdaptivePreset(ScreenResolution.computePresetResolution(
+                        scr.size, 720, CommonConfig.Screen.maxResolutionX, CommonConfig.Screen.maxResolutionY));
+            }
+        } else if(ev.getSource() == btnPresetFHD) {
+            TileEntityScreen.Screen scr = tes.getScreen(side);
+            if (scr != null) {
+                applyAdaptivePreset(ScreenResolution.computePresetResolution(
+                        scr.size, 1080, CommonConfig.Screen.maxResolutionX, CommonConfig.Screen.maxResolutionY));
+            }
+        } else if(ev.getSource() == btnChangeRot) {
             Rotation[] rots = Rotation.values();
             WDNetworkRegistry.INSTANCE.sendToServer(new C2SMessageScreenCtrl(tes, side, rots[(rotation.ordinal() + 1) % rots.length]));
         }
@@ -460,6 +529,9 @@ public class GuiScreenConfig extends WDScreen {
         flag = (myRights & ScreenRights.MODIFY_SCREEN) == 0;
         tfResX.setDisabled(flag);
         tfResY.setDisabled(flag);
+        btnAutoRes.setDisabled(flag);
+        btnPresetHD.setDisabled(flag);
+        btnPresetFHD.setDisabled(flag);
         btnChangeRot.setDisabled(flag);
 
         if(flag)

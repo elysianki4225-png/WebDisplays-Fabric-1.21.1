@@ -81,12 +81,16 @@
   "webdisplays.gui.screencfg.rot270": "270°",
   "webdisplays.gui.screencfg.rot90": "90°",
   "webdisplays.gui.screencfg.rotation": "旋转",
-  "webdisplays.gui.screencfg.setres": "设置分辨率",
+  "webdisplays.gui.screencfg.setres": "应用分辨率",
+  "webdisplays.gui.screencfg.autores": "自适应",
+  "webdisplays.gui.screencfg.title": "屏幕配置",
   "webdisplays.gui.screencfg.seturl": "修改网址",
   "webdisplays.gui.screencfg.upgrades": "升级组件：",
   "webdisplays.gui.seturl.cancel": "取消",
   "webdisplays.gui.seturl.ok": "确定",
   "webdisplays.gui.seturl.shutdown": "关机",
+  "webdisplays.gui.seturl.title": "设置屏幕网址",
+  "webdisplays.gui.seturl.title_pad": "掌上电脑网址",
   "webdisplays.gui.seturl.url": "网址：",
   "webdisplays.linker.posInfo": "屏幕坐标：%d %d %d",
   "webdisplays.linker.selectPeripheral": "右键点击一个外部设备",
@@ -179,5 +183,9 @@
   "config.webdisplays.d100": "开始衰减距离",
   "config.webdisplays.backface_culling": "启用屏幕背面剔除",
   "config.webdisplays.pause_culled_screens": "暂停被剔除的屏幕",
-  "config.webdisplays.max_browsers_per_frame": "每帧最多新建浏览器数"
+  "config.webdisplays.max_browsers_per_frame": "每帧最多新建浏览器数",
+  "config.webdisplays.default_ppb": "默认每格像素密度",
+  "config.webdisplays.min_adaptive_edge": "最小自适应长边像素",
+  "config.webdisplays.adaptive_lod": "启用视距自适应分辨率 (LOD)",
+  "config.webdisplays.lod_cooldown_ms": "LOD 分辨率调整冷却 (ms)"
 }

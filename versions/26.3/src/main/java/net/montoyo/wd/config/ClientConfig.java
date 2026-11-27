@@ -78,6 +78,19 @@ public class ClientConfig {
 		@IntRange(minV = 1, maxV = 16)
 		@Default(valueI = 1)
 		public static int maxBrowsersPerFrame = 1;
+
+		@Name("adaptive_lod")
+		@Comment("Dynamically adjust Chromium render resolution based on screen distance and size")
+		@Translation("config.webdisplays.adaptive_lod")
+		@Default(valueBoolean = true)
+		public static boolean adaptiveLod = true;
+
+		@Name("lod_cooldown_ms")
+		@Comment("Minimum interval in milliseconds between adaptive resolution LOD updates")
+		@Translation("config.webdisplays.lod_cooldown_ms")
+		@IntRange(minV = 200, maxV = 5000)
+		@Default(valueI = 750)
+		public static int lodCooldownMs = 750;
 	}
 
 	@Comment({
@@ -131,6 +144,8 @@ public class ClientConfig {
 		WebDisplays.INSTANCE.enableBackfaceCulling = Performance.backfaceCulling;
 		WebDisplays.INSTANCE.pauseCulledScreens = Performance.pauseCulledScreens;
 		WebDisplays.INSTANCE.maxBrowsersPerFrame = Performance.maxBrowsersPerFrame;
+		WebDisplays.INSTANCE.enableAdaptiveLod = Performance.adaptiveLod;
+		WebDisplays.INSTANCE.lodCooldownMs = Performance.lodCooldownMs;
 
 		WebDisplays.INSTANCE.ytVolume = (float) AutoVolumeControl.ytVolume;
 		WebDisplays.INSTANCE.avDist100 = (float) AutoVolumeControl.dist100;
