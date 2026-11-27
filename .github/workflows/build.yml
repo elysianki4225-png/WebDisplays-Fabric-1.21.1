@@ -166,6 +166,7 @@ jobs:
             !versions/26.3/build/libs/*-dev.jar
 
   publish-release:
+    if: github.event_name == 'push'
     needs: [build-1-21-1, build-26-3]
     runs-on: ubuntu-latest
 
@@ -188,14 +189,16 @@ jobs:
         run: |
           TAG="build-${GITHUB_SHA::7}"
           gh release create "$TAG" release-artifacts/*.jar \
+            --repo "${{ github.repository }}" \
             --target "${GITHUB_SHA}" \
             --title "WebDisplays Fabric 1.21.1 & 26.3 ($TAG)" \
             --notes "Automated standalone builds for Minecraft Fabric 1.21.1 and 26.3 with bundled MCEF, Cloth Config, and Fabric API modules (ARM64 + x86_64)." \
-            --prerelease || gh release upload "$TAG" release-artifacts/*.jar --clobber
+            --prerelease || gh release upload "$TAG" release-artifacts/*.jar --repo "${{ github.repository }}" --clobber
           if [ "${{ github.ref }}" = "refs/heads/main" ]; then
             gh release create "latest" release-artifacts/*.jar \
+              --repo "${{ github.repository }}" \
               --target "${GITHUB_SHA}" \
               --title "WebDisplays Fabric Latest (1.21.1 & 26.3)" \
               --notes "Latest stable standalone builds for Minecraft Fabric 1.21.1 and 26.3 (ARM64 + x86_64, all dependencies bundled)." \
-              || gh release upload "latest" release-artifacts/*.jar --clobber
+              || gh release upload "latest" release-artifacts/*.jar --repo "${{ github.repository }}" --clobber
           fi
