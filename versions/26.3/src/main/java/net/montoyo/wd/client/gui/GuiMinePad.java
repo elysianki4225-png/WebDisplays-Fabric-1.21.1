@@ -19,7 +19,7 @@ import net.montoyo.wd.WebDisplays;
 import net.montoyo.wd.client.ClientProxy;
 import net.montoyo.wd.utilities.BlockSide;
 import org.cef.misc.CefCursorType;
-import org.lwjgl.glfw.GLFW;
+import org.lwjgl.sdl.SDLKeyboard;
 
 import java.util.Optional;
 
@@ -116,8 +116,8 @@ public class GuiMinePad extends WDScreen {
 	/* copied from MCEF */
 	public boolean keyChanged(int keyCode, int scanCode, int modifiers, boolean pressed) {
 		assert minecraft != null;
-		if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
-			minecraft.setScreen(null);
+		if (keyCode == InputConstants.KEY_ESCAPE) {
+			minecraft.gui.setScreen(null);
 			return true;
 		}
 
@@ -173,7 +173,7 @@ public class GuiMinePad extends WDScreen {
 			int sx = (int) (mx * WebDisplays.INSTANCE.padResX);
 			int sy = (int) (my * WebDisplays.INSTANCE.padResY);
 			Minecraft mc = Minecraft.getInstance();
-			browser.sendMouseWheel(sx, sy, amount, (mc.hasControlDown() && !mc.hasAltDown() && !mc.hasShiftDown()) ? GLFW.GLFW_MOD_CONTROL : 0);
+			browser.sendMouseWheel(sx, sy, amount, (mc.hasControlDown() && !mc.hasAltDown() && !mc.hasShiftDown()) ? InputConstants.MOD_CONTROL : 0);
 		}
 
 		return super.mouseScrolled(mouseX, mouseY, horizontalAmount, amount);
@@ -198,11 +198,11 @@ public class GuiMinePad extends WDScreen {
 	}
 
 	public static Optional<Character> getChar(int keyCode, int scanCode) {
-		String keystr = GLFW.glfwGetKeyName(keyCode, scanCode);
+		String keystr = SDLKeyboard.SDL_GetKeyName(SDLKeyboard.SDL_GetKeyFromScancode(keyCode, (short) 0, false));
 		if (keystr == null) {
 			keystr = "\0";
 		}
-		if (keyCode == GLFW.GLFW_KEY_ENTER) {
+		if (keyCode == InputConstants.KEY_RETURN) {
 			keystr = "\n";
 		}
 		if (keystr.length() == 0) {
@@ -215,7 +215,7 @@ public class GuiMinePad extends WDScreen {
 	@Override
 	public void tick() {
 		if (pad == null || pad.view == null)
-			minecraft.setScreen(null);
+			minecraft.gui.setScreen(null);
 	}
 
 	@Override

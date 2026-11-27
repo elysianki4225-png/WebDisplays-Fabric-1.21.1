@@ -21,56 +21,56 @@
 package com.cinemamod.mcef;
 
 import com.cinemamod.mcef.listeners.MCEFCursorChangeListener;
+import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefBrowserOsr;
-import org.cef.browser.CefRequestContext;
 import org.cef.callback.CefDragData;
-import org.cef.handler.CefRenderHandler;
-import org.cef.input.CefMouseEvent;
+import org.cef.event.CefKeyEvent;
+import org.cef.event.CefMouseEvent;
+import org.cef.event.CefMouseWheelEvent;
 import org.cef.misc.CefCursorType;
-import org.lwjgl.glfw.GLFW;
+import org.lwjgl.sdl.SDLMouse;
+import org.lwjgl.sdl.SDLScancode;
+import org.lwjgl.system.MemoryUtil;
 
 import java.awt.*;
-import java.awt.image.BufferedImage;
 import java.nio.ByteBuffer;
-import java.util.concurrent.CompletableFuture;
-
-import static org.lwjgl.glfw.GLFW.*;
 
 /**
- * An OSR (offscreen rendering) browser that can be rendered in Minecraft.
+ * An instance of an "Off-screen rendered" Chromium web browser.
  */
 public class MCEFBrowser extends CefBrowserOsr {
     private final MCEFRenderer renderer;
-    private final Rectangle viewSize = new Rectangle(0, 0, 1, 1);
-    private final Rectangle popupSize = new Rectangle(0, 0, 0, 0);
-    private boolean popupVisible = false;
-    private boolean cursorHidden = false;
+    private final MCEFDragContext dragContext = new MCEFDragContext();
     private MCEFCursorChangeListener cursorChangeListener;
+    private boolean browserControls = true;
+    private int lastWidth = 0, lastHeight = 0;
+    private int btnMask = 0;
+    private boolean visible = true;
+    private boolean closed = false;
 
-    private long lastRenderedTime = System.nanoTime();
-    private MCEFDragContext dragContext;
-    private int dragOperations = 0;
+    protected ByteBuffer popupGraphics;
+    protected Rectangle popupSize;
+    protected boolean showPopup = false;
+    protected boolean popupDrawn = false;
 
-    protected MCEFBrowser(MCEFClient client, String url, boolean transparent, CefRequestContext context) {
-        super(client.getHandle(), url, transparent, context);
+    public MCEFBrowser(MCEFClient client, String url, boolean transparent) {
+        super(client.getHandle(), url, transparent, null);
         renderer = new MCEFRenderer(transparent);
+        cursorChangeListener = (cefCursorID) -> setCursor(CefCursorType.fromId(cefCursorID));
+        MCEF.incrementActiveBrowsers();
+
         if (RenderSystem.isOnRenderThread()) {
             renderer.initialize();
         } else {
             Minecraft.getInstance().execute(renderer::initialize);
         }
-        createImmediately();
     }
 
     public MCEFRenderer getRenderer() {
         return renderer;
-    }
-
-    public MCEFDragContext getDragContext() {
-        return dragContext;
     }
 
     public MCEFCursorChangeListener getCursorChangeListener() {
@@ -81,260 +81,319 @@ public class MCEFBrowser extends CefBrowserOsr {
         this.cursorChangeListener = cursorChangeListener;
     }
 
-    @Override
-    public Rectangle getViewRect(CefBrowser browser) {
-        return viewSize;
+    public boolean usingBrowserControls() {
+        return browserControls;
+    }
+
+    public MCEFBrowser useBrowserControls(boolean browserControls) {
+        this.browserControls = browserControls;
+        return this;
+    }
+
+    public MCEFDragContext getDragContext() {
+        return dragContext;
     }
 
     public void setVisible(boolean visible) {
-        wasHidden(!visible);
+        if (this.visible != visible && !closed) {
+            this.visible = visible;
+            setWindowVisibility(visible);
+        }
     }
 
-    @Override
-    public boolean getScreenInfo(CefBrowser browser, CefScreenInfo screenInfo) {
-        return false;
+    public boolean isVisible() {
+        return visible;
     }
 
+    // Popups
     @Override
     public void onPopupShow(CefBrowser browser, boolean show) {
-        if (!show) {
-            popupVisible = false;
-            popupSize.setBounds(0, 0, 0, 0);
-            invalidate();
-        } else {
-            popupVisible = true;
-        }
+        super.onPopupShow(browser, show);
+        showPopup = show;
+        if (!show) popupDrawn = false;
     }
 
     @Override
     public void onPopupSize(CefBrowser browser, Rectangle size) {
-        if (size.width <= 0 || size.height <= 0) {
+        super.onPopupSize(browser, size);
+        popupSize = size;
+        this.popupGraphics = ByteBuffer.allocateDirect(
+                Math.max(1, size.width * size.height * 4)
+        );
+    }
+
+    // Graphics
+    @Override
+    public void onPaint(CefBrowser browser, boolean popup, Rectangle[] dirtyRects, ByteBuffer buffer, int width, int height) {
+        if (dirtyRects == null || dirtyRects.length == 0 || width <= 0 || height <= 0 || buffer == null) {
             return;
         }
-        popupSize.setBounds(size);
+
+        if (renderer.getTextureID() == 0) {
+            if (RenderSystem.isOnRenderThread()) {
+                renderer.initialize();
+            }
+        }
+
+        if (!popup) {
+            if (lastWidth != width || lastHeight != height || renderer.getTextureID() == 0) {
+                renderer.onPaint(buffer, width, height);
+                lastWidth = width;
+                lastHeight = height;
+            } else {
+                renderer.onPaintRects(buffer, width, height, dirtyRects);
+                if ((popupDrawn || showPopup) && popupSize != null) {
+                    if (!showPopup) {
+                        renderer.onPaintRects(buffer, width, height, new Rectangle[]{popupSize});
+                        popupGraphics = null;
+                        popupSize = null;
+                    } else if (popupDrawn && popupGraphics != null) {
+                        renderer.onPaintSubBuffer(popupGraphics, popupSize.width, popupSize.x, popupSize.y, popupSize.width, popupSize.height);
+                    }
+                }
+            }
+        } else if (popupSize != null && popupSize.width > 0 && popupSize.height > 0) {
+            int start = buffer.capacity();
+            int end = 0;
+            for (Rectangle dirtyRect : dirtyRects) {
+                if (dirtyRect.width <= 0 || dirtyRect.height <= 0) {
+                    continue;
+                }
+                int rectStart = (dirtyRect.x + (dirtyRect.y * popupSize.width)) << 2;
+                if (rectStart < start) start = rectStart;
+
+                int rectEnd = ((dirtyRect.x + dirtyRect.width) + ((dirtyRect.y + dirtyRect.height - 1) * popupSize.width)) << 2;
+                if (rectEnd > end) end = rectEnd;
+            }
+
+            if (start < 0) start = 0;
+            if (end > buffer.capacity()) end = buffer.capacity();
+
+            if (end > start && this.popupGraphics != null && end <= this.popupGraphics.capacity()) {
+                long addrFrom = MemoryUtil.memAddress(buffer);
+                long addrTo = MemoryUtil.memAddress(popupGraphics);
+                MemoryUtil.memCopy(addrFrom + start, addrTo + start, (end - start));
+                renderer.onPaintSubBuffer(popupGraphics, popupSize.width, popupSize.x, popupSize.y, popupSize.width, popupSize.height);
+            }
+
+            popupDrawn = true;
+        }
     }
 
     public void resize(int width, int height) {
-        if (width <= 0) {
-            width = 1;
-        }
-        if (height <= 0) {
-            height = 1;
-        }
-        viewSize.setBounds(0, 0, width, height);
-        wasResized(width, height);
+        int clampedW = Math.max(1, width);
+        int clampedH = Math.max(1, height);
+        browser_rect_.setBounds(0, 0, clampedW, clampedH);
+        wasResized(clampedW, clampedH);
     }
 
-    public long getLastRenderedTime() {
-        return lastRenderedTime;
-    }
-
-    @Override
-    public void onPaint(CefBrowser browser, boolean popup, Rectangle[] dirtyRects, ByteBuffer buffer, int width, int height) {
-        if (width <= 0 || height <= 0 || buffer == null) {
-            return;
-        }
-        if (!RenderSystem.isOnRenderThread()) {
-            ByteBuffer copy = ByteBuffer.allocateDirect(buffer.remaining());
-            copy.put(buffer.duplicate());
-            copy.flip();
-            Minecraft.getInstance().execute(() -> applyPaint(popup, dirtyRects, copy, width, height));
-            return;
-        }
-        applyPaint(popup, dirtyRects, buffer, width, height);
-    }
-
-    private void applyPaint(boolean popup, Rectangle[] dirtyRects, ByteBuffer buffer, int width, int height) {
-        if (!popup) {
-            renderer.onPaintRects(buffer, width, height, dirtyRects);
-        } else if (popupVisible && popupSize.width > 0 && popupSize.height > 0) {
-            renderer.onPaintSubBuffer(buffer, width, popupSize.x, popupSize.y, popupSize.width, popupSize.height);
-        }
-        lastRenderedTime = System.nanoTime();
-    }
-
-    public void setCursor(CefCursorType cursorType) {
-        long windowHandle = Minecraft.getInstance().getWindow().handle();
-        if (cursorType == CefCursorType.NONE) {
-            if (!cursorHidden) {
-                GLFW.glfwSetInputMode(windowHandle, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
-                cursorHidden = true;
-            }
-        } else {
-            if (cursorHidden) {
-                GLFW.glfwSetInputMode(windowHandle, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-                cursorHidden = false;
-            }
-            GLFW.glfwSetCursor(windowHandle, MCEF.getGLFWCursorHandle(cursorType));
-        }
-    }
-
-    @Override
-    public boolean onCursorChange(CefBrowser browser, int cursorType) {
-        if (cursorChangeListener != null) {
-            cursorChangeListener.onCursorChange(cursorType);
-        } else {
-            setCursor(CefCursorType.fromId(cursorType));
-        }
-        return true;
-    }
-
-    @Override
-    public boolean startDragging(CefBrowser browser, CefDragData dragData, int mask, int x, int y) {
-        dragContext = new MCEFDragContext(dragData.clone(), mask);
-        return true;
-    }
-
-    @Override
-    public void updateDragCursor(CefBrowser browser, int operation) {
-        dragOperations = operation;
-    }
-
+    // Inputs
     public void sendKeyPress(int keyCode, long scanCode, int modifiers) {
-        if (modifiers == GLFW_MOD_CONTROL) {
-            if (keyCode == GLFW_KEY_R) {
-                reload();
-                return;
-            } else if (keyCode == GLFW_KEY_EQUAL) {
-                setZoomLevel(getZoomLevel() + 0.5);
-                return;
-            } else if (keyCode == GLFW_KEY_MINUS) {
-                setZoomLevel(getZoomLevel() - 0.5);
-                return;
-            } else if (keyCode == GLFW_KEY_0) {
-                setZoomLevel(0.0);
-                return;
-            }
-        } else if (modifiers == GLFW_MOD_ALT) {
-            if (keyCode == GLFW_KEY_LEFT && canGoBack()) {
-                goBack();
-                return;
-            } else if (keyCode == GLFW_KEY_RIGHT && canGoForward()) {
-                goForward();
-                return;
+        if (browserControls) {
+            if (modifiers == InputConstants.MOD_CONTROL) {
+                if (keyCode == InputConstants.KEY_R) {
+                    reload();
+                    return;
+                } else if (keyCode == SDLScancode.SDL_SCANCODE_EQUALS) {
+                    if (getZoomLevel() < 9) setZoomLevel(getZoomLevel() + 1);
+                    return;
+                } else if (keyCode == SDLScancode.SDL_SCANCODE_MINUS) {
+                    if (getZoomLevel() > -9) setZoomLevel(getZoomLevel() - 1);
+                    return;
+                } else if (keyCode == SDLScancode.SDL_SCANCODE_0) {
+                    setZoomLevel(0);
+                    return;
+                }
+            } else if (modifiers == InputConstants.MOD_ALT) {
+                if (keyCode == SDLScancode.SDL_SCANCODE_LEFT && canGoBack()) {
+                    goBack();
+                    return;
+                } else if (keyCode == SDLScancode.SDL_SCANCODE_RIGHT && canGoForward()) {
+                    goForward();
+                    return;
+                }
             }
         }
 
-        if (keyCode == GLFW_KEY_BACKSPACE) {
-            sendKeyTyped('\b', modifiers);
-            return;
-        }
-
-        KeyEvent e = new KeyEvent(KeyEvent.KEY_PRESSED, System.currentTimeMillis(), modifiers, keyCode, '\0', scanCode);
+        CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_PRESS, keyCode, (char) keyCode, modifiers);
+        e.scancode = scanCode;
         sendKeyEvent(e);
     }
 
     public void sendKeyRelease(int keyCode, long scanCode, int modifiers) {
-        if (modifiers == GLFW_MOD_CONTROL) {
-            if (keyCode == GLFW_KEY_R || keyCode == GLFW_KEY_EQUAL || keyCode == GLFW_KEY_MINUS || keyCode == GLFW_KEY_0) {
-                return;
-            }
-        } else if (modifiers == GLFW_MOD_ALT) {
-            if ((keyCode == GLFW_KEY_LEFT && canGoBack()) || (keyCode == GLFW_KEY_RIGHT && canGoForward())) {
-                return;
+        if (browserControls) {
+            if (modifiers == InputConstants.MOD_CONTROL) {
+                if (keyCode == InputConstants.KEY_R) return;
+                else if (keyCode == SDLScancode.SDL_SCANCODE_EQUALS) return;
+                else if (keyCode == SDLScancode.SDL_SCANCODE_MINUS) return;
+                else if (keyCode == SDLScancode.SDL_SCANCODE_0) return;
+            } else if (modifiers == InputConstants.MOD_ALT) {
+                if (keyCode == SDLScancode.SDL_SCANCODE_LEFT && canGoBack()) return;
+                else if (keyCode == SDLScancode.SDL_SCANCODE_RIGHT && canGoForward()) return;
             }
         }
 
-        KeyEvent e = new KeyEvent(KeyEvent.KEY_RELEASED, System.currentTimeMillis(), modifiers, keyCode, '\0', scanCode);
+        CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_RELEASE, keyCode, (char) keyCode, modifiers);
+        e.scancode = scanCode;
         sendKeyEvent(e);
     }
 
     public void sendKeyTyped(char c, int modifiers) {
-        if (modifiers == GLFW_MOD_CONTROL) {
-            if ((int) c == GLFW_KEY_R || (int) c == GLFW_KEY_EQUAL || (int) c == GLFW_KEY_MINUS || (int) c == GLFW_KEY_0) {
-                return;
-            }
-        } else if (modifiers == GLFW_MOD_ALT) {
-            if (((int) c == GLFW_KEY_LEFT && canGoBack()) || ((int) c == GLFW_KEY_RIGHT && canGoForward())) {
-                return;
+        if (browserControls) {
+            if (modifiers == InputConstants.MOD_CONTROL) {
+                if ((int) c == InputConstants.KEY_R) return;
+                else if ((int) c == SDLScancode.SDL_SCANCODE_EQUALS) return;
+                else if ((int) c == SDLScancode.SDL_SCANCODE_MINUS) return;
+                else if ((int) c == SDLScancode.SDL_SCANCODE_0) return;
+            } else if (modifiers == InputConstants.MOD_ALT) {
+                if ((int) c == SDLScancode.SDL_SCANCODE_LEFT && canGoBack()) return;
+                else if ((int) c == SDLScancode.SDL_SCANCODE_RIGHT && canGoForward()) return;
             }
         }
 
-        KeyEvent e = new KeyEvent(KeyEvent.KEY_TYPED, System.currentTimeMillis(), modifiers, 0, c, 0);
+        CefKeyEvent e = new CefKeyEvent(CefKeyEvent.KEY_TYPE, c, c, modifiers);
         sendKeyEvent(e);
     }
 
     public void sendMouseMove(int mouseX, int mouseY) {
-        CefMouseEvent e = new CefMouseEvent(CefMouseEvent.MOUSE_MOVED, mouseX, mouseY, 0, CefMouseEvent.BUTTON_NONE, 0);
+        CefMouseEvent e = new CefMouseEvent(CefMouseEvent.MOUSE_MOVED, mouseX, mouseY, 0, 0, dragContext.getVirtualModifiers(btnMask));
         sendMouseEvent(e);
 
-        if (dragContext != null) {
-            dragTargetDragOver(new Point(mouseX, mouseY), dragContext.getModifiers(), dragOperations);
+        if (dragContext.isDragging()) {
+            this.dragTargetDragOver(new Point(mouseX, mouseY), 0, dragContext.getMask());
         }
     }
 
     public void sendMousePress(int mouseX, int mouseY, int button) {
-        int btnMask = CefMouseEvent.getModifiersByButton(button);
-        CefMouseEvent e = new CefMouseEvent(GLFW_PRESS, mouseX, mouseY, 1, button, btnMask);
+        if (button == 1) button = 2;
+        else if (button == 2) button = 1;
+
+        if (button == 0) btnMask |= CefMouseEvent.BUTTON1_MASK;
+        else if (button == 1) btnMask |= CefMouseEvent.BUTTON2_MASK;
+        else if (button == 2) btnMask |= CefMouseEvent.BUTTON3_MASK;
+
+        CefMouseEvent e = new CefMouseEvent(InputConstants.PRESS, mouseX, mouseY, 1, button, btnMask);
         sendMouseEvent(e);
     }
 
     public void sendMouseRelease(int mouseX, int mouseY, int button) {
-        if (dragContext != null) {
-            dragTargetDrop(new Point(mouseX, mouseY), dragContext.getModifiers());
-            dragTargetDragLeave();
-            dragContext = null;
-        }
+        if (button == 1) button = 2;
+        else if (button == 2) button = 1;
 
-        int btnMask = CefMouseEvent.getModifiersByButton(button);
-        CefMouseEvent e = new CefMouseEvent(GLFW_RELEASE, mouseX, mouseY, 1, button, btnMask);
+        if (button == 0 && (btnMask & CefMouseEvent.BUTTON1_MASK) != 0) btnMask ^= CefMouseEvent.BUTTON1_MASK;
+        else if (button == 1 && (btnMask & CefMouseEvent.BUTTON2_MASK) != 0) btnMask ^= CefMouseEvent.BUTTON2_MASK;
+        else if (button == 2 && (btnMask & CefMouseEvent.BUTTON3_MASK) != 0) btnMask ^= CefMouseEvent.BUTTON3_MASK;
+
+        CefMouseEvent e = new CefMouseEvent(InputConstants.RELEASE, mouseX, mouseY, 1, button, btnMask);
         sendMouseEvent(e);
+
+        if (dragContext.isDragging() && button == 0) {
+            finishDragging(mouseX, mouseY);
+        }
     }
 
     public void sendMouseWheel(int mouseX, int mouseY, double amount, int modifiers) {
-        if ((modifiers & GLFW_MOD_CONTROL) != 0) {
-            if (amount > 0) {
-                setZoomLevel(getZoomLevel() + 0.5);
-            } else {
-                setZoomLevel(getZoomLevel() - 0.5);
+        if (browserControls) {
+            if ((modifiers & InputConstants.MOD_CONTROL) != 0) {
+                if (amount > 0) {
+                    if (getZoomLevel() < 9) setZoomLevel(getZoomLevel() + 1);
+                } else if (getZoomLevel() > -9) setZoomLevel(getZoomLevel() - 1);
+                return;
             }
-            return;
         }
 
-        int delta = (int) (amount * 120);
-        CefMouseEvent e = new CefMouseEvent(CefMouseEvent.MOUSE_WHEEL, mouseX, mouseY, delta, 0, modifiers);
-        sendMouseEvent(e);
-    }
-
-    public void startDrag(int x, int y) {
-        if (dragContext != null) {
-            dragTargetDragEnter(dragContext.getDragData(), new Point(x, y), dragContext.getModifiers(), dragOperations);
+        MCEFPlatform platform = MCEFPlatform.tryGetPlatform();
+        if (platform == null || !platform.isMacOS()) {
+            if (amount < 0) {
+                amount = Math.floor(amount);
+            } else {
+                amount = Math.ceil(amount);
+            }
+            amount = amount * 3;
         }
+
+        CefMouseWheelEvent e = new CefMouseWheelEvent(CefMouseWheelEvent.WHEEL_UNIT_SCROLL, mouseX, mouseY, amount, modifiers);
+        sendMouseWheelEvent(e);
     }
 
-    public void endDrag(int x, int y) {
-        if (dragContext != null) {
-            dragTargetDragLeave();
-            dragSourceEndedAt(new Point(x, y), dragOperations);
-            dragSourceSystemDragEnded();
-            dragContext = null;
+    // Drag & drop
+    @Override
+    public boolean startDragging(CefBrowser browser, CefDragData dragData, int mask, int x, int y) {
+        dragContext.startDragging(dragData, mask);
+        this.dragTargetDragEnter(dragContext.getDragData(), new Point(x, y), btnMask, dragContext.getMask());
+        return false;
+    }
+
+    @Override
+    public void updateDragCursor(CefBrowser browser, int operation) {
+        if (dragContext.updateCursor(operation))
+            this.onCursorChange(this, dragContext.getVirtualCursor(dragContext.getActualCursor()));
+
+        super.updateDragCursor(browser, operation);
+    }
+
+    public void startDragging(CefDragData dragData, int mask, int x, int y) {
+        startDragging(this, dragData, mask, x, y);
+    }
+
+    public void finishDragging(int x, int y) {
+        dragTargetDrop(new Point(x, y), btnMask);
+        dragTargetDragLeave();
+        dragContext.stopDragging();
+        this.onCursorChange(this, dragContext.getActualCursor());
+    }
+
+    public void cancelDrag() {
+        dragTargetDragLeave();
+        dragContext.stopDragging();
+        this.onCursorChange(this, dragContext.getActualCursor());
+    }
+
+    @Override
+    public void close(boolean force) {
+        if (!closed) {
+            closed = true;
+            MCEF.decrementActiveBrowsers();
+            if (RenderSystem.isOnRenderThread()) {
+                renderer.cleanup();
+            } else {
+                Minecraft.getInstance().execute(renderer::cleanup);
+            }
+            if (cursorChangeListener != null) {
+                cursorChangeListener.onCursorChange(0);
+            }
         }
-    }
-
-    public CompletableFuture<BufferedImage> createScreenshot(boolean includeAlphaChannel) {
-        return super.createScreenshot(includeAlphaChannel);
-    }
-
-    public void setBackgroundColor(int r, int g, int b, int a) {
-        throw new UnsupportedOperationException();
+        super.close(force);
     }
 
     public void close() {
-        MCEF.unregisterBrowser(this);
-        if (RenderSystem.isOnRenderThread()) {
-            renderer.cleanup();
-        } else {
-            Minecraft.getInstance().execute(renderer::cleanup);
-        }
-        setCloseAllowed();
         close(true);
     }
 
     @Override
     protected void finalize() throws Throwable {
-        super.finalize();
-        if (renderer.isReady()) {
+        if (!closed) {
+            closed = true;
+            MCEF.decrementActiveBrowsers();
             Minecraft.getInstance().execute(renderer::cleanup);
+        }
+        super.finalize();
+    }
+
+    // Cursor handling
+    @Override
+    public boolean onCursorChange(CefBrowser browser, int cursorType) {
+        cursorType = dragContext.getVirtualCursor(cursorType);
+        cursorChangeListener.onCursorChange(cursorType);
+        return super.onCursorChange(browser, cursorType);
+    }
+
+    public void setCursor(CefCursorType cursorType) {
+        if (cursorType == CefCursorType.NONE) {
+            SDLMouse.SDL_HideCursor();
+        } else {
+            SDLMouse.SDL_ShowCursor();
+            SDLMouse.SDL_SetCursor(MCEF.getSDLCursorHandle(cursorType));
         }
     }
 }

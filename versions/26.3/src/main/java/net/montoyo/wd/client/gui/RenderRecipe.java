@@ -64,7 +64,7 @@ public class RenderRecipe extends Screen {
 
     private void nextRecipe() {
         if(recipes.isEmpty())
-            minecraft.setScreen(null);
+            minecraft.gui.setScreen(null);
         else
             recipeName = recipes.remove(0);
     }

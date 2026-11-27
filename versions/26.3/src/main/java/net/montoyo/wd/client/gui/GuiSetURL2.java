@@ -98,7 +98,7 @@ public class GuiSetURL2 extends WDScreen {
 	@GuiSubscribe
 	public void onButtonClicked(Button.ClickEvent ev) {
 		if (ev.getSource() == btnCancel)
-			minecraft.setScreen(null);
+			minecraft.gui.setScreen(null);
 		else if (ev.getSource() == btnOk)
 			validate(tfURL.getText());
 		else if (ev.getSource() == btnShutDown) {
@@ -112,7 +112,7 @@ public class GuiSetURL2 extends WDScreen {
 				stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
 			}
 
-			minecraft.setScreen(null);
+			minecraft.gui.setScreen(null);
 		}
 	}
 
@@ -147,7 +147,7 @@ public class GuiSetURL2 extends WDScreen {
 				WDNetworkRegistry.INSTANCE.sendToServer(C2SMessageScreenCtrl.setURL(tileEntity, screenSide, url, remoteLocation));
 		}
 
-		minecraft.setScreen(null);
+		minecraft.gui.setScreen(null);
 	}
 
 	@Override

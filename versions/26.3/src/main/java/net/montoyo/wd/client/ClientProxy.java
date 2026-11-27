@@ -73,8 +73,8 @@ import org.cef.browser.CefBrowser;
 import org.cef.browser.CefFrame;
 import org.cef.handler.CefDisplayHandler;
 import org.cef.misc.CefCursorType;
+import com.mojang.blaze3d.platform.InputConstants;
 import org.jetbrains.annotations.NotNull;
-import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -338,9 +338,9 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 	
 	@Override
 	public void displayGui(GuiData data) {
-		Screen gui = data.createGui(mc.screen, mc.level);
+		Screen gui = data.createGui(mc.gui.screen(), mc.level);
 		if (gui != null)
-			mc.setScreen(gui);
+			mc.gui.setScreen(gui);
 	}
 	
 	@Override
@@ -362,7 +362,7 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 	
 	@Override
 	public void onAutocompleteResult(NameUUIDPair[] pairs) {
-		if (mc.screen != null && mc.screen instanceof WDScreen screen) {
+		if (mc.gui.screen() != null && mc.gui.screen() instanceof WDScreen screen) {
 			if (pairs.length == 0)
 				(screen).onAutocompleteFailure();
 			else
@@ -377,7 +377,7 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 	
 	@Override
 	public void screenUpdateResolutionInGui(Vector3i pos, BlockSide side, Vector2i res) {
-		if (mc.screen != null && mc.screen instanceof GuiScreenConfig gsc) {
+		if (mc.gui.screen() != null && mc.gui.screen() instanceof GuiScreenConfig gsc) {
 			if (gsc.isForBlock(pos.toBlock(), side))
 				gsc.updateResolution(res);
 		}
@@ -385,7 +385,7 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 	
 	@Override
 	public void screenUpdateRotationInGui(Vector3i pos, BlockSide side, Rotation rot) {
-		if (mc.screen != null && mc.screen instanceof GuiScreenConfig gsc) {
+		if (mc.gui.screen() != null && mc.gui.screen() instanceof GuiScreenConfig gsc) {
 			if (gsc.isForBlock(pos.toBlock(), side))
 				gsc.updateRotation(rot);
 		}
@@ -393,7 +393,7 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 	
 	@Override
 	public void screenUpdateAutoVolumeInGui(Vector3i pos, BlockSide side, boolean av) {
-		if (mc.screen != null && mc.screen instanceof GuiScreenConfig gsc) {
+		if (mc.gui.screen() != null && mc.gui.screen() instanceof GuiScreenConfig gsc) {
 			if (gsc.isForBlock(pos.toBlock(), side))
 				gsc.updateAutoVolume(av);
 		}
@@ -401,7 +401,7 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 	
 	@Override
 	public void displaySetPadURLGui(ItemStack is, String padURL) {
-		mc.setScreen(new GuiSetURL2(is, padURL));
+		mc.gui.setScreen(new GuiSetURL2(is, padURL));
 	}
 	
 	@Override
@@ -409,7 +409,7 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 		PadData pd = padMap.get(padId);
 		
 		if (pd != null && pd.view != null)
-			mc.setScreen(new GuiMinePad(pd));
+			mc.gui.setScreen(new GuiMinePad(pd));
 	}
 	
 	@Override
@@ -517,11 +517,11 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 	
 	@Override
 	public void closeGui(BlockPos bp, BlockSide bs) {
-		if (mc.screen instanceof WDScreen) {
-			WDScreen scr = (WDScreen) mc.screen;
+		if (mc.gui.screen() instanceof WDScreen) {
+			WDScreen scr = (WDScreen) mc.gui.screen();
 
 			if (scr.isForBlock(bp, bs))
-				mc.setScreen(null);
+				mc.gui.setScreen(null);
 		}
 	}
 	
@@ -711,8 +711,8 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 	public void onTick() {
 		updateBlockOutline();
 				//Workaround cuz chat sux
-		if (nextScreen != null && mc.screen == null) {
-			mc.setScreen(nextScreen);
+		if (nextScreen != null && mc.gui.screen() == null) {
+			mc.gui.setScreen(nextScreen);
 			nextScreen = null;
 		}
 		
@@ -917,7 +917,7 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 	/**
 	 * KEYBINDS
 	 **/
-	public static final KeyMapping KEY_MOUSE = new KeyMapping("webdisplays.key.toggle_mouse", GLFW.GLFW_KEY_R, KeyMapping.Category.MISC);
+	public static final KeyMapping KEY_MOUSE = new KeyMapping("webdisplays.key.toggle_mouse", InputConstants.KEY_R, KeyMapping.Category.MISC);
 	static boolean rDown = false;
 	public static boolean mouseOn = false;
 
@@ -949,7 +949,7 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 
 			if (message.equals("!WD config")) {
 				Minecraft mc = Minecraft.getInstance();
-				mc.setScreen(WDConfigScreen.create(mc.screen));
+				mc.gui.setScreen(WDConfigScreen.create(mc.gui.screen()));
 				return false;
 			}
 

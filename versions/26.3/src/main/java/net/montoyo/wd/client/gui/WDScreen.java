@@ -27,9 +27,9 @@ import net.montoyo.wd.client.gui.loading.GuiLoader;
 import net.montoyo.wd.client.gui.loading.JsonOWrapper;
 import net.montoyo.wd.net.WDNetworkRegistry;
 import net.montoyo.wd.net.server_bound.C2SMessageACQuery;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.montoyo.wd.utilities.*;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -75,9 +75,9 @@ public abstract class WDScreen extends Screen {
     protected static int currentModifiersMask() {
         Minecraft mc = Minecraft.getInstance();
         int mods = 0;
-        if (mc.hasShiftDown()) mods |= GLFW.GLFW_MOD_SHIFT;
-        if (mc.hasControlDown()) mods |= GLFW.GLFW_MOD_CONTROL;
-        if (mc.hasAltDown()) mods |= GLFW.GLFW_MOD_ALT;
+        if (mc.hasShiftDown()) mods |= InputConstants.MOD_SHIFT;
+        if (mc.hasControlDown()) mods |= InputConstants.MOD_CONTROL;
+        if (mc.hasAltDown()) mods |= InputConstants.MOD_ALT;
         return mods;
     }
 
@@ -246,8 +246,8 @@ public abstract class WDScreen extends Screen {
             return down;
         }
 
-        if (quitOnEscape && keyCode == GLFW.GLFW_KEY_ESCAPE) {
-            minecraft.setScreen(null);
+        if (quitOnEscape && keyCode == InputConstants.KEY_ESCAPE) {
+            minecraft.gui.setScreen(null);
             return true;
         }
 

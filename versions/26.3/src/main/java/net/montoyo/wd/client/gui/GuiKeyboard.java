@@ -24,8 +24,9 @@ import net.montoyo.wd.net.server_bound.C2SMessageScreenCtrl;
 import net.montoyo.wd.utilities.BlockSide;
 import net.montoyo.wd.utilities.Log;
 import net.montoyo.wd.utilities.TypeData;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.montoyo.wd.utilities.Util;
-import org.lwjgl.glfw.GLFW;
+import org.lwjgl.sdl.SDLMouse;
 
 import java.io.*;
 import java.lang.reflect.Method;
@@ -167,15 +168,15 @@ public class GuiKeyboard extends WDScreen {
     public void tick() {
         super.tick();
 
-        if (closeRequested && minecraft.screen == this) {
+        if (closeRequested && minecraft.gui.screen() == this) {
             closeRequested = false;
-            minecraft.setScreen(null);
+            minecraft.gui.setScreen(null);
         }
     }
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        if(quitOnEscape && event.key() == GLFW.GLFW_KEY_ESCAPE)
+        if(quitOnEscape && event.key() == InputConstants.KEY_ESCAPE)
             closeRequested = true;
         addKey(new TypeData(TypeData.Action.PRESS, event.key(), event.modifiers(), event.scancode()));
         return super.keyPressed(event);
@@ -237,7 +238,7 @@ public class GuiKeyboard extends WDScreen {
             return;
 
         mouse.mouseGrabbed = true;
-        GLFW.glfwSetInputMode(minecraft.getWindow().handle(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
+        SDLMouse.SDL_SetWindowRelativeMouseMode(minecraft.getWindow().handle(), true);
         mouse.setIgnoreFirstMove();
         minecraft.missTime = 10000;
     }

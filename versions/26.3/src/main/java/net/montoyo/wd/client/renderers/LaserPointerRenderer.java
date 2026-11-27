@@ -29,7 +29,7 @@ public final class LaserPointerRenderer {
 
 	public static boolean isOn() {
 		Minecraft mc = Minecraft.getInstance();
-		if (mc.screen != null) return false;
+		if (mc.gui.screen() != null) return false;
 
 		return mc.player != null && mc.level != null &&
 				(ClientProxy.mouseOn || ItemLaserPointer.isOn()) &&

@@ -1,5 +1,6 @@
 package net.montoyo.wd.mixins;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.MouseHandler;
 import net.minecraft.client.input.MouseButtonInfo;
@@ -7,7 +8,6 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.phys.HitResult;
 import net.montoyo.wd.init.ItemInit;
 import net.montoyo.wd.item.ItemLaserPointer;
-import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -21,13 +21,13 @@ public class MouseHandlerMixin {
 
 	@Inject(at = @At("HEAD"), method = "onButton", cancellable = true)
 	public void preButton(long window, MouseButtonInfo buttonInfo, int action, CallbackInfo ci) {
-		if (action != GLFW.GLFW_PRESS && action != GLFW.GLFW_RELEASE)
+		if (action != InputConstants.PRESS && action != InputConstants.RELEASE)
 			return;
 
-		if (minecraft.screen == null && minecraft.player != null && minecraft.level != null) {
+		if (minecraft.gui.screen() == null && minecraft.player != null && minecraft.level != null) {
 			if (minecraft.player.getItemInHand(InteractionHand.MAIN_HAND).getItem().equals(ItemInit.LASER_POINTER.get())
 					&& (minecraft.hitResult == null || minecraft.hitResult.getType() == HitResult.Type.BLOCK || minecraft.hitResult.getType() == HitResult.Type.MISS)) {
-				ItemLaserPointer.press(action == GLFW.GLFW_PRESS, buttonInfo.button());
+				ItemLaserPointer.press(action == InputConstants.PRESS, buttonInfo.button());
 				ci.cancel();
 			}
 		}

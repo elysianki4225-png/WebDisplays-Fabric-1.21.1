@@ -17,12 +17,13 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.montoyo.wd.WebDisplays;
 import net.montoyo.wd.miniserv.Constants;
 import net.montoyo.wd.miniserv.client.*;
 import net.montoyo.wd.net.WDNetworkRegistry;
 import net.montoyo.wd.utilities.*;
-import org.lwjgl.glfw.GLFW;
+import org.lwjgl.sdl.SDLScancode;
 
 import org.jetbrains.annotations.Nullable;
 import javax.swing.filechooser.FileSystemView;
@@ -207,8 +208,8 @@ public class GuiServer extends WDScreen {
 		int keyCode = event.key();
 		int scanCode = event.scancode();
 		int modifiers = event.modifiers();
-		if (keyCode == GLFW.GLFW_KEY_ESCAPE && !uploadWizard) {
-			Minecraft.getInstance().setScreen(null);
+		if (keyCode == InputConstants.KEY_ESCAPE && !uploadWizard) {
+			Minecraft.getInstance().gui.setScreen(null);
 			return true;
 		}
 
@@ -234,35 +235,35 @@ public class GuiServer extends WDScreen {
 
 		if (uploadWizard) {
 			if (keyState) {
-				if (keyCode == GLFW.GLFW_KEY_UP) {
+				if (keyCode == InputConstants.KEY_UP) {
 					if (selectedLine > 3)
 						selectedLine--;
 					else if (uploadOffset > 0) {
 						uploadOffset--;
 						updateUploadScreen();
 					}
-				} else if (keyCode == GLFW.GLFW_KEY_DOWN) {
+				} else if (keyCode == InputConstants.KEY_DOWN) {
 					if (selectedLine < MAX_LINES - 1)
 						selectedLine++;
 					else if (uploadOffset + selectedLine - 2 < uploadFiles.size()) {
 						uploadOffset++;
 						updateUploadScreen();
 					}
-				} else if (keyCode == GLFW.GLFW_KEY_PAGE_DOWN) {
+				} else if (keyCode == InputConstants.KEY_PAGEDOWN) {
 					selectedLine = 3;
 					int dst = uploadOffset - (MAX_LINES - 3);
 					if (dst < 0)
 						dst = 0;
 
 					selectFile(dst);
-				} else if (keyCode == GLFW.GLFW_KEY_PAGE_UP) {
+				} else if (keyCode == InputConstants.KEY_PAGEUP) {
 					selectedLine = 3;
 					int dst = uploadOffset + (MAX_LINES - 3);
 					if (dst >= uploadFiles.size())
 						dst = uploadFiles.size() - 1;
 
 					selectFile(dst);
-				} else if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
+				} else if (keyCode == InputConstants.KEY_RETURN || keyCode == SDLScancode.SDL_SCANCODE_KP_ENTER) {
 					File file = uploadFiles.get(uploadOffset + selectedLine - 3);
 
 					if (file.isDirectory()) {
@@ -270,13 +271,13 @@ public class GuiServer extends WDScreen {
 						updateUploadScreen();
 					} else
 						startFileUpload(file, true);
-				} else if (keyCode == GLFW.GLFW_KEY_F5) {
+				} else if (keyCode == SDLScancode.SDL_SCANCODE_F5) {
 					uploadCD(uploadDir);
 					updateUploadScreen();
 				}
 			}
 
-			if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+			if (keyCode == InputConstants.KEY_ESCAPE) {
 				quitUploadWizard();
 				return true; //Don't let the screen handle this
 			}
@@ -288,14 +289,14 @@ public class GuiServer extends WDScreen {
 			if (keyState) {
 				boolean ctrl = Minecraft.getInstance().hasControlDown();
 
-				if (keyCode == GLFW.GLFW_KEY_L && ctrl)
+				if (keyCode == InputConstants.KEY_L && ctrl)
 					lines.clear();
-				else if (keyCode == GLFW.GLFW_KEY_V && ctrl) {
+				else if (keyCode == SDLScancode.SDL_SCANCODE_V && ctrl) {
 					prompt += Minecraft.getInstance().keyboardHandler.getClipboard();
 
 					if (prompt.length() > MAX_LINE_LEN)
 						prompt = prompt.substring(0, MAX_LINE_LEN);
-				} else if (keyCode == GLFW.GLFW_KEY_UP) {
+				} else if (keyCode == InputConstants.KEY_UP) {
 					if (lastCmd != null) {
 						String tmp = prompt;
 						prompt = lastCmd;
@@ -316,7 +317,7 @@ public class GuiServer extends WDScreen {
 	protected void keyTyped(char typedChar, int keyCode, int modifier) throws IOException {
 		//this.charTyped(typedChar, modifier);
 		
-		if (keyCode == GLFW.GLFW_KEY_DOWN) {
+		if (keyCode == InputConstants.KEY_DOWN) {
 			if (!queue.isEmpty()) {
 				writeLine(queue.remove(0));
 				return;
@@ -345,17 +346,17 @@ public class GuiServer extends WDScreen {
 		} else if (promptLocked)
 			return;
 		
-		if (keyCode == GLFW.GLFW_KEY_SPACE)
+		if (keyCode == SDLScancode.SDL_SCANCODE_SPACE)
 			typedChar = ' ';
 		if (
 				(typedChar == 'v' || typedChar == 'V') &&
 						(modifier & 2) == 2
 		) return;
 		
-		if (keyCode == GLFW.GLFW_KEY_BACKSPACE) {
+		if (keyCode == SDLScancode.SDL_SCANCODE_BACKSPACE) {
 			if (prompt.length() > 0)
 				prompt = prompt.substring(0, prompt.length() - 1);
-		} else if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
+		} else if (keyCode == InputConstants.KEY_RETURN || keyCode == SDLScancode.SDL_SCANCODE_KP_ENTER) {
 			if (prompt.length() > 0) {
 				writeLine(userPrompt + prompt);
 				evaluateCommand(prompt);
@@ -485,7 +486,7 @@ public class GuiServer extends WDScreen {
 	
 	@CommandHandler("exit")
 	public void commandExit() {
-		minecraft.setScreen(null);
+		minecraft.gui.setScreen(null);
 	}
 	
 	@CommandHandler("access")

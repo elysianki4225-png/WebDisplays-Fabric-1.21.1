@@ -4,6 +4,7 @@
 
 package net.montoyo.wd.client.gui.controls;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.input.CharacterEvent;
@@ -12,7 +13,7 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.network.chat.Component;
 import net.montoyo.wd.client.gui.loading.JsonOWrapper;
-import org.lwjgl.glfw.GLFW;
+import org.lwjgl.sdl.SDLScancode;
 
 import java.util.ArrayList;
 
@@ -127,9 +128,9 @@ public class TextField extends Control {
 
     @Override
     public boolean keyTyped(int keyCode, int modifier) {
-        if(keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)
+        if(keyCode == InputConstants.KEY_RETURN || keyCode == SDLScancode.SDL_SCANCODE_KP_ENTER)
             parent.actionPerformed(new EnterPressedEvent(this));
-        else if(keyCode == GLFW.GLFW_KEY_TAB)
+        else if(keyCode == InputConstants.KEY_TAB)
             parent.actionPerformed(new TabPressedEvent(this));
         else {
             String old = (enabled && field.isFocused()) ? field.getValue() : null;

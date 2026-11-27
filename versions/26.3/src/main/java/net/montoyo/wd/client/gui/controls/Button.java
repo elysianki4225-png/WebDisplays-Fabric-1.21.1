@@ -4,12 +4,12 @@
 
 package net.montoyo.wd.client.gui.controls;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.network.chat.Component;
 import net.montoyo.wd.client.gui.loading.JsonOWrapper;
-import org.lwjgl.glfw.GLFW;
 
 public class Button extends Control {
 
@@ -162,7 +162,7 @@ public class Button extends Control {
 
     @Override
     public boolean keyUp(int key, int scanCode, int modifiers) {
-        if(key == GLFW.GLFW_KEY_LEFT_SHIFT || key == GLFW.GLFW_KEY_RIGHT_SHIFT) {
+        if(key == InputConstants.KEY_LSHIFT || key == InputConstants.KEY_RSHIFT) {
             shiftDown = false;
             btn.setFGColor(originalColor);
 
@@ -174,7 +174,7 @@ public class Button extends Control {
 
     @Override
     public boolean keyDown(int key, int scanCode, int modifiers) {
-        if(key == GLFW.GLFW_KEY_LEFT_SHIFT || key == GLFW.GLFW_KEY_RIGHT_SHIFT) {
+        if(key == InputConstants.KEY_LSHIFT || key == InputConstants.KEY_RSHIFT) {
             shiftDown = true;
             btn.setFGColor(shiftColor);
 

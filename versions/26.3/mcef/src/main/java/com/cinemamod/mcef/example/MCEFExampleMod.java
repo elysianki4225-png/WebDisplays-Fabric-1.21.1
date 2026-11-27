@@ -5,14 +5,13 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 public class MCEFExampleMod {
     private static final Minecraft minecraft = Minecraft.getInstance();
 
     public static final KeyMapping KEY_MAPPING = new KeyMapping(
-            "Open Browser", InputConstants.Type.KEYSYM,
-            GLFW.GLFW_KEY_F10, KeyMapping.Category.MISC
+            "Open Browser", InputConstants.Type.KEYBOARD,
+            InputConstants.KEY_F10, KeyMapping.Category.MISC
     );
 
     public MCEFExampleMod() {

@@ -23,7 +23,7 @@ package com.cinemamod.mcef;
 import com.cinemamod.mcef.listeners.MCEFInitListener;
 import net.minecraft.client.Minecraft;
 import org.cef.misc.CefCursorType;
-import org.lwjgl.glfw.GLFW;
+import org.lwjgl.sdl.SDLMouse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -214,11 +214,25 @@ public final class MCEF {
         return "eaeb3d4370aa3526ee237ad1981ad59af3de4dd1";
     }
 
-    static long getGLFWCursorHandle(CefCursorType cursorType) {
-        if (CEF_TO_GLFW_CURSORS.containsKey(cursorType)) return CEF_TO_GLFW_CURSORS.get(cursorType);
-        long glfwCursorHandle = GLFW.glfwCreateStandardCursor(cursorType.glfwId);
-        CEF_TO_GLFW_CURSORS.put(cursorType, glfwCursorHandle);
-        return glfwCursorHandle;
+    static long getSDLCursorHandle(CefCursorType cursorType) {
+        if (CEF_TO_SDL_CURSORS.containsKey(cursorType)) return CEF_TO_SDL_CURSORS.get(cursorType);
+        int sdlCursorId = switch (cursorType) {
+            case CROSS -> SDLMouse.SDL_SYSTEM_CURSOR_CROSSHAIR;
+            case HAND -> SDLMouse.SDL_SYSTEM_CURSOR_POINTER;
+            case IBEAM, VERTICAL_IBEAM -> SDLMouse.SDL_SYSTEM_CURSOR_TEXT;
+            case WAIT -> SDLMouse.SDL_SYSTEM_CURSOR_WAIT;
+            case PROGRESS -> SDLMouse.SDL_SYSTEM_CURSOR_PROGRESS;
+            case EAST_RESIZE, WEST_RESIZE, EAST_WEST_RESIZE -> SDLMouse.SDL_SYSTEM_CURSOR_EW_RESIZE;
+            case NORTH_RESIZE, SOUTH_RESIZE, NORTH_SOUTH_RESIZE -> SDLMouse.SDL_SYSTEM_CURSOR_NS_RESIZE;
+            case NORTH_EAST_RESIZE, SOUTH_WEST_RESIZE, NORTH_EAST_SOUTH_WEST_RESIZE -> SDLMouse.SDL_SYSTEM_CURSOR_NESW_RESIZE;
+            case NORTH_WEST_RESIZE, SOUTH_EAST_RESIZE, NORTH_WEST_SOUTH_EAST_RESIZE -> SDLMouse.SDL_SYSTEM_CURSOR_NWSE_RESIZE;
+            case MOVE -> SDLMouse.SDL_SYSTEM_CURSOR_MOVE;
+            case NO_DROP, NOT_ALLOWED -> SDLMouse.SDL_SYSTEM_CURSOR_NOT_ALLOWED;
+            default -> SDLMouse.SDL_SYSTEM_CURSOR_DEFAULT;
+        };
+        long sdlCursorHandle = SDLMouse.SDL_CreateSystemCursor(sdlCursorId);
+        CEF_TO_SDL_CURSORS.put(cursorType, sdlCursorHandle);
+        return sdlCursorHandle;
     }
-    private static final HashMap<CefCursorType, Long> CEF_TO_GLFW_CURSORS = new HashMap<>();
+    private static final HashMap<CefCursorType, Long> CEF_TO_SDL_CURSORS = new HashMap<>();
 }
