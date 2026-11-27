@@ -178,7 +178,7 @@ public class GuiKeyboard extends WDScreen {
     public boolean keyPressed(KeyEvent event) {
         if(quitOnEscape && event.key() == InputConstants.KEY_ESCAPE)
             closeRequested = true;
-        addKey(new TypeData(TypeData.Action.PRESS, event.key(), event.modifiers(), event.scancode()));
+        addKey(new TypeData(TypeData.Action.PRESS, event.key(), event.modifiers(), event.key()));
         return super.keyPressed(event);
     }
 
@@ -190,7 +190,7 @@ public class GuiKeyboard extends WDScreen {
 
     @Override
     public boolean keyReleased(KeyEvent event) {
-        addKey(new TypeData(TypeData.Action.RELEASE, event.key(), event.modifiers(), event.scancode()));
+        addKey(new TypeData(TypeData.Action.RELEASE, event.key(), event.modifiers(), event.key()));
         return super.keyReleased(event);
     }
 

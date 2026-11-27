@@ -235,7 +235,7 @@ public abstract class WDScreen extends Screen {
     @Override
     public boolean keyPressed(KeyEvent event) {
         int keyCode = event.key();
-        int scanCode = event.scancode();
+        int scanCode = event.key();
         int modifiers = event.modifiers();
         boolean down = false;
 
@@ -257,7 +257,7 @@ public abstract class WDScreen extends Screen {
     @Override
     public boolean keyReleased(KeyEvent event) {
         int keyCode = event.key();
-        int scanCode = event.scancode();
+        int scanCode = event.key();
         int modifiers = event.modifiers();
         boolean up = false;
 

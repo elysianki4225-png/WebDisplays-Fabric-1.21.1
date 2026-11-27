@@ -116,14 +116,14 @@ public class ExampleScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        browser.sendKeyPress(event.key(), event.scancode(), event.modifiers());
+        browser.sendKeyPress(event.key(), event.key(), event.modifiers());
         browser.setFocus(true);
         return super.keyPressed(event);
     }
 
     @Override
     public boolean keyReleased(KeyEvent event) {
-        browser.sendKeyRelease(event.key(), event.scancode(), event.modifiers());
+        browser.sendKeyRelease(event.key(), event.key(), event.modifiers());
         browser.setFocus(true);
         return super.keyReleased(event);
     }
@@ -132,7 +132,7 @@ public class ExampleScreen extends Screen {
     public boolean charTyped(CharacterEvent event) {
         int cp = event.codepoint();
         if (cp == 0) return false;
-        browser.sendKeyTyped((char) cp, event.modifiers());
+        browser.sendKeyTyped((char) cp, 0);
         browser.setFocus(true);
         return super.charTyped(event);
     }

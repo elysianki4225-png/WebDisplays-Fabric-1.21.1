@@ -95,12 +95,12 @@ public class GuiMinePad extends WDScreen {
 
 	@Override
 	public boolean keyPressed(KeyEvent event) {
-		return this.keyChanged(event.key(), event.scancode(), event.modifiers(), true) || super.keyPressed(event);
+		return this.keyChanged(event.key(), event.key(), event.modifiers(), true) || super.keyPressed(event);
 	}
 
 	@Override
 	public boolean keyReleased(KeyEvent event) {
-		return this.keyChanged(event.key(), event.scancode(), event.modifiers(), false) || super.keyReleased(event);
+		return this.keyChanged(event.key(), event.key(), event.modifiers(), false) || super.keyReleased(event);
 	}
 
 	@Override

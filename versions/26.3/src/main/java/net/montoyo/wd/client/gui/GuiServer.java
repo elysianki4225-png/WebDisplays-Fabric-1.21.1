@@ -206,7 +206,7 @@ public class GuiServer extends WDScreen {
 	@Override
 	public boolean keyPressed(KeyEvent event) {
 		int keyCode = event.key();
-		int scanCode = event.scancode();
+		int scanCode = event.key();
 		int modifiers = event.modifiers();
 		if (keyCode == InputConstants.KEY_ESCAPE && !uploadWizard) {
 			Minecraft.getInstance().gui.setScreen(null);
