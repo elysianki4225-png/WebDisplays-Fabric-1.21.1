@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "id": "webdisplays",
+  "version": "${version}",
+  "name": "WebDisplays",
+  "description": "Display live web pages in Minecraft using Chromium (MCEF bundled).",
+  "authors": [
+    "montoyo",
+    "GiantLuigi4",
+    "Mysticpasta1"
+  ],
+  "contact": {
+    "homepage": "https://www.curseforge.com/minecraft/mc-mods/webdisplays",
+    "sources": "https://github.com/elysianki4225-png/WebDisplays-Fabric-1.21.1"
+  },
+  "license": "MIT",
+  "icon": "assets/webdisplays/textures/item/advicon_wd.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "net.montoyo.wd.WebDisplaysFabric"
+    ],
+    "client": [
+      "net.montoyo.wd.client.WebDisplaysFabricClient"
+    ]
+  },
+  "mixins": [
+    "webdisplays.mixins.json"
+  ],
+  "accessWidener": "webdisplays.accesswidener",
+  "depends": {
+    "fabricloader": ">=0.20.1",
+    "minecraft": "~26.3",
+    "java": ">=25",
+    "mcef": "*",
+    "cloth-config": "*",
+    "fabric-api-base": "*",
+    "fabric-block-getter-api-v2": "*",
+    "fabric-creative-tab-api-v1": "*",
+    "fabric-events-interaction-v0": "*",
+    "fabric-key-mapping-api-v1": "*",
+    "fabric-lifecycle-events-v1": "*",
+    "fabric-message-api-v1": "*",
+    "fabric-model-loading-api-v1": "*",
+    "fabric-networking-api-v1": "*",
+    "fabric-object-builder-api-v1": "*",
+    "fabric-registry-sync-v0": "*",
+    "fabric-renderer-api-v1": "*",
+    "fabric-rendering-v1": "*",
+    "fabric-resource-loader-v1": "*",
+    "fabric-screen-api-v1": "*"
+  }
+}

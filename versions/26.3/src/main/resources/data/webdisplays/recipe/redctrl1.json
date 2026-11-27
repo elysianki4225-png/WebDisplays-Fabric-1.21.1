@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "RRR",
+    "RPR",
+    "BBB"
+  ],
+  "key": {
+    "R": "minecraft:redstone",
+    "P": "webdisplays:craftcomp_peripheral",
+    "B": "minecraft:oak_button"
+  },
+  "result": {
+    "id": "webdisplays:redctrl"
+  }
+}

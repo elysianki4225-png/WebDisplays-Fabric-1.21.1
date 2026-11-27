@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "RRR",
+    "RPR"
+  ],
+  "key": {
+    "R": "minecraft:redstone",
+    "P": "webdisplays:redctrl"
+  },
+  "result": {
+    "id": "webdisplays:redctrl"
+  }
+}

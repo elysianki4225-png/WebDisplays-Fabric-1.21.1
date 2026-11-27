@@ -1,0 +1,9 @@
+{
+  "model": {
+    "type": "minecraft:special",
+    "base": "webdisplays:item/minepad",
+    "model": {
+      "type": "webdisplays:minepad"
+    }
+  }
+}
