@@ -27,6 +27,7 @@ public class ItemInit {
     public static final RegistryObject<Item> OWNERSHIP_THEIF = ITEMS.register("ownerthief", () -> new ItemOwnershipThief(new Item.Properties()));
     public static final RegistryObject<Item> LINKER = ITEMS.register("linker", () -> new ItemLinker(new Item.Properties()));
     public static final RegistryObject<Item> MINEPAD = ITEMS.register("minepad", () -> new ItemMinePad2(new Item.Properties()));
+    public static final RegistryObject<Item> SMARTPHONE = ITEMS.register("smartphone", () -> new ItemSmartphone(new Item.Properties()));
     public static final RegistryObject<Item> LASER_POINTER = ITEMS.register("laserpointer", () -> new ItemLaserPointer(new Item.Properties()));
 
     static {

@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "PGP",
+    "ICI",
+    "RDB"
+  ],
+  "key": {
+    "P": "minecraft:glass_pane",
+    "G": "minecraft:green_dye",
+    "I": "minecraft:iron_ingot",
+    "C": "webdisplays:craftcomp_batcell",
+    "R": "minecraft:red_dye",
+    "D": "minecraft:diamond",
+    "B": "minecraft:blue_dye"
+  },
+  "result": {
+    "count": 1,
+    "id": "webdisplays:smartphone"
+  }
+}

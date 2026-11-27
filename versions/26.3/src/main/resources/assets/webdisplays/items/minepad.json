@@ -1,9 +1,25 @@
 {
   "model": {
-    "type": "minecraft:special",
-    "base": "webdisplays:item/minepad",
-    "model": {
-      "type": "webdisplays:minepad"
+    "type": "minecraft:select",
+    "property": "minecraft:display_context",
+    "cases": [
+      {
+        "when": [
+          "firstperson_righthand",
+          "firstperson_lefthand"
+        ],
+        "model": {
+          "type": "minecraft:special",
+          "base": "webdisplays:item/minepad_hand",
+          "model": {
+            "type": "webdisplays:minepad"
+          }
+        }
+      }
+    ],
+    "fallback": {
+      "type": "minecraft:model",
+      "model": "webdisplays:item/minepad"
     }
   }
 }

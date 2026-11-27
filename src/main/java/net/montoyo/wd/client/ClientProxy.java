@@ -108,7 +108,7 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 		ItemStack stack = Minecraft.getInstance().player.getItemInHand(InteractionHand.MAIN_HAND);
 		ItemStack stack1 = Minecraft.getInstance().player.getItemInHand(InteractionHand.OFF_HAND);
 		
-		if (stack.getItem() instanceof ItemMinePad2) {
+		if (stack.getItem() instanceof ItemMinePad2 pad && !pad.isMobileLayout()) {
 			float sign = 1;
 			if (Minecraft.getInstance().player.getMainArm() == HumanoidArm.LEFT) sign = -1;
 			if (!MinePadRenderer.renderAtSide(sign)) {
@@ -116,7 +116,7 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 				return;
 			}
 		} else {
-			if (stack1.getItem() instanceof ItemMinePad2) {
+			if (stack1.getItem() instanceof ItemMinePad2 pad && !pad.isMobileLayout()) {
 				float sign = -1;
 				if (Minecraft.getInstance().player.getMainArm() == HumanoidArm.LEFT) sign = 1;
 				if (!MinePadRenderer.renderAtSide(sign)) {
@@ -190,10 +190,16 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 		private boolean isInHotbar;
 		private final UUID id;
 		private long lastURLSent;
+		public final boolean mobile;
+		public final int resX;
+		public final int resY;
 		
 		public int activeCursor;
 		
-		private PadData(String url, UUID id) {
+		private PadData(String url, UUID id, boolean mobile) {
+			this.mobile = mobile;
+			this.resX = mobile ? 450 : Math.max(1, (int) WebDisplays.INSTANCE.padResX);
+			this.resY = mobile ? 800 : Math.max(1, (int) WebDisplays.INSTANCE.padResY);
 			if (MCEF.isInitialized()) {
 				String webUrl;
 				try {
@@ -202,9 +208,7 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 					throw new RuntimeException(e);
 				}
 				ensureSchemeHandlers();
-				view = MCEF.createBrowser(WebDisplays.applyBlacklist(webUrl), false,
-						Math.max(1, (int) WebDisplays.INSTANCE.padResX),
-						Math.max(1, (int) WebDisplays.INSTANCE.padResY));
+				view = MCEF.createBrowser(WebDisplays.applyBlacklist(webUrl), false, resX, resY);
 				if (view instanceof MCEFBrowser browser) {
 					browser.setCursorChangeListener((cursor) -> {
 						activeCursor = cursor;
@@ -218,6 +222,7 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 	
 	private Minecraft mc;
 	private MinePadRenderer minePadRenderer;
+	private SmartphoneRenderer smartphoneRenderer;
 //	private JSQueryDispatcher jsDispatcher;
 	private LaserPointerRenderer laserPointerRenderer;
 	private Screen nextScreen;
@@ -256,12 +261,22 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 	@Override
 	public void init() {
 		super.init();
+		if (minePadRenderer == null)
+			minePadRenderer = new MinePadRenderer();
+		if (smartphoneRenderer == null)
+			smartphoneRenderer = new SmartphoneRenderer();
+		if (laserPointerRenderer == null)
+			laserPointerRenderer = new LaserPointerRenderer();
 	}
 	
 	@Override
 	public void onCefInit(/*CefInitEvent event*/) {
-		minePadRenderer = new MinePadRenderer();
-		laserPointerRenderer = new LaserPointerRenderer();
+		if (minePadRenderer == null)
+			minePadRenderer = new MinePadRenderer();
+		if (smartphoneRenderer == null)
+			smartphoneRenderer = new SmartphoneRenderer();
+		if (laserPointerRenderer == null)
+			laserPointerRenderer = new LaserPointerRenderer();
 
 		if (!MCEF.isInitialized()) return;
 
@@ -426,6 +441,24 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 	@Override
 	public void openMinePadGui(UUID padId) {
 		PadData pd = padMap.get(padId);
+		if (pd == null && mc.player != null) {
+			for (InteractionHand hand : InteractionHand.values()) {
+				ItemStack stack = mc.player.getItemInHand(hand);
+				if (stack.getItem() instanceof ItemMinePad2 padItem) {
+					var data = stack.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
+					if (data != null && data.contains("PadID")) {
+						CompoundTag tag = data.copyTag();
+						if (padId.equals(tag.getUUID("PadID"))) {
+							String url = tag.contains("PadURL") ? tag.getString("PadURL") : net.montoyo.wd.config.CommonConfig.Browser.homepage;
+							pd = new PadData(url, padId, padItem.isMobileLayout());
+							padMap.put(padId, pd);
+							padList.add(pd);
+							break;
+						}
+					}
+				}
+			}
+		}
 		
 		if (pd != null && pd.view != null)
 			mc.setScreen(new GuiMinePad(pd));
@@ -798,27 +831,32 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 	 * Called from ItemInHandRendererMixin, replacing Forge's RenderHandEvent.
 	 * Returns true when vanilla hand rendering should be skipped.
 	 */
-	public static boolean renderFirstPersonItem(ItemStack stack, boolean leftHand, PoseStack pose, MultiBufferSource buffers, int light) {
+	public static boolean renderFirstPersonItem(ItemStack stack, boolean leftHand, float swingProgress, float equipProgress, PoseStack pose, MultiBufferSource buffers, int light) {
 		ClientProxy proxy = INSTANCE;
 		if (proxy == null || proxy.mc.player == null)
 			return false;
 
-		if (!ItemInit.MINEPAD.isPresent() || !ItemInit.LASER_POINTER.isPresent())
-			return false;
+		if (proxy.minePadRenderer == null)
+			proxy.minePadRenderer = new MinePadRenderer();
+		if (proxy.smartphoneRenderer == null)
+			proxy.smartphoneRenderer = new SmartphoneRenderer();
+		if (proxy.laserPointerRenderer == null)
+			proxy.laserPointerRenderer = new LaserPointerRenderer();
 
 		Item item = stack.getItem();
 		IItemRenderer renderer;
 
-		if (item == ItemInit.MINEPAD.get())
+		if (ItemInit.SMARTPHONE.isPresent() && item == ItemInit.SMARTPHONE.get())
+			renderer = proxy.smartphoneRenderer;
+		else if (ItemInit.MINEPAD.isPresent() && item == ItemInit.MINEPAD.get())
 			renderer = proxy.minePadRenderer;
-		else if (item == ItemInit.LASER_POINTER.get())
+		else if (ItemInit.LASER_POINTER.isPresent() && item == ItemInit.LASER_POINTER.get())
 			renderer = proxy.laserPointerRenderer;
 		else
 			return false;
 
 		float sign = leftHand ? -1.0f : 1.0f;
-		float swingProgress = proxy.mc.player.getAttackAnim(proxy.mc.getTimer().getGameTimeDeltaPartialTick(false));
-		return renderer.render(pose, stack, sign, swingProgress, 0.0f, buffers, light);
+		return renderer.render(pose, stack, sign, swingProgress, equipProgress, buffers, light);
 	}
 
 	public void onWorldDisconnect() {
@@ -839,29 +877,25 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 	}
 	
 	private void updateInventory(NonNullList<ItemStack> inv, ItemStack heldStack, int cnt) {
-		if (!ItemInit.MINEPAD.isPresent())
-			return;
-
-		Item minepadItem = ItemInit.MINEPAD.get();
 		for (int i = 0; i < cnt; i++) {
 			ItemStack item = inv.get(i);
-			if (item.getItem() == minepadItem) {
+			if (item.getItem() instanceof ItemMinePad2 padItem) {
 				net.minecraft.world.item.component.CustomData data = item.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
 				if (data != null && data.contains("PadID")) {
 					CompoundTag tag = data.copyTag();
-					updatePad(tag.getUUID("PadID"), tag, item == heldStack);
+					updatePad(tag.getUUID("PadID"), tag, item == heldStack, padItem.isMobileLayout());
 				}
 			}
 		}
 	}
 	
-	private void updatePad(UUID id, CompoundTag tag, boolean isSelected) {
+	private void updatePad(UUID id, CompoundTag tag, boolean isSelected, boolean mobile) {
 		PadData pd = padMap.get(id);
 		
 		if (pd != null)
 			pd.isInHotbar = true;
 		else if (isSelected && tag.contains("PadURL")) {
-			pd = new PadData(tag.getString("PadURL"), id);
+			pd = new PadData(tag.getString("PadURL"), id, mobile);
 			padMap.put(id, pd);
 			padList.add(pd);
 		}

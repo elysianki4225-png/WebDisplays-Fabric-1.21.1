@@ -84,13 +84,17 @@ public class GuiSetURL2 extends WDScreen {
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
 		if (panelBounds != null) {
-			String title = I18n.get(isPad ? "webdisplays.gui.seturl.title_pad" : "webdisplays.gui.seturl.title");
+			boolean isPhone = isPad && stack != null && stack.getItem() instanceof ItemMinePad2 padItem && padItem.isMobileLayout();
+			String titleKey = isPad
+					? (isPhone ? "webdisplays.gui.seturl.title_phone" : "webdisplays.gui.seturl.title_pad")
+					: "webdisplays.gui.seturl.title";
+			String title = I18n.get(titleKey);
 			WDTheme.drawGlassPanelWithHeader(
 					graphics,
 					font,
 					panelBounds[0], panelBounds[1], panelBounds[2], panelBounds[3],
 					title,
-					isPad ? "minePad" : null
+					isPad ? (isPhone ? "phone" : "minePad") : null
 			);
 		}
 		super.extractRenderState(graphics, mouseX, mouseY, ptt);
