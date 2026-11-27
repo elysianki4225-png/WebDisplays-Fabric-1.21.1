@@ -40,6 +40,7 @@ public class GuiSetURL2 extends WDScreen {
 
 	private ItemStack stack;
 	private final boolean isPad;
+	private final ClientProxy.PadData returnPad;
 
 	private final String screenURL;
 	private int[] panelBounds;
@@ -62,13 +63,20 @@ public class GuiSetURL2 extends WDScreen {
 		screenSide = side;
 		remoteLocation = rl;
 		isPad = false;
+		stack = null;
+		returnPad = null;
 		screenURL = url;
 	}
 
 	public GuiSetURL2(ItemStack is, String url) {
+		this(is, url, null);
+	}
+
+	public GuiSetURL2(ItemStack is, String url, ClientProxy.PadData returnPad) {
 		super(Component.nullToEmpty(null));
 		isPad = true;
 		stack = is;
+		this.returnPad = returnPad;
 		screenURL = url;
 	}
 
@@ -77,14 +85,14 @@ public class GuiSetURL2 extends WDScreen {
 		super.init();
 		loadFrom(Identifier.fromNamespaceAndPath("webdisplays", "gui/seturl.json"));
 		panelBounds = centerInPanel(12, 32, 10);
-		tfURL.setText(screenURL);
+		tfURL.setText(screenURL == null ? "" : screenURL);
 		tfURL.focus();
 	}
 
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
 		if (panelBounds != null) {
-			boolean isPhone = isPad && stack != null && stack.getItem() instanceof ItemMinePad2 padItem && padItem.isMobileLayout();
+			boolean isPhone = isMobilePhone();
 			String titleKey = isPad
 					? (isPhone ? "webdisplays.gui.seturl.title_phone" : "webdisplays.gui.seturl.title_pad")
 					: "webdisplays.gui.seturl.title";
@@ -105,35 +113,55 @@ public class GuiSetURL2 extends WDScreen {
 		vars.put("isPad", isPad ? 1.0 : 0.0);
 	}
 
-	protected UUID getUUID() {
-		if (stack == null || !(stack.getItem() instanceof ItemMinePad2))
-			throw new RuntimeException("Get UUID is being called for a non-minepad UI");
-		CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
-		UUID uuid = NbtCompat.getUUID(tag, "PadID");
-		if (uuid == null) {
-			uuid = UUID.randomUUID();
-			NbtCompat.putUUID(tag, "PadID", uuid);
-			stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
-		}
+	private boolean isMobilePhone() {
+		if (stack != null && !stack.isEmpty() && stack.getItem() instanceof ItemMinePad2 padItem && padItem.isMobileLayout())
+			return true;
+		return returnPad != null && returnPad.mobile;
+	}
 
-		return uuid;
+	private void closeToParent() {
+		if (returnPad != null && returnPad.view != null)
+			minecraft.gui.setScreen(new GuiMinePad(returnPad));
+		else
+			minecraft.gui.setScreen(null);
+	}
+
+	protected UUID getUUID() {
+		if (stack != null && !stack.isEmpty() && stack.getItem() instanceof ItemMinePad2) {
+			CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
+			UUID uuid = NbtCompat.getUUID(tag, "PadID");
+			if (uuid == null) {
+				uuid = (returnPad != null && returnPad.id != null) ? returnPad.id : UUID.randomUUID();
+				NbtCompat.putUUID(tag, "PadID", uuid);
+				stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+			}
+
+			return uuid;
+		}
+		if (returnPad != null && returnPad.id != null)
+			return returnPad.id;
+		throw new RuntimeException("Get UUID is being called for a non-minepad UI");
 	}
 
 	@GuiSubscribe
 	public void onButtonClicked(Button.ClickEvent ev) {
 		if (ev.getSource() == btnCancel)
-			minecraft.gui.setScreen(null);
+			closeToParent();
 		else if (ev.getSource() == btnOk)
 			validate(tfURL.getText());
 		else if (ev.getSource() == btnShutDown) {
 			if (isPad) {
+				UUID uuid = getUUID();
 				WDNetworkRegistry.INSTANCE.sendToServer(new C2SMessageMinepadUrl(
-						getUUID(),
+						uuid,
 						""
 				));
-				CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
-				NbtCompat.removeUUID(tag, "PadID");
-				stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+				if (stack != null && !stack.isEmpty()) {
+					CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
+					NbtCompat.removeUUID(tag, "PadID");
+					stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+				}
+				((ClientProxy) WebDisplays.PROXY).closePad(uuid);
 			}
 
 			minecraft.gui.setScreen(null);
@@ -145,7 +173,17 @@ public class GuiSetURL2 extends WDScreen {
 		validate(ev.getText());
 	}
 
-	private void validate(String url) {
+	@Override
+	public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
+		if (quitOnEscape && event.key() == com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE) {
+			closeToParent();
+			return true;
+		}
+		return super.keyPressed(event);
+	}
+
+	private void validate(String rawUrl) {
+		String url = rawUrl == null ? "" : rawUrl.trim();
 		if (!url.isEmpty()) {
 			try {
 				TileEntityScreen.url(url);
@@ -157,21 +195,32 @@ public class GuiSetURL2 extends WDScreen {
 
 			if (isPad) {
 				UUID uuid = getUUID();
+				boolean mobile = isMobilePhone();
 				WDNetworkRegistry.INSTANCE.sendToServer(new C2SMessageMinepadUrl(uuid, url));
-				CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
-				tag.putString("PadURL", url);
-				stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+				if (stack != null && !stack.isEmpty()) {
+					CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
+					NbtCompat.putUUID(tag, "PadID", uuid);
+					tag.putString("PadURL", url);
+					if (mobile)
+						tag.putBoolean("PadMobile", true);
+					stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+				}
 
-				ClientProxy.PadData pd = ((ClientProxy) WebDisplays.PROXY).getPadByID(uuid);
+				ClientProxy proxy = (ClientProxy) WebDisplays.PROXY;
+				ClientProxy.PadData pd = returnPad != null ? returnPad : proxy.getOrCreatePad(uuid, url, mobile);
 
 				if (pd != null && pd.view != null) {
 					pd.view.loadURL(WebDisplays.applyBlacklist(url));
+				}
+				if ((returnPad != null || mobile) && pd != null && pd.view != null) {
+					minecraft.gui.setScreen(new GuiMinePad(pd));
+					return;
 				}
 			} else
 				WDNetworkRegistry.INSTANCE.sendToServer(C2SMessageScreenCtrl.setURL(tileEntity, screenSide, url, remoteLocation));
 		}
 
-		minecraft.gui.setScreen(null);
+		closeToParent();
 	}
 
 	@Override

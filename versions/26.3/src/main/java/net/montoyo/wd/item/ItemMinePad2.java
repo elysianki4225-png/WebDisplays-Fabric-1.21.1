@@ -62,7 +62,7 @@ public class ItemMinePad2 extends Item implements WDItem, IItemEntityTickHandler
 		} else if (NbtCompat.hasUUID(tag, "PadID")) {
 			if (world.isClientSide())
 				WebDisplays.PROXY.openMinePadGui(NbtCompat.getUUID(tag, "PadID"));
-		} else {
+		} else if (world.isClientSide()) {
 			UUID uuid = UUID.randomUUID();
 			String url = getURL(is);
 			WDNetworkRegistry.INSTANCE.sendToServer(new C2SMessageMinepadUrl(uuid, url));
@@ -71,6 +71,8 @@ public class ItemMinePad2 extends Item implements WDItem, IItemEntityTickHandler
 			if (isMobileLayout())
 				tag.putBoolean("PadMobile", true);
 			is.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+			if (isMobileLayout())
+				WebDisplays.PROXY.openMinePadGui(uuid);
 		}
 
 		return InteractionResult.SUCCESS;

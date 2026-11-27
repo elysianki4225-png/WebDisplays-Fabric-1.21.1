@@ -182,6 +182,8 @@ public abstract class WDScreen extends Screen {
 
     @Override
     protected void init() {
+        controls.clear();
+        postDrawList.clear();
         CURRENT_SCREEN = this;
 //        minecraft.keyboardHandler.setSendRepeatsToGui(true);
     }
