@@ -37,6 +37,7 @@ public class ItemInit {
     public static final RegistryObject<Item> OWNERSHIP_THEIF = ITEMS.register("ownerthief", () -> new ItemOwnershipThief(itemProps("ownerthief")));
     public static final RegistryObject<Item> LINKER = ITEMS.register("linker", () -> new ItemLinker(itemProps("linker")));
     public static final RegistryObject<Item> MINEPAD = ITEMS.register("minepad", () -> new ItemMinePad2(itemProps("minepad")));
+    public static final RegistryObject<Item> SMARTPHONE = ITEMS.register("smartphone", () -> new ItemSmartphone(itemProps("smartphone")));
     public static final RegistryObject<Item> LASER_POINTER = ITEMS.register("laserpointer", () -> new ItemLaserPointer(itemProps("laserpointer")));
 
     static {
@@ -57,7 +58,7 @@ public class ItemInit {
 
     public static final RegistryObject<Item> SCREEN = ITEMS.register("screen", () -> new BlockItem(BlockInit.blockScreen.get(), blockItemProps("screen")));
 
-    public static final RegistryObject<Item> KEYBOARD = ITEMS.register("keyboard", () -> new KeyboardItem(BlockInit.blockKeyBoard.get(), itemProps("keyboard")));
+    public static final RegistryObject<Item> KEYBOARD = ITEMS.register("keyboard", () -> new KeyboardItem(BlockInit.blockKeyBoard.get(), blockItemProps("keyboard")));
     public static final RegistryObject<Item> REDSTONE_CONTROLLER = ITEMS.register("redctrl", () -> new BlockItem(BlockInit.blockRedControl.get(), blockItemProps("redctrl")));
     public static final RegistryObject<Item> REMOTE_CONTROLLER = ITEMS.register("rctrl", () -> new BlockItem(BlockInit.blockRControl.get(), blockItemProps("rctrl")));
     public static final RegistryObject<Item> SERVER = ITEMS.register("server", () -> new BlockItem(BlockInit.blockServer.get(), blockItemProps("server")));

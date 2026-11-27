@@ -38,6 +38,10 @@ public class ItemMinePad2 extends Item implements WDItem, IItemEntityTickHandler
 		);
 	}
 
+	public boolean isMobileLayout() {
+		return false;
+	}
+
 	private static String getURL(ItemStack is) {
 		CustomData data = is.get(DataComponents.CUSTOM_DATA);
 		if (data == null || !data.copyTag().contains("PadURL"))
@@ -63,6 +67,9 @@ public class ItemMinePad2 extends Item implements WDItem, IItemEntityTickHandler
 			String url = getURL(is);
 			WDNetworkRegistry.INSTANCE.sendToServer(new C2SMessageMinepadUrl(uuid, url));
 			NbtCompat.putUUID(tag, "PadID", uuid);
+			tag.putString("PadURL", url);
+			if (isMobileLayout())
+				tag.putBoolean("PadMobile", true);
 			is.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
 		}
 

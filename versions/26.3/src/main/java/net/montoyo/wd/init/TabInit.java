@@ -33,6 +33,7 @@ public class TabInit {
                 output.accept(ItemInit.SERVER.get());
                 output.accept(ItemInit.CONFIGURATOR.get());
                 output.accept(ItemInit.MINEPAD.get());
+                output.accept(ItemInit.SMARTPHONE.get());
                 output.accept(ItemInit.LASER_POINTER.get());
 
                 // upgrades

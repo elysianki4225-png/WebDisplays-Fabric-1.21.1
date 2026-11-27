@@ -56,6 +56,7 @@ import net.montoyo.wd.client.gui.*;
 import net.montoyo.wd.client.gui.loading.GuiLoader;
 import net.montoyo.wd.client.renderers.*;
 import net.montoyo.wd.config.ClientConfig;
+import net.montoyo.wd.config.CommonConfig;
 import net.montoyo.wd.core.HasAdvancement;
 import net.montoyo.wd.data.GuiData;
 import net.montoyo.wd.entity.TileEntityScreen;
@@ -120,11 +121,11 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 		ItemStack stack = mc.player.getItemInHand(InteractionHand.MAIN_HAND);
 		ItemStack stack1 = mc.player.getItemInHand(InteractionHand.OFF_HAND);
 
-		if (stack.getItem() instanceof ItemMinePad2) {
+		if (stack.getItem() instanceof ItemMinePad2 pad && !pad.isMobileLayout()) {
 			float sign = mc.player.getMainArm() == HumanoidArm.LEFT ? -1 : 1;
 			if (!shouldRenderMinePadAtSide(sign))
 				return true;
-		} else if (stack1.getItem() instanceof ItemMinePad2) {
+		} else if (stack1.getItem() instanceof ItemMinePad2 pad && !pad.isMobileLayout()) {
 			float sign = mc.player.getMainArm() == HumanoidArm.LEFT ? 1 : -1;
 			if (!shouldRenderMinePadAtSide(sign))
 				return true;
@@ -181,10 +182,16 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 		private boolean isInHotbar;
 		private final UUID id;
 		private long lastURLSent;
+		public final boolean mobile;
+		public final int resX;
+		public final int resY;
 		
 		public int activeCursor;
 		
-		private PadData(String url, UUID id) {
+		private PadData(String url, UUID id, boolean mobile) {
+			this.mobile = mobile;
+			this.resX = mobile ? 450 : Math.max(1, (int) WebDisplays.INSTANCE.padResX);
+			this.resY = mobile ? 800 : Math.max(1, (int) WebDisplays.INSTANCE.padResY);
 			if (MCEF.isInitialized()) {
 				String webUrl;
 				try {
@@ -193,9 +200,7 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 					throw new RuntimeException(e);
 				}
 				ensureSchemeHandlers();
-				view = MCEF.createBrowser(WebDisplays.applyBlacklist(webUrl), false,
-						Math.max(1, (int) WebDisplays.INSTANCE.padResX),
-						Math.max(1, (int) WebDisplays.INSTANCE.padResY));
+				view = MCEF.createBrowser(WebDisplays.applyBlacklist(webUrl), false, resX, resY);
 				if (view instanceof MCEFBrowser browser) {
 					browser.setCursorChangeListener((cursor) -> {
 						activeCursor = cursor;
@@ -234,6 +239,7 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 		BlockEntityRenderers.register(TileInit.SCREEN_BLOCK_ENTITY.get(), ScreenRenderer::new);
 		ScreenModelLoader.register();
 		SpecialModelRenderers.ID_MAPPER.put(Identifier.fromNamespaceAndPath("webdisplays", "minepad"), MinePadRenderer.Unbaked.MAP_CODEC);
+		SpecialModelRenderers.ID_MAPPER.put(Identifier.fromNamespaceAndPath("webdisplays", "smartphone"), SmartphoneRenderer.Unbaked.MAP_CODEC);
 		LaserPointerRenderer.register();
 		HudElementRegistry.replaceElement(VanillaHudElements.CROSSHAIR, original -> (graphics, deltaTracker) -> {
 			if (!ClientProxy.renderCustomCrosshair(graphics))
@@ -408,6 +414,25 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 	@Override
 	public void openMinePadGui(UUID padId) {
 		PadData pd = padMap.get(padId);
+		if (pd == null && mc.player != null) {
+			for (InteractionHand hand : InteractionHand.values()) {
+				ItemStack stack = mc.player.getItemInHand(hand);
+				if (stack.getItem() instanceof ItemMinePad2 padItem) {
+					CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+					if (data != null) {
+						CompoundTag tag = data.copyTag();
+						UUID stackId = NbtCompat.getUUID(tag, "PadID");
+						if (padId.equals(stackId)) {
+							String url = tag.getStringOr("PadURL", CommonConfig.Browser.homepage);
+							pd = new PadData(url, padId, padItem.isMobileLayout());
+							padMap.put(padId, pd);
+							padList.add(pd);
+							break;
+						}
+					}
+				}
+			}
+		}
 		
 		if (pd != null && pd.view != null)
 			mc.gui.setScreen(new GuiMinePad(pd));
@@ -793,44 +818,40 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 	}
 	
 	private void updateInventory(Inventory inv, ItemStack mainHeld, ItemStack offhandItem, ItemStack offHeld) {
-		if (!ItemInit.MINEPAD.isPresent())
-			return;
-
-		Item minepadItem = ItemInit.MINEPAD.get();
 		for (int i = 0; i < 9; i++) {
 			ItemStack item = inv.getItem(i);
-			if (item.getItem() == minepadItem) {
+			if (item.getItem() instanceof ItemMinePad2 padItem) {
 				CustomData data = item.get(DataComponents.CUSTOM_DATA);
 				if (data != null) {
 					CompoundTag tag = data.copyTag();
 					if (NbtCompat.hasUUID(tag, "PadID")) {
 						UUID id = NbtCompat.getUUID(tag, "PadID");
 						if (id != null)
-							updatePad(id, tag, item == mainHeld);
+							updatePad(id, tag, item == mainHeld, padItem.isMobileLayout());
 					}
 				}
 			}
 		}
-		if (offhandItem.getItem() == minepadItem) {
+		if (offhandItem.getItem() instanceof ItemMinePad2 padItem) {
 			CustomData data = offhandItem.get(DataComponents.CUSTOM_DATA);
 			if (data != null) {
 				CompoundTag tag = data.copyTag();
 				if (NbtCompat.hasUUID(tag, "PadID")) {
 					UUID id = NbtCompat.getUUID(tag, "PadID");
 					if (id != null)
-						updatePad(id, tag, offhandItem == offHeld);
+						updatePad(id, tag, offhandItem == offHeld, padItem.isMobileLayout());
 				}
 			}
 		}
 	}
 	
-	private void updatePad(UUID id, CompoundTag tag, boolean isSelected) {
+	private void updatePad(UUID id, CompoundTag tag, boolean isSelected, boolean mobile) {
 		PadData pd = padMap.get(id);
 		
 		if (pd != null)
 			pd.isInHotbar = true;
 		else if (isSelected && tag.contains("PadURL")) {
-			pd = new PadData(tag.getStringOr("PadURL", ""), id);
+			pd = new PadData(tag.getStringOr("PadURL", ""), id, mobile);
 			padMap.put(id, pd);
 			padList.add(pd);
 		}

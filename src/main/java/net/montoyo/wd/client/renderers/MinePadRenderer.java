@@ -8,19 +8,17 @@ import com.cinemamod.mcef.MCEF;
 import com.cinemamod.mcef.MCEFBrowser;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.player.PlayerRenderer;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
 import net.montoyo.wd.WebDisplays;
 import net.montoyo.wd.client.ClientProxy;
 import net.montoyo.wd.config.ClientConfig;
@@ -37,7 +35,6 @@ import static com.mojang.math.Axis.*;
 public final class MinePadRenderer implements IItemRenderer {
 	private static final float PI = (float) Math.PI;
 	private final Minecraft mc = Minecraft.getInstance();
-	private final ResourceLocation tex = ResourceLocation.fromNamespaceAndPath("webdisplays", "textures/item/model/minepad.png");
 	private final ModelMinePad model = new ModelMinePad();
 	private final ClientProxy clientProxy = (ClientProxy) WebDisplays.PROXY;
 	private final Map<CustomData, UUID> padIdCache = Collections.synchronizedMap(new WeakHashMap<>());
@@ -62,13 +59,17 @@ public final class MinePadRenderer implements IItemRenderer {
 	}
 
 	public static boolean renderAtSide(float handSideSign) {
-		float relSide = handSideSign;
-		if (Minecraft.getInstance().player.getMainArm() == HumanoidArm.LEFT) relSide *= -1;
+		Minecraft mc = Minecraft.getInstance();
+		if (mc.player == null)
+			return false;
 
-		boolean sideHold = Minecraft.getInstance().player.isShiftKeyDown() != ClientConfig.sidePad;
+		float relSide = handSideSign;
+		if (mc.player.getMainArm() == HumanoidArm.LEFT) relSide *= -1;
+
+		boolean sideHold = mc.player.isShiftKeyDown() != ClientConfig.sidePad;
 		if (
-				(relSide < 0 && Minecraft.getInstance().player.getItemInHand(InteractionHand.MAIN_HAND).getItem() instanceof ItemMinePad2) ||
-						(relSide > 0 && Minecraft.getInstance().player.getItemInHand(InteractionHand.OFF_HAND).getItem() instanceof ItemMinePad2)
+				(relSide < 0 && mc.player.getItemInHand(InteractionHand.MAIN_HAND).getItem() instanceof ItemMinePad2) ||
+						(relSide > 0 && mc.player.getItemInHand(InteractionHand.OFF_HAND).getItem() instanceof ItemMinePad2)
 		) sideHold = true;
 
 		return sideHold;
@@ -84,9 +85,11 @@ public final class MinePadRenderer implements IItemRenderer {
 
 		boolean sideHold = renderAtSide(handSideSign);
 
-		stack.pushPose();
-		renderArmFirstPerson(stack, multiBufferSource, packedLight, equipProgress, handSideSign);
-		stack.popPose();
+		if (mc.player != null && !mc.player.isInvisible()) {
+			stack.pushPose();
+			renderArmFirstPerson(stack, multiBufferSource, packedLight, equipProgress, handSideSign);
+			stack.popPose();
+		}
 
 		stack.pushPose();
 		stack.translate(handSideSign * -0.4f * sinSqrtSwingProg1, 0.2f * sinSqrtSwingProg2, -0.2f * sinSwingProg1);
@@ -109,10 +112,10 @@ public final class MinePadRenderer implements IItemRenderer {
 			stack.translate(0.065f, 0.0f, 0.0f);
 
 		stack.translate(0.063f, 0.28f, 0.001f);
-		model.render(multiBufferSource, stack);
-		stack.translate(-0.063f, -0.28f, -0.001f);
+		model.render(multiBufferSource, stack, packedLight);
 
-		multiBufferSource.getBuffer(RenderType.LINES);
+		if (multiBufferSource instanceof MultiBufferSource.BufferSource bs)
+			bs.endBatch();
 
 		CustomData data = is.get(DataComponents.CUSTOM_DATA);
 		if (MCEF.isInitialized() && data != null && data.contains("PadID")) {
@@ -122,24 +125,22 @@ public final class MinePadRenderer implements IItemRenderer {
 			if (pd != null && pd.view instanceof MCEFBrowser browser) {
 				int texId = browser.getRenderer().getTextureID();
 				if (texId != 0) {
-					double x1 = 0.0;
-					double y1 = 0.0;
-					double x2 = 27.65 / 32.0 + 0.01;
-					double y2 = 14.0 / 32.0 + 0.002;
+					float x1 = 0.0f;
+					float y1 = 0.0f;
+					float x2 = 27.65f / 32.0f + 0.01f;
+					float y2 = 14.0f / 32.0f + 0.002f;
 
-					stack.translate(0.063f, 0.28f, 0.001f);
-
-					RenderSystem.disableDepthTest();
+					RenderSystem.enableDepthTest();
+					RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
 					RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
 					RenderSystem.setShaderTexture(0, texId);
 					BufferBuilder buffer = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
 					var mat = stack.last().pose();
-					buffer.addVertex(mat, (float) x1, (float) y1, 0.0f).setUv(0.0F, 1.0F).setColor(255, 255, 255, 255);
-					buffer.addVertex(mat, (float) x2, (float) y1, 0.0f).setUv(1.0F, 1.0F).setColor(255, 255, 255, 255);
-					buffer.addVertex(mat, (float) x2, (float) y2, 0.0f).setUv(1.0F, 0.0F).setColor(255, 255, 255, 255);
-					buffer.addVertex(mat, (float) x1, (float) y2, 0.0f).setUv(0.0F, 0.0F).setColor(255, 255, 255, 255);
+					buffer.addVertex(mat, x1, y1, 0.002f).setUv(0.0F, 1.0F).setColor(255, 255, 255, 255);
+					buffer.addVertex(mat, x2, y1, 0.002f).setUv(1.0F, 1.0F).setColor(255, 255, 255, 255);
+					buffer.addVertex(mat, x2, y2, 0.002f).setUv(1.0F, 0.0F).setColor(255, 255, 255, 255);
+					buffer.addVertex(mat, x1, y2, 0.002f).setUv(0.0F, 0.0F).setColor(255, 255, 255, 255);
 					BufferUploader.drawWithShader(buffer.buildOrThrow());
-					RenderSystem.enableDepthTest();
 				}
 			}
 		}
