@@ -1,4 +1,4 @@
-accessWidener	v1	named
+accessWidener	v1	official
 mutable	field	net/minecraft/world/phys/AABB	minX	D
 mutable	field	net/minecraft/world/phys/AABB	minY	D
 mutable	field	net/minecraft/world/phys/AABB	minZ	D
