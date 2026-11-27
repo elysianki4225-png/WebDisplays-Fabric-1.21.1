@@ -115,26 +115,53 @@ public class TextField extends Control {
     }
 
     @Override
-    public boolean keyDown(int key, int scanCode, int modifiers) {
-        String old = (enabled && field.isFocused()) ? field.getValue() : null;
-        boolean handled = field.keyPressed(new KeyEvent(key, scanCode, modifiers));
+    public boolean keyDown(KeyEvent event) {
+        if (!enabled)
+            return false;
+
+        int key = event.key();
+        if (field.isFocused()) {
+            if (key == InputConstants.KEY_RETURN || key == SDLScancode.SDL_SCANCODE_KP_ENTER) {
+                parent.actionPerformed(new EnterPressedEvent(this));
+                return true;
+            } else if (key == InputConstants.KEY_TAB) {
+                parent.actionPerformed(new TabPressedEvent(this));
+                return true;
+            }
+        }
+
+        String old = field.isFocused() ? field.getValue() : null;
+        boolean handled = field.keyPressed(event);
         notifyIfChanged(old);
         return handled;
     }
 
     @Override
+    public boolean keyUp(KeyEvent event) {
+        return enabled && field.keyReleased(event);
+    }
+
+    @Override
+    public boolean keyDown(int key, int scanCode, int modifiers) {
+        return keyDown(new KeyEvent(key, scanCode, modifiers));
+    }
+
+    @Override
     public boolean keyUp(int key, int scanCode, int modifiers) {
-        return field.keyReleased(new KeyEvent(key, scanCode, modifiers));
+        return keyUp(new KeyEvent(key, scanCode, modifiers));
     }
 
     @Override
     public boolean keyTyped(int keyCode, int modifier) {
+        if (!enabled)
+            return false;
+
         if(keyCode == InputConstants.KEY_RETURN || keyCode == SDLScancode.SDL_SCANCODE_KP_ENTER)
             parent.actionPerformed(new EnterPressedEvent(this));
         else if(keyCode == InputConstants.KEY_TAB)
             parent.actionPerformed(new TabPressedEvent(this));
         else {
-            String old = (enabled && field.isFocused()) ? field.getValue() : null;
+            String old = field.isFocused() ? field.getValue() : null;
             boolean handled = field.charTyped(new CharacterEvent(keyCode));
             notifyIfChanged(old);
             return handled;
@@ -154,7 +181,7 @@ public class TextField extends Control {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int mouseButton) {
-        if (field.mouseClicked(new MouseButtonEvent(mouseX, mouseY, new MouseButtonInfo(mouseButton, 0)), false)) {
+        if (enabled && field.mouseClicked(new MouseButtonEvent(mouseX, mouseY, new MouseButtonInfo(mouseButton, 0)), false)) {
             setFocused(true);
             return true;
         }
@@ -272,8 +299,9 @@ public class TextField extends Control {
 
     public void setDisabled(boolean en) {
         enabled = !en;
-        if (!en)
+        if (en)
             field.setFocused(false);
+        field.setEditable(enabled);
     }
 
     public boolean isDisabled() {
@@ -282,11 +310,13 @@ public class TextField extends Control {
 
     public void enable() {
         enabled = true;
+        field.setEditable(true);
     }
 
     public void disable() {
         field.setFocused(false);
         enabled = false;
+        field.setEditable(false);
     }
 
     public void setVisible(boolean vi) {
@@ -362,6 +392,7 @@ public class TextField extends Control {
         field.setMaxLength(json.getInt("maxLength", 32));
 
         enabled = !json.getBool("disabled", false);
+        field.setEditable(enabled);
         textColor = toARGB(json.getColor("textColor", DEFAULT_TEXT_COLOR));
         disabledColor = toARGB(json.getColor("disabledColor", DEFAULT_DISABLED_COLOR));
 

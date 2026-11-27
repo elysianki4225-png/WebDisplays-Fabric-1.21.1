@@ -133,43 +133,61 @@ public class TextField extends Control {
     
     @Override
     public boolean keyDown(int key, int scanCode, int modifiers) {
-        return field.keyPressed(key, scanCode, modifiers);
+        if (!enabled)
+            return false;
+
+        if (field.isFocused()) {
+            if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+                parent.actionPerformed(new EnterPressedEvent(this));
+                return true;
+            } else if (key == GLFW.GLFW_KEY_TAB) {
+                parent.actionPerformed(new TabPressedEvent(this));
+                return true;
+            }
+        }
+
+        String old = field.isFocused() ? field.getValue() : null;
+        boolean handled = field.keyPressed(key, scanCode, modifiers);
+        notifyIfChanged(old);
+        return handled;
     }
-    
+
     @Override
     public boolean keyUp(int key, int scanCode, int modifiers) {
-        return field.keyReleased(key, scanCode, modifiers);
+        return enabled && field.keyReleased(key, scanCode, modifiers);
     }
-    
+
     @Override
     public boolean keyTyped(int keyCode, int modifier) {
+        if (!enabled)
+            return false;
+
         if(keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)
             parent.actionPerformed(new EnterPressedEvent(this));
         else if(keyCode == GLFW.GLFW_KEY_TAB)
             parent.actionPerformed(new TabPressedEvent(this));
         else {
-            String old;
-            if(enabled && field.isFocused())
-                old = field.getValue();
-            else
-                old = null;
-
-            if(enabled && field.isFocused() && !field.getValue().equals(old)) {
-                for(TextChangeListener tcl : listeners)
-                    tcl.onTextChange(this, old, field.getValue());
-
-                parent.actionPerformed(new TextChangedEvent(this, old));
-            }
-            
-            return field.charTyped((char) keyCode, modifier);
+            String old = field.isFocused() ? field.getValue() : null;
+            boolean handled = field.charTyped((char) keyCode, modifier);
+            notifyIfChanged(old);
+            return handled;
         }
 
         return false;
     }
-    
+
+    private void notifyIfChanged(String old) {
+        if(old != null && !field.getValue().equals(old)) {
+            for(TextChangeListener tcl : listeners)
+                tcl.onTextChange(this, old, field.getValue());
+
+            parent.actionPerformed(new TextChangedEvent(this, old));
+        }
+    }
+
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int mouseButton) {
-        if (field.mouseClicked(mouseX, mouseY, mouseButton)) {
+        if (enabled && field.mouseClicked(mouseX, mouseY, mouseButton)) {
             setFocused(true);
             return true;
         }
@@ -272,8 +290,9 @@ public class TextField extends Control {
 
     public void setDisabled(boolean en) {
         enabled = !en;
-        if (!en)
+        if (en)
             field.setFocused(false);
+        field.setEditable(enabled);
     }
 
     public boolean isDisabled() {
@@ -282,11 +301,13 @@ public class TextField extends Control {
 
     public void enable() {
         enabled = true;
+        field.setEditable(true);
     }
 
     public void disable() {
         field.setFocused(false);
         enabled = false;
+        field.setEditable(false);
     }
 
     public void setVisible(boolean vi) {
@@ -317,9 +338,13 @@ public class TextField extends Control {
         field.setFocused(true);
     }
 
+    private static int toARGB(int color) {
+        return (color & 0xFF000000) == 0 ? (0xFF000000 | color) : color;
+    }
+
     public void setTextColor(int color) {
-        field.setTextColor(color);
-        textColor = color;
+        textColor = toARGB(color);
+        field.setTextColor(textColor);
     }
 
     public int getTextColor() {
@@ -327,8 +352,8 @@ public class TextField extends Control {
     }
 
     public void setDisabledTextColor(int color) {
-        field.setTextColorUneditable(color);
-        disabledColor = color;
+        disabledColor = toARGB(color);
+        field.setTextColorUneditable(disabledColor);
     }
 
     public int getDisabledTextColor() {
@@ -362,8 +387,9 @@ public class TextField extends Control {
         field.setMaxLength(json.getInt("maxLength", 32));
 
         enabled = !json.getBool("disabled", false);
-        textColor = json.getColor("textColor", DEFAULT_TEXT_COLOR);
-        disabledColor = json.getColor("disabledColor", DEFAULT_DISABLED_COLOR);
+        field.setEditable(enabled);
+        textColor = toARGB(json.getColor("textColor", DEFAULT_TEXT_COLOR));
+        disabledColor = toARGB(json.getColor("disabledColor", DEFAULT_DISABLED_COLOR));
 
         field.setTextColor(textColor);
         field.setTextColorUneditable(disabledColor);
