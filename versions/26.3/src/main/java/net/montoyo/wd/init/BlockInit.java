@@ -26,7 +26,7 @@ public class BlockInit {
     private static BlockBehaviour.Properties props(String name) {
         return BlockBehaviour.Properties.ofFullCopy(Blocks.STONE)
                 .strength(1.5f, 10.f)
-                .pushReaction(PushReaction.IGNORE)
+                .pushReaction(PushReaction.BLOCK)
                 .setId(ResourceKey.create(Registries.BLOCK, Identifier.fromNamespaceAndPath("webdisplays", name)));
     }
 

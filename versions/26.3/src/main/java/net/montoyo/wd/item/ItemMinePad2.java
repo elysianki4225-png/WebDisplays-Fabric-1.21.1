@@ -97,7 +97,7 @@ public class ItemMinePad2 extends Item implements WDItem, IItemEntityTickHandler
 
 					Player ply = ent.level().getPlayerByUUID(thrower);
 					if (ply instanceof ServerPlayer sp)
-						WebDisplays.INSTANCE.criterionPadBreak.trigger(sp.getAdvancements());
+						WebDisplays.INSTANCE.criterionPadBreak.trigger(sp);
 				}
 			}
 		}

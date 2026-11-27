@@ -49,7 +49,7 @@ public class BlockScreen extends BaseEntityBlock {
     private static final Property<?>[] properties = new Property<?>[]{hasTE, emitting};
 
     public BlockScreen(Properties properties) {
-        super(properties.strength(1.5f, 10.f).pushReaction(PushReaction.IGNORE));
+        super(properties.strength(1.5f, 10.f).pushReaction(PushReaction.BLOCK));
         this.registerDefaultState(this.defaultBlockState().setValue(hasTE, false).setValue(emitting, false));
     }
 
@@ -163,7 +163,7 @@ public class BlockScreen extends BaseEntityBlock {
 
                         Util.toast(player, ChatFormatting.AQUA, "upgradeOk");
                         if (player instanceof ServerPlayer)
-                            WebDisplays.INSTANCE.criterionUpgradeScreen.trigger(((ServerPlayer) player).getAdvancements());
+                            WebDisplays.INSTANCE.criterionUpgradeScreen.trigger((ServerPlayer) player);
                     } else
                         Util.toast(player, "upgradeError");
 

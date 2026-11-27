@@ -52,11 +52,6 @@ public class BlockKeyboardLeft extends BlockPeripheral {
         super(DefaultPeripheral.KEYBOARD, properties);
     }
 
-    @Override
-    public MapCodec<BlockKeyboardLeft> codec() {
-        return CODEC;
-    }
-
     public static TileEntityKeyboard getTileEntity(BlockState state, Level world, BlockPos pos) {
         if (state.getBlock() instanceof BlockKeyboardLeft) {
             BlockEntity te = world.getBlockEntity(pos);
