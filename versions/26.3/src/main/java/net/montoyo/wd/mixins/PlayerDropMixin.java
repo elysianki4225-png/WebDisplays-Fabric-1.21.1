@@ -3,6 +3,7 @@ package net.montoyo.wd.mixins;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -18,11 +19,14 @@ import java.util.UUID;
  * Replaces Forge's ItemTossEvent: stamps who threw a minePad and from how high, so that it breaks
  * when it lands far below (see ItemMinePad2.onEntityItemUpdate).
  */
-@Mixin(Player.class)
+@Mixin(LivingEntity.class)
 public class PlayerDropMixin {
-	@Inject(method = "drop(Lnet/minecraft/world/item/ItemStack;ZZ)Lnet/minecraft/world/entity/item/ItemEntity;",
+	@Inject(method = "createItemStackToDrop(Lnet/minecraft/world/item/ItemStack;ZZ)Lnet/minecraft/world/entity/item/ItemEntity;",
 			at = @At("RETURN"))
 	private void webdisplays$stampTossedMinePad(CallbackInfoReturnable<ItemEntity> cir) {
+		if (!((Object) this instanceof Player throwerPlayer))
+			return;
+
 		ItemEntity entity = cir.getReturnValue();
 		if (entity == null || entity.level().isClientSide())
 			return;
@@ -34,7 +38,6 @@ public class PlayerDropMixin {
 		CustomData custom = stack.get(DataComponents.CUSTOM_DATA);
 		CompoundTag tag = custom == null ? new CompoundTag() : custom.copyTag();
 
-		Player throwerPlayer = (Player) (Object) this;
 		UUID thrower = throwerPlayer.getGameProfile().id();
 		tag.putLong("ThrowerMSB", thrower.getMostSignificantBits());
 		tag.putLong("ThrowerLSB", thrower.getLeastSignificantBits());

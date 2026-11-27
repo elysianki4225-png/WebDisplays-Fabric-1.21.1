@@ -126,6 +126,80 @@ jobs:
           )
           PY
 
+      - name: Verify 26.3 Mixin and AccessWidener targets
+        if: success()
+        working-directory: versions/26.3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import glob, os, subprocess, sys, traceback
+
+          def post_comment(body):
+              repo = os.environ["GITHUB_REPOSITORY"]
+              sha = os.environ["GITHUB_SHA"]
+              subprocess.run(["gh", "api", f"repos/{repo}/commits/{sha}/comments", "-f", f"body={body[:60000]}"], check=True)
+
+          try:
+              import zipfile
+              candidates = (
+                  glob.glob(".gradle/loom-cache/**/*.jar", recursive=True)
+                  + glob.glob(os.path.expanduser("~/.gradle/caches/fabric-loom/**/*.jar"), recursive=True)
+              )
+              candidates = [j for j in candidates if not j.endswith(("-sources.jar", "-javadoc.jar"))]
+              mc_jar = None
+              for j in sorted(candidates, key=os.path.getsize, reverse=True):
+                  try:
+                      with zipfile.ZipFile(j) as zf:
+                          if "net/minecraft/client/Minecraft.class" in zf.namelist():
+                              mc_jar = j
+                              break
+                  except Exception:
+                      pass
+              if mc_jar is None:
+                  raise RuntimeError("Could not find merged MC jar in: " + str(candidates[:20]))
+
+              checks = {
+                  "net.minecraft.world.entity.LivingEntity": ["createItemStackToDrop(net.minecraft.world.item.ItemStack, boolean, boolean)", "(Lnet/minecraft/world/item/ItemStack;ZZ)Lnet/minecraft/world/entity/item/ItemEntity;"],
+                  "net.minecraft.world.entity.player.Player": [],
+                  "net.minecraft.world.entity.item.ItemEntity": ["tick()"],
+                  "net.minecraft.client.MouseHandler": ["onButton(", "mouseGrabbed"],
+                  "net.minecraft.client.gui.Gui": ["setScreen("],
+                  "net.minecraft.client.Minecraft": ["renderFrame(", "close()"],
+                  "net.minecraft.client.resources.ClientPackSource": ["static {};"],
+                  "net.minecraft.world.phys.AABB": ["minX", "minY", "minZ", "maxX", "maxY", "maxZ"],
+              }
+
+              missing = []
+              details = [f"MC jar: {mc_jar} ({os.path.getsize(mc_jar)} bytes)"]
+              for cls, needles in checks.items():
+                  proc = subprocess.run(["javap", "-s", "-p", "-cp", mc_jar, cls], capture_output=True, text=True, errors="replace")
+                  if proc.returncode != 0:
+                      missing.append(f"{cls} :: javap failed: {proc.stderr.strip()}")
+                      continue
+                  out = proc.stdout
+                  for n in needles:
+                      if n not in out:
+                          missing.append(f"{cls} :: missing '{n}'")
+                  lines = out.splitlines()
+                  interesting = []
+                  for i, line in enumerate(lines):
+                      if any(k in line for k in ("drop", "Drop", "tick(", "onButton", "mouseGrabbed", "setScreen", "renderFrame", "runTick", "close(", "exitWorld", "static {", "minX")):
+                          interesting.append(line.strip())
+                          if i + 1 < len(lines) and "descriptor:" in lines[i + 1]:
+                              interesting.append("  " + lines[i + 1].strip())
+                  details.append(f"=== {cls} ===\n" + "\n".join(interesting[:60]))
+
+              report = "\n\n".join(details)
+              if missing:
+                  post_comment("### 26.3 Mixin / AccessWidener check FAILED\nMissing:\n" + "\n".join(f"- {m}" for m in missing) + "\n\n```text\n" + report[:50000] + "\n```")
+                  sys.exit(1)
+              post_comment("### 26.3 Mixin / AccessWidener check PASSED\n```text\n" + report[:50000] + "\n```")
+          except Exception:
+              post_comment("### 26.3 Mixin check crashed\n```text\n" + traceback.format_exc() + "\n```")
+              sys.exit(1)
+          PY
+
       - name: Inspect and summarize 26.3 JAR
         if: success()
         working-directory: versions/26.3
