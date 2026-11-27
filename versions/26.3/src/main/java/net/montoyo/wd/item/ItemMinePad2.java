@@ -40,7 +40,7 @@ public class ItemMinePad2 extends Item implements WDItem, IItemEntityTickHandler
 
 	private static String getURL(ItemStack is) {
 		CustomData data = is.get(DataComponents.CUSTOM_DATA);
-		if (data == null || !data.contains("PadURL"))
+		if (data == null || !data.copyTag().contains("PadURL"))
 			return CommonConfig.Browser.homepage;
 		else
 			return data.copyTag().getStringOr("PadURL", CommonConfig.Browser.homepage);

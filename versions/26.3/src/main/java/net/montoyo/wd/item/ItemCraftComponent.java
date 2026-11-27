@@ -31,8 +31,9 @@ public class ItemCraftComponent extends ItemMulti implements WDItem {
      * yields a useless card instead. Replaces Forge's PlayerEvent.ItemCraftedEvent handler.
      */
     @Override
-    public void onCraftedBy(ItemStack stack, Level level, Player player) {
-        super.onCraftedBy(stack, level, player);
+    public void onCraftedBy(ItemStack stack, Player player) {
+        super.onCraftedBy(stack, player);
+        Level level = player.level();
 
         if (!CommonConfig.hardRecipes || !CraftComponent.EXTCARD.makeItemStack().is(stack.getItem()) || hasPadBreak(level, player))
             return;

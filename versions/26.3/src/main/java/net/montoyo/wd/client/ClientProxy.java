@@ -69,6 +69,7 @@ import net.montoyo.wd.net.WDContext;
 import net.montoyo.wd.net.WDNetworkRegistry;
 import net.montoyo.wd.net.server_bound.C2SMessageMinepadUrl;
 import net.montoyo.wd.utilities.*;
+import org.cef.CefSettings;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefFrame;
 import org.cef.handler.CefDisplayHandler;
@@ -233,7 +234,7 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 		BlockEntityRenderers.register(TileInit.SCREEN_BLOCK_ENTITY.get(), ScreenRenderer::new);
 		ScreenModelLoader.register();
 		SpecialModelRenderers.ID_MAPPER.put(Identifier.fromNamespaceAndPath("webdisplays", "minepad"), MinePadRenderer.Unbaked.MAP_CODEC);
-		LevelRenderEvents.BEFORE_TRANSLUCENT_TERRAIN.register(LaserPointerRenderer::render);
+		LaserPointerRenderer.register();
 		HudElementRegistry.replaceElement(VanillaHudElements.CROSSHAIR, original -> (graphics, deltaTracker) -> {
 			if (!ClientProxy.renderCustomCrosshair(graphics))
 				original.extractRenderState(graphics, deltaTracker);
@@ -800,21 +801,25 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 			ItemStack item = inv.getItem(i);
 			if (item.getItem() == minepadItem) {
 				CustomData data = item.get(DataComponents.CUSTOM_DATA);
-				if (data != null && data.contains("PadID")) {
+				if (data != null) {
 					CompoundTag tag = data.copyTag();
-					UUID id = NbtCompat.getUUID(tag, "PadID");
-					if (id != null)
-						updatePad(id, tag, item == mainHeld);
+					if (NbtCompat.hasUUID(tag, "PadID")) {
+						UUID id = NbtCompat.getUUID(tag, "PadID");
+						if (id != null)
+							updatePad(id, tag, item == mainHeld);
+					}
 				}
 			}
 		}
 		if (offhandItem.getItem() == minepadItem) {
 			CustomData data = offhandItem.get(DataComponents.CUSTOM_DATA);
-			if (data != null && data.contains("PadID")) {
+			if (data != null) {
 				CompoundTag tag = data.copyTag();
-				UUID id = NbtCompat.getUUID(tag, "PadID");
-				if (id != null)
-					updatePad(id, tag, offhandItem == offHeld);
+				if (NbtCompat.hasUUID(tag, "PadID")) {
+					UUID id = NbtCompat.getUUID(tag, "PadID");
+					if (id != null)
+						updatePad(id, tag, offhandItem == offHeld);
+				}
 			}
 		}
 	}

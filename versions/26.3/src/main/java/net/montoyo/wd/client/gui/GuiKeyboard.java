@@ -226,7 +226,6 @@ public class GuiKeyboard extends WDScreen {
             btnOk.setVisible(false);
             showWarning = false;
             defaultBackground = false;
-            minecraft.setWindowActive(true);
             grabMouseKeepingScreen();
         }
     }

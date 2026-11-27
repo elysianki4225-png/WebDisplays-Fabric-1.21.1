@@ -7,7 +7,6 @@ package net.montoyo.wd.client.renderers;
 import com.cinemamod.mcef.MCEF;
 import com.cinemamod.mcef.MCEFBrowser;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
@@ -18,6 +17,7 @@ import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.phys.Vec3;
 import net.montoyo.wd.WebDisplays;
 import net.montoyo.wd.entity.TileEntityScreen;
@@ -26,6 +26,7 @@ import net.montoyo.wd.utilities.Vector3f;
 import net.montoyo.wd.utilities.Vector3i;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.joml.Matrix4f;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -150,9 +151,9 @@ public class ScreenRenderer implements BlockEntityRenderer<TileEntityScreen, Scr
 				}
 			}
 
-			if (scr.browser instanceof MCEFBrowser mb) {
+			if (scr.browser instanceof MCEFBrowser mb && mb.getRenderer().isReady()) {
 				mb.setVisible(true);
-				Identifier texLoc = mb.getRenderer().getTextureLocation();
+				Identifier texLoc = mb.getRenderer().getTextureIdentifier();
 				if (texLoc == null) {
 					continue;
 				}
@@ -198,12 +199,12 @@ public class ScreenRenderer implements BlockEntityRenderer<TileEntityScreen, Scr
 			poseStack.translate(q.midX(), q.midY(), q.midZ());
 
 			switch (q.side()) {
-				case BOTTOM -> poseStack.mulPose(XP.rotation(90.f + 49.8f));
-				case TOP -> poseStack.mulPose(XN.rotation(90.f + 49.8f));
-				case NORTH -> poseStack.mulPose(YN.rotationDegrees(180.f));
+				case BOTTOM -> poseStack.mulPose(new Matrix4f().rotate(XP.rotation(90.f + 49.8f)));
+				case TOP -> poseStack.mulPose(new Matrix4f().rotate(XN.rotation(90.f + 49.8f)));
+				case NORTH -> poseStack.mulPose(new Matrix4f().rotate(YN.rotationDegrees(180.f)));
 				case SOUTH -> {}
-				case WEST -> poseStack.mulPose(YN.rotationDegrees(90.f));
-				case EAST -> poseStack.mulPose(YP.rotationDegrees(90.f));
+				case WEST -> poseStack.mulPose(new Matrix4f().rotate(YN.rotationDegrees(90.f)));
+				case EAST -> poseStack.mulPose(new Matrix4f().rotate(YP.rotationDegrees(90.f)));
 			}
 
 			if (q.turnOnScale() < 1.0f) {
@@ -211,16 +212,16 @@ public class ScreenRenderer implements BlockEntityRenderer<TileEntityScreen, Scr
 			}
 
 			if (q.hasRotation()) {
-				poseStack.mulPose(ZP.rotationDegrees(q.rotationAngle()));
+				poseStack.mulPose(new Matrix4f().rotate(ZP.rotationDegrees(q.rotationAngle())));
 			}
 
 			final float sw = q.sw();
 			final float sh = q.sh();
 			submitNodeCollector.submitCustomGeometry(poseStack, RenderTypes.armorCutoutNoCull(q.textureId()), (pose, vc) -> {
-				vc.addVertex(pose, -sw, -sh, 0.505f).setColor(255, 255, 255, 255).setUv(0.f, 1.f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightTexture.FULL_BRIGHT).setNormal(pose, 0.f, 0.f, 1.f);
-				vc.addVertex(pose, sw, -sh, 0.505f).setColor(255, 255, 255, 255).setUv(1.f, 1.f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightTexture.FULL_BRIGHT).setNormal(pose, 0.f, 0.f, 1.f);
-				vc.addVertex(pose, sw, sh, 0.505f).setColor(255, 255, 255, 255).setUv(1.f, 0.f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightTexture.FULL_BRIGHT).setNormal(pose, 0.f, 0.f, 1.f);
-				vc.addVertex(pose, -sw, sh, 0.505f).setColor(255, 255, 255, 255).setUv(0.f, 0.f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightTexture.FULL_BRIGHT).setNormal(pose, 0.f, 0.f, 1.f);
+				vc.addVertex(pose, -sw, -sh, 0.505f).setColor(255, 255, 255, 255).setUv(0.f, 1.f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightCoordsUtil.FULL_BRIGHT).setNormal(pose, 0.f, 0.f, 1.f);
+				vc.addVertex(pose, sw, -sh, 0.505f).setColor(255, 255, 255, 255).setUv(1.f, 1.f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightCoordsUtil.FULL_BRIGHT).setNormal(pose, 0.f, 0.f, 1.f);
+				vc.addVertex(pose, sw, sh, 0.505f).setColor(255, 255, 255, 255).setUv(1.f, 0.f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightCoordsUtil.FULL_BRIGHT).setNormal(pose, 0.f, 0.f, 1.f);
+				vc.addVertex(pose, -sw, sh, 0.505f).setColor(255, 255, 255, 255).setUv(0.f, 0.f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightCoordsUtil.FULL_BRIGHT).setNormal(pose, 0.f, 0.f, 1.f);
 			});
 
 			poseStack.popPose();

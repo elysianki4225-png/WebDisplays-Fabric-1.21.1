@@ -38,17 +38,9 @@ import org.jetbrains.annotations.Nullable;
 public class BlockPeripheral extends WDBlockContainer {
     DefaultPeripheral type;
 
-    private final MapCodec<BlockPeripheral> peripheralCodec;
-
     public BlockPeripheral(DefaultPeripheral type, Properties properties) {
         super(properties);
         this.type = type;
-        this.peripheralCodec = simpleCodec(props -> new BlockPeripheral(type, props));
-    }
-
-    @Override
-    public MapCodec<? extends BlockPeripheral> codec() {
-        return peripheralCodec;
     }
 
     @Nullable

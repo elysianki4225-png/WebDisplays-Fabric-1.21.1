@@ -44,7 +44,6 @@ import org.jetbrains.annotations.NotNull;
 
 public class BlockScreen extends BaseEntityBlock {
 
-    public static final MapCodec<BlockScreen> CODEC = simpleCodec(BlockScreen::new);
     public static final BooleanProperty hasTE = BooleanProperty.create("haste");
     public static final BooleanProperty emitting = BooleanProperty.create("emitting");
     private static final Property<?>[] properties = new Property<?>[]{hasTE, emitting};
@@ -52,11 +51,6 @@ public class BlockScreen extends BaseEntityBlock {
     public BlockScreen(Properties properties) {
         super(properties.strength(1.5f, 10.f).pushReaction(PushReaction.IGNORE));
         this.registerDefaultState(this.defaultBlockState().setValue(hasTE, false).setValue(emitting, false));
-    }
-
-    @Override
-    public MapCodec<BlockScreen> codec() {
-        return CODEC;
     }
 
     @Override

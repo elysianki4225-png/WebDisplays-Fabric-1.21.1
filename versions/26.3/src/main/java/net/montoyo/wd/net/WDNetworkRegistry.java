@@ -70,8 +70,8 @@ public class WDNetworkRegistry {
             return;
 
         payloadsRegistered = true;
-        PayloadTypeRegistry.playC2S().register(WDPayload.C2S.TYPE, WDPayload.C2S.STREAM_CODEC);
-        PayloadTypeRegistry.playS2C().register(WDPayload.S2C.TYPE, WDPayload.S2C.STREAM_CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(WDPayload.C2S.TYPE, WDPayload.C2S.STREAM_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(WDPayload.S2C.TYPE, WDPayload.S2C.STREAM_CODEC);
     }
 
     public static void init() {

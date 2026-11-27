@@ -27,4 +27,10 @@ public final class NbtCompat {
             return new UUID(tag.getLongOr(key + "Most", 0L), tag.getLongOr(key + "Least", 0L));
         return new UUID(0L, 0L);
     }
+
+    public static void removeUUID(CompoundTag tag, String key) {
+        tag.remove(key);
+        tag.remove(key + "Most");
+        tag.remove(key + "Least");
+    }
 }

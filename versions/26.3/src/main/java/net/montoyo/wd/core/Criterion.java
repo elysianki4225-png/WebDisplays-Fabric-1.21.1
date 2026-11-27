@@ -5,9 +5,10 @@
 package net.montoyo.wd.core;
 
 import com.mojang.serialization.Codec;
-import net.minecraft.advancements.CriterionTrigger;
-import net.minecraft.advancements.CriterionTriggerInstance;
-import net.minecraft.advancements.criterion.CriterionValidator;
+import com.mojang.serialization.MapCodec;
+import net.minecraft.advancements.triggers.CriterionTrigger;
+import net.minecraft.advancements.triggers.CriterionTriggerInstance;
+import net.minecraft.advancements.triggers.CriterionValidator;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.PlayerAdvancements;
 import org.jetbrains.annotations.NotNull;
@@ -24,7 +25,7 @@ public class Criterion implements CriterionTrigger<Criterion.Instance> {
      */
     public static class Instance implements CriterionTriggerInstance {
 
-        public static final Codec<Instance> CODEC = Codec.unit(new Instance());
+        public static final Codec<Instance> CODEC = MapCodec.unit(new Instance()).codec();
 
         @Override
         public void validate(CriterionValidator validator) {

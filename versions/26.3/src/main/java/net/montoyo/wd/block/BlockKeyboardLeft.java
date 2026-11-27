@@ -36,7 +36,6 @@ import org.jetbrains.annotations.NotNull;
 
 public class BlockKeyboardLeft extends BlockPeripheral {
 
-    public static final MapCodec<BlockKeyboardLeft> CODEC = simpleCodec(BlockKeyboardLeft::new);
     public static final EnumProperty<DefaultPeripheral> TYPE = EnumProperty.create("type", DefaultPeripheral.class);
     public static final EnumProperty<Direction> FACING = EnumProperty.create("facing", Direction.class, Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST);
 

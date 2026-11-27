@@ -10,7 +10,6 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.serialization.MapCodec;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.special.SpecialModelRenderer;
@@ -19,6 +18,7 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 import net.montoyo.wd.WebDisplays;
@@ -56,8 +56,8 @@ public final class MinePadRenderer implements SpecialModelRenderer<UUID> {
 
 		if (padId != null && MCEF.isInitialized() && WebDisplays.PROXY instanceof ClientProxy clientProxy) {
 			ClientProxy.PadData pd = clientProxy.getPadByID(padId);
-			if (pd != null && pd.view instanceof MCEFBrowser browser) {
-				Identifier texLoc = browser.getRenderer().getTextureLocation();
+			if (pd != null && pd.view instanceof MCEFBrowser browser && browser.getRenderer().isReady()) {
+				Identifier texLoc = browser.getRenderer().getTextureIdentifier();
 				if (texLoc != null) {
 					float x1 = 0.0f;
 					float y1 = 0.0f;
@@ -65,10 +65,10 @@ public final class MinePadRenderer implements SpecialModelRenderer<UUID> {
 					float y2 = 14.0f / 32.0f + 0.002f;
 
 					submitNodeCollector.order(1).submitCustomGeometry(poseStack, RenderTypes.armorCutoutNoCull(texLoc), (pose, vc) -> {
-						vc.addVertex(pose, x1, y1, 0.001f).setColor(255, 255, 255, 255).setUv(0.0f, 1.0f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightTexture.FULL_BRIGHT).setNormal(pose, 0.0f, 0.0f, 1.0f);
-						vc.addVertex(pose, x2, y1, 0.001f).setColor(255, 255, 255, 255).setUv(1.0f, 1.0f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightTexture.FULL_BRIGHT).setNormal(pose, 0.0f, 0.0f, 1.0f);
-						vc.addVertex(pose, x2, y2, 0.001f).setColor(255, 255, 255, 255).setUv(1.0f, 0.0f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightTexture.FULL_BRIGHT).setNormal(pose, 0.0f, 0.0f, 1.0f);
-						vc.addVertex(pose, x1, y2, 0.001f).setColor(255, 255, 255, 255).setUv(0.0f, 0.0f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightTexture.FULL_BRIGHT).setNormal(pose, 0.0f, 0.0f, 1.0f);
+						vc.addVertex(pose, x1, y1, 0.001f).setColor(255, 255, 255, 255).setUv(0.0f, 1.0f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightCoordsUtil.FULL_BRIGHT).setNormal(pose, 0.0f, 0.0f, 1.0f);
+						vc.addVertex(pose, x2, y1, 0.001f).setColor(255, 255, 255, 255).setUv(1.0f, 1.0f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightCoordsUtil.FULL_BRIGHT).setNormal(pose, 0.0f, 0.0f, 1.0f);
+						vc.addVertex(pose, x2, y2, 0.001f).setColor(255, 255, 255, 255).setUv(1.0f, 0.0f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightCoordsUtil.FULL_BRIGHT).setNormal(pose, 0.0f, 0.0f, 1.0f);
+						vc.addVertex(pose, x1, y2, 0.001f).setColor(255, 255, 255, 255).setUv(0.0f, 0.0f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightCoordsUtil.FULL_BRIGHT).setNormal(pose, 0.0f, 0.0f, 1.0f);
 					});
 				}
 			}
@@ -81,7 +81,7 @@ public final class MinePadRenderer implements SpecialModelRenderer<UUID> {
 	public void getExtents(Consumer<Vector3fc> output) {
 	}
 
-	public record Unbaked() implements SpecialModelRenderer.Unbaked {
+	public record Unbaked() implements SpecialModelRenderer.Unbaked<UUID> {
 		public static final MapCodec<Unbaked> MAP_CODEC = MapCodec.unit(new Unbaked());
 
 		@Override
@@ -90,7 +90,7 @@ public final class MinePadRenderer implements SpecialModelRenderer<UUID> {
 		}
 
 		@Override
-		public SpecialModelRenderer<?> bake(SpecialModelRenderer.BakingContext context) {
+		public SpecialModelRenderer<UUID> bake(SpecialModelRenderer.BakingContext context) {
 			return new MinePadRenderer();
 		}
 	}

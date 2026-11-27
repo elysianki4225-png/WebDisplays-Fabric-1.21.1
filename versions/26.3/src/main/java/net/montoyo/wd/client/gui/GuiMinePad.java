@@ -88,8 +88,8 @@ public class GuiMinePad extends WDScreen {
 		graphics.fill(bx - 16, by, bx, by + bh, bezelColor);
 		graphics.fill(bx + bw, by, bx + bw + 16, by + bh, bezelColor);
 
-		if (pad != null && pad.view instanceof MCEFBrowser browser) {
-			graphics.blit(RenderPipelines.GUI_TEXTURED, browser.getRenderer().getTextureID(), bx, by, 0.0f, 0.0f, bw, bh, bw, bh);
+		if (pad != null && pad.view instanceof MCEFBrowser browser && browser.getRenderer().isReady()) {
+			graphics.blit(RenderPipelines.GUI_TEXTURED, browser.getRenderer().getTextureIdentifier(), bx, by, 0.0f, 0.0f, bw, bh, bw, bh);
 		}
 	}
 

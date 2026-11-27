@@ -2,8 +2,8 @@ package net.montoyo.wd;
 
 import net.minecraft.advancements.AdvancementHolder;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLevelEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.ChatFormatting;
@@ -51,8 +51,8 @@ public class WebDisplaysFabric implements ModInitializer {
             }
         });
 
-        ServerWorldEvents.LOAD.register(this::onWorldLoad);
-        ServerWorldEvents.UNLOAD.register(this::onWorldUnload);
+        ServerLevelEvents.LOAD.register(this::onWorldLoad);
+        ServerLevelEvents.UNLOAD.register(this::onWorldUnload);
 
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> onPlayerLogin(handler.player));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
