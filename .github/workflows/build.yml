@@ -141,14 +141,23 @@ jobs:
               subprocess.run(["gh", "api", f"repos/{repo}/commits/{sha}/comments", "-f", f"body={body[:60000]}"], check=True)
 
           try:
-              jars = glob.glob(".gradle/loom-cache/**/minecraft*.jar", recursive=True)
-              jars += glob.glob(os.path.expanduser("~/.gradle/caches/fabric-loom/**/minecraft*.jar"), recursive=True)
-              jars = [j for j in jars if not j.endswith(("-sources.jar", "-javadoc.jar"))]
-              if not jars:
-                  jars = glob.glob(os.path.expanduser("~/.gradle/caches/fabric-loom/**/*.jar"), recursive=True)
-                  jars += glob.glob(".gradle/loom-cache/**/*.jar", recursive=True)
-                  jars = [j for j in jars if not j.endswith(("-sources.jar", "-javadoc.jar"))]
-              mc_jar = max(jars, key=os.path.getsize)
+              import zipfile
+              candidates = (
+                  glob.glob(".gradle/loom-cache/**/*.jar", recursive=True)
+                  + glob.glob(os.path.expanduser("~/.gradle/caches/fabric-loom/**/*.jar"), recursive=True)
+              )
+              candidates = [j for j in candidates if not j.endswith(("-sources.jar", "-javadoc.jar"))]
+              mc_jar = None
+              for j in sorted(candidates, key=os.path.getsize, reverse=True):
+                  try:
+                      with zipfile.ZipFile(j) as zf:
+                          if "net/minecraft/client/Minecraft.class" in zf.namelist():
+                              mc_jar = j
+                              break
+                  except Exception:
+                      pass
+              if mc_jar is None:
+                  raise RuntimeError("Could not find merged MC jar in: " + str(candidates[:20]))
 
               checks = {
                   "net.minecraft.world.entity.LivingEntity": ["createItemStackToDrop(net.minecraft.world.item.ItemStack, boolean, boolean)", "(Lnet/minecraft/world/item/ItemStack;ZZ)Lnet/minecraft/world/entity/item/ItemEntity;"],
