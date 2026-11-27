@@ -9,6 +9,7 @@ import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.resources.language.I18n;
 import net.montoyo.wd.client.gui.WDScreen;
 import net.montoyo.wd.client.gui.loading.JsonOWrapper;
@@ -56,6 +57,14 @@ public abstract class Control {
 
     public boolean keyDown(int key, int scanCode, int modifiers) {
         return false;
+    }
+
+    public boolean keyUp(KeyEvent event) {
+        return keyUp(event.key(), event.key(), event.modifiers());
+    }
+
+    public boolean keyDown(KeyEvent event) {
+        return keyDown(event.key(), event.key(), event.modifiers());
     }
 
     public boolean mouseClicked(double mouseX, double mouseY, int mouseButton) {

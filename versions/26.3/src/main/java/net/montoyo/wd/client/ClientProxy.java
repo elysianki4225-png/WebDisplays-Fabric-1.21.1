@@ -180,7 +180,7 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 		
 		public CefBrowser view;
 		private boolean isInHotbar;
-		private final UUID id;
+		public final UUID id;
 		private long lastURLSent;
 		public final boolean mobile;
 		public final int resX;

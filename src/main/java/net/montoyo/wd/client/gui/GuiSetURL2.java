@@ -77,6 +77,7 @@ public class GuiSetURL2 extends WDScreen {
 		super.init();
 		loadFrom(ResourceLocation.fromNamespaceAndPath("webdisplays", "gui/seturl.json"));
 		tfURL.setText(screenURL);
+		tfURL.focus();
 	}
 	
 	@Override
@@ -155,7 +156,8 @@ public class GuiSetURL2 extends WDScreen {
 	
 	@Override
 	public boolean isForBlock(BlockPos bp, BlockSide side) {
-		return (remoteLocation != null && remoteLocation.equalsBlockPos(bp)) || (bp.equals(tileEntity.getBlockPos()) && side == screenSide);
+		return (remoteLocation != null && remoteLocation.equalsBlockPos(bp))
+				|| (tileEntity != null && bp.equals(tileEntity.getBlockPos()) && side == screenSide);
 	}
 	
 }

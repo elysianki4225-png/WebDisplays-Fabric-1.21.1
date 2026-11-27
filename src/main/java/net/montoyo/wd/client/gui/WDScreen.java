@@ -27,6 +27,7 @@ import net.montoyo.wd.client.gui.loading.JsonOWrapper;
 import net.montoyo.wd.net.WDNetworkRegistry;
 import net.montoyo.wd.net.server_bound.C2SMessageACQuery;
 import net.montoyo.wd.utilities.*;
+import org.lwjgl.glfw.GLFW;
 
 import org.jetbrains.annotations.Nullable;
 import java.io.IOException;
@@ -223,22 +224,31 @@ public abstract class WDScreen extends Screen {
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         boolean down = false;
 
-        for (Control ctrl : controls)
-            down = down || ctrl.keyDown(keyCode, scanCode, modifiers);
+        for (Control ctrl : controls) {
+            if (ctrl.keyDown(keyCode, scanCode, modifiers))
+                down = true;
+        }
 
         if (this instanceof GuiKeyboard) {
             return down;
-        } else {
-            return new GuiServer(new Vector3i(), new NameUUIDPair()).keyPressed(keyCode, scanCode, modifiers);
         }
+
+        if (quitOnEscape && keyCode == GLFW.GLFW_KEY_ESCAPE) {
+            minecraft.setScreen(null);
+            return true;
+        }
+
+        return down || super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     @Override
     public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
         boolean up = false;
 
-        for(Control ctrl : controls)
-            up = up || ctrl.keyUp(keyCode, scanCode, modifiers);
+        for(Control ctrl : controls) {
+            if (ctrl.keyUp(keyCode, scanCode, modifiers))
+                up = true;
+        }
 
         return up || super.keyReleased(keyCode, scanCode, modifiers);
     }

@@ -260,12 +260,12 @@ public abstract class WDScreen extends Screen {
     @Override
     public boolean keyPressed(KeyEvent event) {
         int keyCode = event.key();
-        int scanCode = event.key();
-        int modifiers = event.modifiers();
         boolean down = false;
 
-        for (Control ctrl : controls)
-            down = down || ctrl.keyDown(keyCode, scanCode, modifiers);
+        for (Control ctrl : controls) {
+            if (ctrl.keyDown(event))
+                down = true;
+        }
 
         if (this instanceof GuiKeyboard) {
             return down;
@@ -281,13 +281,12 @@ public abstract class WDScreen extends Screen {
 
     @Override
     public boolean keyReleased(KeyEvent event) {
-        int keyCode = event.key();
-        int scanCode = event.key();
-        int modifiers = event.modifiers();
         boolean up = false;
 
-        for(Control ctrl : controls)
-            up = up || ctrl.keyUp(keyCode, scanCode, modifiers);
+        for(Control ctrl : controls) {
+            if (ctrl.keyUp(event))
+                up = true;
+        }
 
         return up || super.keyReleased(event);
     }
