@@ -6,6 +6,7 @@ package net.montoyo.wd.client.gui.controls;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.montoyo.wd.client.gui.WDTheme;
 import net.montoyo.wd.client.gui.loading.JsonOWrapper;
 import net.montoyo.wd.utilities.Bounds;
 
@@ -15,8 +16,8 @@ public class ControlGroup extends Container {
     private int height;
     private String label;
     private int labelW;
-    private int labelColor = COLOR_WHITE;
-    private boolean labelShadowed = true;
+    private int labelColor = WDTheme.TEXT_SECONDARY;
+    private boolean labelShadowed = false;
 
     public ControlGroup() {
         width = 100;
@@ -45,7 +46,7 @@ public class ControlGroup extends Container {
         this.label = label;
         this.labelW = font.width(label);
         paddingX = 8;
-        paddingY = 8;
+        paddingY = this.labelW > 0 ? 20 : 8;
     }
 
     @Override
@@ -90,31 +91,11 @@ public class ControlGroup extends Container {
 
     @Override
     public void draw(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
-        super.draw(graphics, mouseX, mouseY, ptt);
-
-        if(visible) {
-            int bp = 4;
-            int x1 = x + bp;
-            int y1 = y + bp;
-            int x2 = x + width - bp;
-            int y2 = y + height - bp;
-            int lw = labelW + 12;
-            int borderCol = 0xFF808080;
-
-            if(labelW == 0) {
-                graphics.fill(x1, y1, x2, y1 + 1, borderCol);
-            } else {
-                graphics.fill(x1, y1, x1 + 8, y1 + 1, borderCol);
-                graphics.fill(x1 + lw, y1, x2, y1 + 1, borderCol);
-            }
-
-            graphics.fill(x1, y2 - 1, x2, y2, borderCol);
-            graphics.fill(x1, y1, x1 + 1, y2, borderCol);
-            graphics.fill(x2 - 1, y1, x2, y2, borderCol);
-
-            if(labelW != 0)
-                graphics.text(Minecraft.getInstance().font, label, x + 10 + bp, y, toARGB(labelColor), labelShadowed);
+        if (visible) {
+            WDTheme.drawSectionCard(graphics, Minecraft.getInstance().font, x, y, width, height, labelW > 0 ? label : null);
         }
+
+        super.draw(graphics, mouseX, mouseY, ptt);
     }
 
     public void pack() {
@@ -123,7 +104,7 @@ public class ControlGroup extends Container {
             ctrl.setPos(ctrl.getX() - bounds.minX, ctrl.getY() - bounds.minY);
 
         width = bounds.getWidth() + paddingX * 2;
-        height = bounds.getHeight() + paddingY * 2;
+        height = bounds.getHeight() + paddingY + 8;
     }
 
     @Override
@@ -140,8 +121,10 @@ public class ControlGroup extends Container {
         height = json.getInt("height", 100);
         label = tr(json.getString("label", ""));
         labelW = font.width(label);
-        labelColor = toARGB(json.getColor("labelColor", COLOR_WHITE));
-        labelShadowed = json.getBool("labelShadowed", true);
+        paddingX = json.getInt("paddingX", 8);
+        paddingY = json.getInt("paddingY", labelW > 0 ? 21 : 8);
+        labelColor = toARGB(json.getColor("labelColor", WDTheme.TEXT_SECONDARY));
+        labelShadowed = json.getBool("labelShadowed", false);
 
         if(json.getBool("pack", false))
             pack();

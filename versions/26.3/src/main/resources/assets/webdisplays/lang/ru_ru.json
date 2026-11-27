@@ -81,12 +81,16 @@
   "webdisplays.gui.screencfg.rot270": "270°",
   "webdisplays.gui.screencfg.rot90": "90°",
   "webdisplays.gui.screencfg.rotation": "Поворот",
-  "webdisplays.gui.screencfg.setres": "Задать разрешение",
+  "webdisplays.gui.screencfg.setres": "Применить",
+  "webdisplays.gui.screencfg.autores": "Авто",
+  "webdisplays.gui.screencfg.title": "Конфигуратор экрана",
   "webdisplays.gui.screencfg.seturl": "Изменить URL",
   "webdisplays.gui.screencfg.upgrades": "Улучшения:",
   "webdisplays.gui.seturl.cancel": "Отмена",
   "webdisplays.gui.seturl.ok": "ОК",
   "webdisplays.gui.seturl.shutdown": "Выключить",
+  "webdisplays.gui.seturl.title": "URL экрана",
+  "webdisplays.gui.seturl.title_pad": "URL minePad",
   "webdisplays.gui.seturl.url": "URL: ",
   "webdisplays.linker.posInfo": "Координаты экрана: %d %d %d",
   "webdisplays.linker.selectPeripheral": "Нажмите ПКМ по периферийному устройству",
@@ -179,5 +183,9 @@
   "config.webdisplays.d100": "Дистанция начала затухания",
   "config.webdisplays.backface_culling": "Отсечение задней стороны экрана",
   "config.webdisplays.pause_culled_screens": "Приостанавливать скрытые экраны",
-  "config.webdisplays.max_browsers_per_frame": "Макс. создаваемых браузеров за кадр"
+  "config.webdisplays.max_browsers_per_frame": "Макс. создаваемых браузеров за кадр",
+  "config.webdisplays.default_ppb": "Плотность пикселей на блок",
+  "config.webdisplays.min_adaptive_edge": "Мин. адаптивное разрешение (px)",
+  "config.webdisplays.adaptive_lod": "Адаптивное LOD-разрешение по дистанции",
+  "config.webdisplays.lod_cooldown_ms": "Задержка смены LOD-разрешения (мс)"
 }

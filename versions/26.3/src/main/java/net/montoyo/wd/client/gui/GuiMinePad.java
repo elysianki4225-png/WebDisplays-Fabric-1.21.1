@@ -70,27 +70,50 @@ public class GuiMinePad extends WDScreen {
 	}
 
 	@Override
-	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
+	public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
 		width = trueWidth;
 		height = trueHeight;
-		extractBackground(graphics, mouseX, mouseY, ptt);
+		super.extractBackground(graphics, mouseX, mouseY, ptt);
 		width = (int) vw;
 		height = (int) vh;
+	}
 
+	@Override
+	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
 		int bx = (int) vx;
 		int by = (int) vy;
 		int bw = (int) vw;
 		int bh = (int) vh;
-		int bezelColor = 0xFFBABABA;
 
-		graphics.fill(bx, by - 16, bx + bw, by, bezelColor);
-		graphics.fill(bx, by + bh, bx + bw, by + bh + 16, bezelColor);
-		graphics.fill(bx - 16, by, bx, by + bh, bezelColor);
-		graphics.fill(bx + bw, by, bx + bw + 16, by + bh, bezelColor);
+		int frameX = bx - 12;
+		int frameY = by - 14;
+		int frameW = bw + 24;
+		int frameH = bh + 30;
+
+		WDTheme.drawDropShadow(graphics, frameX, frameY, frameW, frameH);
+		graphics.fill(frameX, frameY, frameX + frameW, frameY + frameH, 0xEC181E29);
+		WDTheme.drawBorder(graphics, frameX, frameY, frameW, frameH, 0xFF3C485E);
+		graphics.fill(frameX + 1, frameY + 1, frameX + frameW - 1, frameY + 2, 0x28FFFFFF);
+
+		// Top bezel camera dot
+		int camX = bx + bw / 2 - 2;
+		int camY = frameY + 5;
+		graphics.fill(camX, camY, camX + 4, camY + 4, 0xFF0A0D12);
+		graphics.fill(camX + 1, camY + 1, camX + 3, camY + 3, 0xFF1F2937);
+		graphics.fill(camX + 1, camY + 1, camX + 2, camY + 2, 0xFF38BDF8);
+
+		// Inner screen recess
+		graphics.fill(bx - 1, by - 1, bx + bw + 1, by + bh + 1, 0xFF070A0F);
 
 		if (pad != null && pad.view instanceof MCEFBrowser browser && browser.getRenderer().isReady()) {
 			graphics.blit(RenderPipelines.GUI_TEXTURED, browser.getRenderer().getTextureIdentifier(), bx, by, 0.0f, 0.0f, bw, bh, bw, bh);
 		}
+
+		// Bottom home indicator pill
+		int pillW = Math.min(44, Math.max(24, bw / 8));
+		int pillX = bx + (bw - pillW) / 2;
+		int pillY = by + bh + 7;
+		graphics.fill(pillX, pillY, pillX + pillW, pillY + 2, 0x889AA7BC);
 	}
 
 	@Override

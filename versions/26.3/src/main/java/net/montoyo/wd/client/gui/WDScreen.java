@@ -120,15 +120,40 @@ public abstract class WDScreen extends Screen {
         }
     }
 
+    /**
+     * Centers all controls inside a framed glass panel and returns [panelX, panelY, panelW, panelH].
+     */
+    protected int[] centerInPanel(int padX, int padTop, int padBottom) {
+        Bounds bounds = Control.findBounds(controls);
+        int contentW = Math.max(0, bounds.maxX - bounds.minX);
+        int contentH = Math.max(0, bounds.maxY - bounds.minY);
+        int panelW = contentW + padX * 2;
+        int panelH = contentH + padTop + padBottom;
+        int panelX = (width - panelW) / 2;
+        int panelY = (height - panelH) / 2;
+
+        int diffX = (panelX + padX) - bounds.minX;
+        int diffY = (panelY + padTop) - bounds.minY;
+
+        for (Control ctrl : controls) {
+            ctrl.setPos(ctrl.getX() + diffX, ctrl.getY() + diffY);
+        }
+
+        return new int[] { panelX, panelY, panelW, panelH };
+    }
+
+    @Override
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
+        if (defaultBackground)
+            super.extractBackground(graphics, mouseX, mouseY, ptt);
+    }
+
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
-        if(defaultBackground)
-            extractBackground(graphics, mouseX, mouseY, ptt);
-
-        for(Control ctrl: controls)
+        for (Control ctrl : controls)
             ctrl.draw(graphics, mouseX, mouseY, ptt);
 
-        for(Control ctrl: postDrawList)
+        for (Control ctrl : postDrawList)
             ctrl.postDraw(graphics, mouseX, mouseY, ptt);
     }
 

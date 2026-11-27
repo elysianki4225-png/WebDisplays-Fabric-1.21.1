@@ -63,6 +63,8 @@ public class WebDisplays {
     public boolean enableBackfaceCulling = true;
     public boolean pauseCulledScreens = true;
     public int maxBrowsersPerFrame = 1;
+    public boolean enableAdaptiveLod = true;
+    public int lodCooldownMs = 750;
 
     public static final DeferredRegister<SoundEvent> SOUNDS = DeferredRegister.create(Registries.SOUND_EVENT, "webdisplays");
 

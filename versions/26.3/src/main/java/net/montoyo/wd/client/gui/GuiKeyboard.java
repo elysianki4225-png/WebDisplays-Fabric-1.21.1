@@ -8,6 +8,7 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MouseHandler;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.core.BlockPos;
@@ -43,6 +44,7 @@ public class GuiKeyboard extends WDScreen {
     private final ArrayList<TypeData> evStack = new ArrayList<>();
     private BlockPos kbPos;
     private boolean showWarning = true;
+    private int[] warningPanelBounds;
 
     @FillControl
     private Label lblInfo;
@@ -130,23 +132,32 @@ public class GuiKeyboard extends WDScreen {
                     if (ctrl.getWidth() > maxLabelW)
                         maxLabelW = ctrl.getWidth();
 
-                    totalH += ctrl.getHeight();
+                    totalH += ctrl.getHeight() + 2;
                     ctrl.setPos((width - ctrl.getWidth()) / 2, 0);
                 }
             }
 
-            btnOk.setWidth(maxLabelW);
-            btnOk.setPos((width - maxLabelW) / 2, 0);
-            totalH += btnOk.getHeight();
+            int btnW = Math.max(120, maxLabelW / 2);
+            btnOk.setWidth(btnW);
+            btnOk.setPos((width - btnW) / 2, 0);
+            totalH += btnOk.getHeight() + 6;
 
             int y = (height - totalH) / 2;
             for (Control ctrl : controls) {
                 if (ctrl != lblInfo) {
+                    if (ctrl == btnOk)
+                        y += 6;
                     ctrl.setPos(ctrl.getX(), y);
-                    y += ctrl.getHeight();
+                    y += ctrl.getHeight() + 2;
                 }
             }
+
+            int padX = 16;
+            int pw = maxLabelW + padX * 2;
+            int ph = totalH + 26;
+            warningPanelBounds = new int[] { (width - pw) / 2, (height - ph) / 2 - 4, pw, ph };
         } else {
+            warningPanelBounds = null;
             grabMouseKeepingScreen();
         }
 
@@ -154,6 +165,23 @@ public class GuiKeyboard extends WDScreen {
         syncTicks = 5;
 
         showVivecraftKeyboard(true);
+    }
+
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
+        if (showWarning && warningPanelBounds != null) {
+            WDTheme.drawGlassPanel(graphics, warningPanelBounds[0], warningPanelBounds[1], warningPanelBounds[2], warningPanelBounds[3]);
+            graphics.fill(warningPanelBounds[0] + 1, warningPanelBounds[1] + 1, warningPanelBounds[0] + warningPanelBounds[2] - 1, warningPanelBounds[1] + 3, WDTheme.DANGER);
+        } else if (!showWarning && lblInfo != null && lblInfo.isVisible()) {
+            int pillW = lblInfo.getWidth() + 16;
+            int pillH = 18;
+            int px = lblInfo.getX() - 8;
+            int py = lblInfo.getY() - 5;
+            graphics.fill(px, py, px + pillW, py + pillH, 0xCC10151E);
+            WDTheme.drawBorder(graphics, px, py, pillW, pillH, 0xFF2E384B);
+            graphics.fill(px + 1, py + 4, px + 3, py + pillH - 4, WDTheme.ACCENT);
+        }
+        super.extractRenderState(graphics, mouseX, mouseY, ptt);
     }
 
     @Override

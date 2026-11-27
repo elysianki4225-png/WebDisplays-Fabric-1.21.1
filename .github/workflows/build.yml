@@ -194,7 +194,7 @@ jobs:
               if missing:
                   post_comment("### 26.3 Mixin / AccessWidener check FAILED\nMissing:\n" + "\n".join(f"- {m}" for m in missing) + "\n\n```text\n" + report[:50000] + "\n```")
                   sys.exit(1)
-              post_comment("### 26.3 Mixin / AccessWidener check PASSED\n```text\n" + report[:50000] + "\n```")
+              print("All Mixin and AccessWidener targets verified OK!")
           except Exception:
               post_comment("### 26.3 Mixin check crashed\n```text\n" + traceback.format_exc() + "\n```")
               sys.exit(1)

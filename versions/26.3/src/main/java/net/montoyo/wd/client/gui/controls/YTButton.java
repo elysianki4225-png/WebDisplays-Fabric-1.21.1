@@ -19,6 +19,7 @@ public class YTButton extends Button implements TextField.TextChangeListener {
     public YTButton() {
         btn.setMessage(Component.nullToEmpty("YT"));
         btn.active = false;
+        btn.setVariant(WDButton.Variant.SUBTLE);
         shiftColor = 0xFFFF6464;
     }
 

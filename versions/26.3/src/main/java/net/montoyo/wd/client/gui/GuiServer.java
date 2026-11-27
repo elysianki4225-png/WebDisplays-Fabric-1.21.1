@@ -100,7 +100,9 @@ public class GuiServer extends WDScreen {
 		int x = (width - 256) / 2;
 		int y = (height - 176) / 2;
 
+		WDTheme.drawDropShadow(graphics, x, y, 256, 176);
 		graphics.blit(RenderPipelines.GUI_TEXTURED, BG_IMAGE, x, y, 0.0f, 0.0f, 256, 256, 256, 256);
+		WDTheme.drawBorder(graphics, x, y, 256, 176, WDTheme.PANEL_BORDER);
 
 		x += 18;
 		y += 18;

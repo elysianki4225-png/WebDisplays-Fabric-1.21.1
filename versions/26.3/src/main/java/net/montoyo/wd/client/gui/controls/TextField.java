@@ -12,6 +12,7 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.network.chat.Component;
+import net.montoyo.wd.client.gui.WDTheme;
 import net.montoyo.wd.client.gui.loading.JsonOWrapper;
 import org.lwjgl.sdl.SDLScancode;
 
@@ -189,6 +190,21 @@ public class TextField extends Control {
     @Override
     public void draw(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
         field.extractRenderState(graphics, mouseX, mouseY, ptt);
+        if (field.isVisible()) {
+            int fx = getX();
+            int fy = getY();
+            int fw = getWidth();
+            int fh = getHeight();
+            if (!enabled) {
+                graphics.fill(fx, fy, fx + fw, fy + fh, 0x55090D14);
+                WDTheme.drawBorder(graphics, fx, fy, fw, fh, 0xFF232B3A);
+            } else if (field.isFocused()) {
+                WDTheme.drawBorder(graphics, fx, fy, fw, fh, WDTheme.ACCENT);
+            } else {
+                boolean hovered = mouseX >= fx && mouseX < fx + fw && mouseY >= fy && mouseY < fy + fh;
+                WDTheme.drawBorder(graphics, fx, fy, fw, fh, hovered ? 0xFF4B5D7C : 0xFF2E384B);
+            }
+        }
     }
 
     public void setText(String text) {

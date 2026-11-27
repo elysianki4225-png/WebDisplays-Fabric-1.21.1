@@ -6,6 +6,7 @@ package net.montoyo.wd.client.gui.controls;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.item.ItemStack;
+import net.montoyo.wd.client.gui.WDTheme;
 import net.montoyo.wd.client.gui.loading.JsonOWrapper;
 
 import java.util.ArrayList;
@@ -14,6 +15,7 @@ public class UpgradeGroup extends BasicControl {
 
     private int width;
     private int height;
+    private int slotCount = 4;
     private ArrayList<ItemStack> upgrades;
     private ItemStack overStack;
     private ItemStack clickStack;
@@ -24,17 +26,24 @@ public class UpgradeGroup extends BasicControl {
 
     @Override
     public void draw(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
-        if(upgrades != null) {
-            int x = this.x;
+        int slots = Math.max(slotCount, upgrades != null ? upgrades.size() : 0);
+        int x = this.x;
 
-            for(ItemStack is: upgrades) {
-                if(is == overStack && !disabled)
-                    graphics.fill(x, y, x + 16, y + 16, 0x80FF0000);
+        for (int i = 0; i < slots; i++) {
+            ItemStack is = (upgrades != null && i < upgrades.size()) ? upgrades.get(i) : null;
+            boolean hovered = is != null && is == overStack && !disabled;
 
-                graphics.item(is, x, y);
-                graphics.itemDecorations(font, is, x, y);
-                x += 18;
+            int bg = hovered ? WDTheme.DANGER_SOFT : WDTheme.INSET_BG;
+            int border = hovered ? WDTheme.DANGER : WDTheme.INSET_BORDER;
+            graphics.fill(x, y, x + 18, y + 18, bg);
+            WDTheme.drawBorder(graphics, x, y, 18, 18, border);
+
+            if (is != null) {
+                graphics.item(is, x + 1, y + 1);
+                graphics.itemDecorations(font, is, x + 1, y + 1);
             }
+
+            x += 20;
         }
     }
 
@@ -46,12 +55,13 @@ public class UpgradeGroup extends BasicControl {
 
     @Override
     public int getWidth() {
-        return width;
+        int slots = Math.max(slotCount, upgrades != null ? upgrades.size() : 0);
+        return Math.max(width, slots * 20 - 2);
     }
 
     @Override
     public int getHeight() {
-        return height;
+        return Math.max(height, 18);
     }
 
     public void setWidth(int w) {
@@ -73,8 +83,9 @@ public class UpgradeGroup extends BasicControl {
     @Override
     public void load(JsonOWrapper json) {
         super.load(json);
-        width = json.getInt("width", 0);
-        height = json.getInt("height", 16);
+        slotCount = json.getInt("slots", 4);
+        width = json.getInt("width", slotCount * 20 - 2);
+        height = json.getInt("height", 18);
     }
 
     @Override
@@ -82,11 +93,11 @@ public class UpgradeGroup extends BasicControl {
         if(upgrades != null) {
             overStack = null;
 
-            if(mouseY >= y && mouseY <= y + 16 && mouseX >= x) {
+            if(mouseY >= y && mouseY <= y + 18 && mouseX >= x) {
                 mouseX -= x;
-                int sel = (int) (mouseX / 18);
+                int sel = (int) (mouseX / 20);
 
-                if(sel < upgrades.size() && mouseX % 18 <= 16)
+                if(sel < upgrades.size() && mouseX % 20 <= 18)
                     overStack = upgrades.get(sel);
 
                 return true;
@@ -99,7 +110,7 @@ public class UpgradeGroup extends BasicControl {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int mouseButton) {
         if(mouseButton == 0) {
-            if (mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + height) {
+            if (mouseX >= x && mouseX <= x + getWidth() && mouseY >= y && mouseY <= y + getHeight()) {
                 clickStack = overStack;
                 return true;
             }

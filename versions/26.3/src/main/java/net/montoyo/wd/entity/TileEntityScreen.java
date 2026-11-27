@@ -34,6 +34,7 @@ import net.montoyo.wd.controls.builtin.ClickControl;
 import net.montoyo.wd.core.DefaultUpgrade;
 import net.montoyo.wd.core.IUpgrade;
 import net.montoyo.wd.core.JSServerRequest;
+import net.montoyo.wd.core.ScreenResolution;
 import net.montoyo.wd.core.ScreenRights;
 import net.montoyo.wd.data.ScreenConfigData;
 import net.montoyo.wd.init.BlockInit;
@@ -82,6 +83,10 @@ public class TileEntityScreen extends BlockEntity {
         public boolean doTurnOnAnim;
         public long turnOnTime;
         public long lastVisibleMs = System.currentTimeMillis();
+        public int renderWidth;
+        public int renderHeight;
+        public float currentLodScale = 1.0f;
+        public long lastLodResizeMs;
         public Player laserUser;
         public final Vector2i lastMousePos = new Vector2i();
         public NibbleArray redstoneStatus; //null on client
@@ -99,13 +104,13 @@ public class TileEntityScreen extends BlockEntity {
             ret.videoType = VideoType.getTypeFromURL(ret.url);
 
             if (ret.resolution.x <= 0 || ret.resolution.y <= 0) {
-                float psx = ((float) ret.size.x) * 16.f - 4.f;
-                float psy = ((float) ret.size.y) * 16.f - 4.f;
-                psx *= 8.f;
-                psy *= 8.f;
-
-                ret.resolution.x = (int) psx;
-                ret.resolution.y = (int) psy;
+                ret.resolution = ScreenResolution.computeAdaptiveResolution(
+                        ret.size,
+                        CommonConfig.Screen.defaultPixelsPerBlock,
+                        CommonConfig.Screen.minAdaptiveEdge,
+                        CommonConfig.Screen.maxResolutionX,
+                        CommonConfig.Screen.maxResolutionY
+                );
             }
 
             if (input.contains("OwnerName")) {
@@ -203,23 +208,53 @@ public class TileEntityScreen extends BlockEntity {
             if (resolution.x > CommonConfig.Screen.maxResolutionX) {
                 float newY = ((float) resolution.y) * ((float) CommonConfig.Screen.maxResolutionX) / ((float) resolution.x);
                 resolution.x = CommonConfig.Screen.maxResolutionX;
-                resolution.y = (int) newY;
+                resolution.y = Math.max(1, (int) newY);
             }
 
             if (resolution.y > CommonConfig.Screen.maxResolutionY) {
                 float newX = ((float) resolution.x) * ((float) CommonConfig.Screen.maxResolutionY) / ((float) resolution.y);
-                resolution.x = (int) newX;
                 resolution.y = CommonConfig.Screen.maxResolutionY;
+                resolution.x = Math.max(1, (int) newX);
+            }
+        }
+
+        public Vector2i computeTargetBrowserSize(float lodScale) {
+            int canonW = Math.max(1, rotation.isVertical ? resolution.y : resolution.x);
+            int canonH = Math.max(1, rotation.isVertical ? resolution.x : resolution.y);
+            float scale = Math.max(0.1f, Math.min(1.0f, lodScale));
+
+            if (scale >= 0.999f) {
+                return new Vector2i(canonW, canonH);
+            }
+
+            int w = ScreenResolution.alignEven(Math.round(canonW * scale), Math.min(64, canonW), canonW);
+            int h = ScreenResolution.alignEven(Math.round(canonH * scale), Math.min(64, canonH), canonH);
+            return new Vector2i(w, h);
+        }
+
+        public void syncBrowserSize(float lodScale) {
+            currentLodScale = lodScale;
+            Vector2i target = computeTargetBrowserSize(lodScale);
+            if (browser instanceof MCEFBrowser mcefBrowser && (renderWidth != target.x || renderHeight != target.y)) {
+                renderWidth = target.x;
+                renderHeight = target.y;
+                mcefBrowser.resize(target.x, target.y);
             }
         }
 
         public void createBrowser(boolean doAnim) {
+            createBrowser(doAnim, 1.0f);
+        }
+
+        public void createBrowser(boolean doAnim, float initialLodScale) {
             if (WebDisplays.PROXY instanceof ClientProxy && MCEF.isInitialized()) {
                 net.montoyo.wd.client.ClientProxy.ensureSchemeHandlers();
-                int targetW = rotation.isVertical ? resolution.y : resolution.x;
-                int targetH = rotation.isVertical ? resolution.x : resolution.y;
+                currentLodScale = Math.max(0.1f, Math.min(1.0f, initialLodScale));
+                Vector2i target = computeTargetBrowserSize(currentLodScale);
+                renderWidth = target.x;
+                renderHeight = target.y;
                 browser = MCEF.createBrowser(WebDisplays.applyBlacklist(url != null ? url : "https://www.google.com"),
-                        false, Math.max(1, targetW), Math.max(1, targetH));
+                        false, target.x, target.y);
 
                 if (browser instanceof MCEFBrowser mcefBrowser) {
                     //noinspection RedundantCast
@@ -227,6 +262,7 @@ public class TileEntityScreen extends BlockEntity {
                 }
 
                 lastVisibleMs = System.currentTimeMillis();
+                lastLodResizeMs = lastVisibleMs;
                 doTurnOnAnim = doAnim;
                 turnOnTime = lastVisibleMs;
             }
@@ -328,12 +364,13 @@ public class TileEntityScreen extends BlockEntity {
         }
 
         if (resolution == null || resolution.x < 1 || resolution.y < 1) {
-            float psx = ((float) size.x) * 16.f - 4.f;
-            float psy = ((float) size.y) * 16.f - 4.f;
-            psx *= 8.f; //TODO: Use ratio in config file
-            psy *= 8.f;
-
-            ret.resolution = new Vector2i((int) psx, (int) psy);
+            ret.resolution = ScreenResolution.computeAdaptiveResolution(
+                    size,
+                    CommonConfig.Screen.defaultPixelsPerBlock,
+                    CommonConfig.Screen.minAdaptiveEdge,
+                    CommonConfig.Screen.maxResolutionX,
+                    CommonConfig.Screen.maxResolutionY
+            );
         } else
             ret.resolution = resolution;
 
@@ -471,14 +508,14 @@ public class TileEntityScreen extends BlockEntity {
         scr.clampResolution();
 
         if (level.isClientSide()) {
-            WebDisplays.PROXY.screenUpdateResolutionInGui(new Vector3i(getBlockPos()), side, res);
+            WebDisplays.PROXY.screenUpdateResolutionInGui(new Vector3i(getBlockPos()), side, scr.resolution);
 
             if (scr.browser != null) {
-                scr.browser.close(true);
-                scr.browser = null; //Will be re-created by renderer
+                scr.syncBrowserSize(scr.currentLodScale);
+                scr.lastLodResizeMs = System.currentTimeMillis();
             }
         } else {
-            WDNetworkRegistry.INSTANCE.send(WDDistributor.NEAR.with(() -> point(level, getBlockPos())), S2CMessageScreenUpdate.setResolution(this, side, res));
+            WDNetworkRegistry.INSTANCE.send(WDDistributor.NEAR.with(() -> point(level, getBlockPos())), S2CMessageScreenUpdate.setResolution(this, side, scr.resolution));
             setChanged();
         }
     }
@@ -537,23 +574,34 @@ public class TileEntityScreen extends BlockEntity {
             if (button == 1) button = 0;
             else if (button == 0) button = 1;
 
+            int mx = scr.lastMousePos.x;
+            int my = scr.lastMousePos.y;
+            if (vec != null) {
+                int canonW = Math.max(1, scr.rotation.isVertical ? scr.resolution.y : scr.resolution.x);
+                int canonH = Math.max(1, scr.rotation.isVertical ? scr.resolution.x : scr.resolution.y);
+                int targetW = scr.renderWidth > 0 ? scr.renderWidth : canonW;
+                int targetH = scr.renderHeight > 0 ? scr.renderHeight : canonH;
+                mx = Math.max(0, Math.min(targetW - 1, Math.round(vec.x * (float) targetW / (float) canonW)));
+                my = Math.max(0, Math.min(targetH - 1, Math.round(vec.y * (float) targetH / (float) canonH)));
+            }
+
             if (event == ClickControl.ControlType.CLICK) {
-                mcefBrowser.sendMouseMove(vec.x, vec.y);                                            //Move to target
-                mcefBrowser.sendMousePress(vec.x, vec.y, button);                              //Press
-                mcefBrowser.sendMouseRelease(vec.x, vec.y, button);                            //Release
+                mcefBrowser.sendMouseMove(mx, my);                                            //Move to target
+                mcefBrowser.sendMousePress(mx, my, button);                                   //Press
+                mcefBrowser.sendMouseRelease(mx, my, button);                                 //Release
             } else if (event == ClickControl.ControlType.DOWN) {
-                mcefBrowser.sendMouseMove(vec.x, vec.y);                                            //Move to target
-                mcefBrowser.sendMousePress(vec.x, vec.y, button);                              //Press
+                mcefBrowser.sendMouseMove(mx, my);                                            //Move to target
+                mcefBrowser.sendMousePress(mx, my, button);                                   //Press
             } else if (event == ClickControl.ControlType.MOVE)
-                mcefBrowser.sendMouseMove(vec.x, vec.y);                                            //Move
+                mcefBrowser.sendMouseMove(mx, my);                                            //Move
             else if (event == ClickControl.ControlType.UP)
-                mcefBrowser.sendMouseRelease(scr.lastMousePos.x, scr.lastMousePos.y, button);  //Release
+                mcefBrowser.sendMouseRelease(scr.lastMousePos.x, scr.lastMousePos.y, button); //Release
 
             mcefBrowser.setFocus(true);
 
             if (vec != null) {
-                scr.lastMousePos.x = vec.x;
-                scr.lastMousePos.y = vec.y;
+                scr.lastMousePos.x = mx;
+                scr.lastMousePos.y = my;
             }
         }
     }
@@ -1179,8 +1227,8 @@ public class TileEntityScreen extends BlockEntity {
             WebDisplays.PROXY.screenUpdateRotationInGui(new Vector3i(getBlockPos()), side, rot);
 
             if (scr.browser != null && oldWasVertical != rot.isVertical) {
-                scr.browser.close(true);
-                scr.browser = null; //Will be re-created by renderer
+                scr.syncBrowserSize(scr.currentLodScale);
+                scr.lastLodResizeMs = System.currentTimeMillis();
             }
         } else {
             scr.rotation = rot;

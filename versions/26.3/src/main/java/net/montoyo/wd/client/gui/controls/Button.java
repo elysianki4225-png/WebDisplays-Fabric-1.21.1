@@ -204,6 +204,10 @@ public class Button extends Control {
         return shiftColor;
     }
 
+    public void setVariant(WDButton.Variant variant) {
+        btn.setVariant(variant);
+    }
+
     @Override
     public void load(JsonOWrapper json) {
         super.load(json);
@@ -215,7 +219,16 @@ public class Button extends Control {
         btn.setHeight(json.getInt("height", 20));
         btn.setMessage(Component.nullToEmpty(tr(json.getString("label", btn.getMessage().getString()))));
         btn.active = json.getBool("active", btn.active);
+        if (json.getBool("disabled", false))
+            btn.active = false;
         btn.visible = json.getBool("visible", btn.visible);
+
+        String variantStr = json.getString("variant", "default").toUpperCase();
+        try {
+            btn.setVariant(WDButton.Variant.valueOf(variantStr));
+        } catch (IllegalArgumentException ignored) {
+            btn.setVariant(WDButton.Variant.DEFAULT);
+        }
 
         originalColor = toARGB(json.getColor("color", originalColor));
         shiftColor = toARGB(json.getColor("shiftColor", shiftColor));

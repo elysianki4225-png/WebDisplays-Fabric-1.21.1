@@ -77,6 +77,20 @@ public class CommonConfig {
 		@IntRange(minV = 0, maxV = Integer.MAX_VALUE)
 		@Default(valueI = 16)
 		public static int maxScreenSizeY = 16;
+
+		@Name("default_pixels_per_block")
+		@Comment("Default pixel density per block when creating a screen with adaptive resolution")
+		@Translation("config.webdisplays.default_ppb")
+		@IntRange(minV = 64, maxV = 512)
+		@Default(valueI = 240)
+		public static int defaultPixelsPerBlock = 240;
+
+		@Name("min_adaptive_edge")
+		@Comment("Minimum target pixel count on the longest edge for small screens (e.g. 2x2)")
+		@Translation("config.webdisplays.min_adaptive_edge")
+		@IntRange(minV = 128, maxV = 1080)
+		@Default(valueI = 512)
+		public static int minAdaptiveEdge = 512;
 	}
 	
 	@Comment("Options for the miniserver")

@@ -7,18 +7,15 @@ package net.montoyo.wd.client.gui.controls;
 import com.google.common.collect.Lists;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
-import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvents;
+import net.montoyo.wd.client.gui.WDTheme;
 import net.montoyo.wd.client.gui.loading.JsonOWrapper;
 
 public class CheckBox extends BasicControl {
 
-    private static final Identifier texUnchecked = Identifier.fromNamespaceAndPath("webdisplays", "textures/gui/checkbox.png");
-    private static final Identifier texChecked = Identifier.fromNamespaceAndPath("webdisplays", "textures/gui/checkbox_checked.png");
-    public static final int WIDTH = 16;
-    public static final int HEIGHT = 16;
+    public static final int WIDTH = 14;
+    public static final int HEIGHT = 14;
 
     public static class CheckedEvent extends Event<CheckBox> {
 
@@ -63,7 +60,7 @@ public class CheckBox extends BasicControl {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int mouseButton) {
         if(mouseButton == 0 && !disabled) {
-            if(mouseX >= x && mouseX <= x + WIDTH + 2 + labelW && mouseY >= y && mouseY < y + HEIGHT) {
+            if(mouseX >= x && mouseX <= x + WIDTH + 4 + labelW && mouseY >= y && mouseY < y + HEIGHT) {
                 checked = !checked;
                 mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F));
                 parent.actionPerformed(new CheckedEvent(this));
@@ -78,14 +75,41 @@ public class CheckBox extends BasicControl {
     @Override
     public void draw(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
         if(visible) {
-            graphics.blit(
-                    RenderPipelines.GUI_TEXTURED,
-                    checked ? texChecked : texUnchecked,
-                    x, y, 0.0f, 0.0f, WIDTH, HEIGHT, WIDTH, HEIGHT
-            );
+            boolean inside = (!disabled && mouseX >= x && mouseX <= x + WIDTH + 4 + labelW && mouseY >= y && mouseY < y + HEIGHT);
+            int bx = x + 1;
+            int by = y + 1;
+            int bSize = 12;
 
-            boolean inside = (!disabled && mouseX >= x && mouseX <= x + WIDTH + 2 + labelW && mouseY >= y && mouseY < y + HEIGHT);
-            graphics.text(Minecraft.getInstance().font, label, x + WIDTH + 2, y + 4, inside ? 0xFF0080FF : COLOR_WHITE, false);
+            int bg;
+            int border;
+            if (disabled) {
+                bg = checked ? 0x661D4ED8 : 0x70111620;
+                border = 0xFF283142;
+            } else if (checked) {
+                bg = inside ? 0xFF3B82F6 : 0xFF2563EB;
+                border = inside ? 0xFF93C5FD : 0xFF60A5FA;
+            } else {
+                bg = inside ? 0xE018202E : 0xD40E131C;
+                border = inside ? 0xFF5A739C : 0xFF374357;
+            }
+
+            graphics.fill(bx, by, bx + bSize, by + bSize, bg);
+            WDTheme.drawBorder(graphics, bx, by, bSize, bSize, border);
+
+            if (checked) {
+                int checkCol = disabled ? 0x99CBD5E1 : 0xFFFFFFFF;
+                // Crisp vector checkmark inside 12x12 box
+                graphics.fill(bx + 3, by + 6, bx + 4, by + 8, checkCol);
+                graphics.fill(bx + 4, by + 7, bx + 5, by + 9, checkCol);
+                graphics.fill(bx + 5, by + 8, bx + 6, by + 9, checkCol);
+                graphics.fill(bx + 6, by + 6, bx + 7, by + 8, checkCol);
+                graphics.fill(bx + 7, by + 5, bx + 8, by + 7, checkCol);
+                graphics.fill(bx + 8, by + 4, bx + 9, by + 6, checkCol);
+                graphics.fill(bx + 9, by + 3, bx + 10, by + 5, checkCol);
+            }
+
+            int labelCol = disabled ? WDTheme.TEXT_MUTED : (inside ? 0xFF93C5FD : WDTheme.TEXT_PRIMARY);
+            graphics.text(Minecraft.getInstance().font, label, x + WIDTH + 3, y + 3, labelCol, false);
         }
     }
 
@@ -108,7 +132,7 @@ public class CheckBox extends BasicControl {
 
     @Override
     public int getWidth() {
-        return WIDTH + 2 + labelW;
+        return WIDTH + 4 + labelW;
     }
 
     @Override
@@ -132,7 +156,7 @@ public class CheckBox extends BasicControl {
 
     @Override
     public void postDraw(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
-        if(tooltip != null && !disabled && mouseX >= x && mouseX <= x + WIDTH + 2 + labelW && mouseY >= y && mouseY < y + HEIGHT)
+        if(tooltip != null && !disabled && mouseX >= x && mouseX <= x + WIDTH + 4 + labelW && mouseY >= y && mouseY < y + HEIGHT)
             parent.drawTooltip(graphics, tooltip, mouseX, mouseY);
     }
 

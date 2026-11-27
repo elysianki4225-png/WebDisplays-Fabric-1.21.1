@@ -20,6 +20,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.phys.Vec3;
 import net.montoyo.wd.WebDisplays;
+import net.montoyo.wd.core.ScreenResolution;
 import net.montoyo.wd.entity.TileEntityScreen;
 import net.montoyo.wd.utilities.BlockSide;
 import net.montoyo.wd.utilities.Vector3f;
@@ -140,15 +141,27 @@ public class ScreenRenderer implements BlockEntityRenderer<TileEntityScreen, Scr
 
 			scr.lastVisibleMs = nowMs;
 
+			double dx = camPos.x - (bp.getX() + mid.x);
+			double dy = camPos.y - (bp.getY() + mid.y);
+			double dz = camPos.z - (bp.getZ() + mid.z);
+			double distSqr = dx * dx + dy * dy + dz * dz;
+			float targetLod = WebDisplays.INSTANCE.enableAdaptiveLod
+					? ScreenResolution.computeLodScale(distSqr, scr.size, scr.resolution.x, scr.resolution.y)
+					: 1.0f;
+
 			if (scr.browser == null) {
 				if (!mcefReady || createdInWindow >= WebDisplays.INSTANCE.maxBrowsersPerFrame) {
 					continue;
 				}
 				createdInWindow++;
-				scr.createBrowser(true);
+				scr.createBrowser(true, targetLod);
 				if (scr.browser == null) {
 					continue;
 				}
+			} else if (Math.abs(targetLod - scr.currentLodScale) >= 0.1f
+					&& nowMs - scr.lastLodResizeMs >= WebDisplays.INSTANCE.lodCooldownMs) {
+				scr.syncBrowserSize(targetLod);
+				scr.lastLodResizeMs = nowMs;
 			}
 
 			if (scr.browser instanceof MCEFBrowser mb && mb.getRenderer().isReady()) {
