@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "PPP",
+    "RGB",
+    "DCD"
+  ],
+  "key": {
+    "P": "minecraft:glass_pane",
+    "R": "minecraft:red_dye",
+    "G": "minecraft:green_dye",
+    "B": "minecraft:blue_dye",
+    "D": "minecraft:diamond",
+    "C": "webdisplays:craftcomp_batcell"
+  },
+  "result": {
+    "count": 1,
+    "id": "webdisplays:minepad"
+  }
+}

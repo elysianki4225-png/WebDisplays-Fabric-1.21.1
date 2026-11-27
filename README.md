@@ -29,12 +29,20 @@ Minecraft **1.21.1** Fabric 平台的 [WebDisplays](https://www.mcmod.cn/class/8
    - **交互与网络**：`MinePadRenderer` 缓存 `PadID` UUID 查询；`ClientProxy` 按 game tick 缓存激光笔射线检测；`WDNetworkRegistry` 安全释放 Netty 缓冲区；完整升级 Minecraft 1.21.1 数据包（`recipe/`、`advancement/`、`loot_table/`）及多语言（`zh_cn`、`en_us`、`ru_ru`）。
 
 ### 本地构建
-需要 **JDK 21**：
+- **Minecraft 1.21.1**（需要 **JDK 21**）：
 ```bash
 chmod +x gradlew
 ./gradlew build
 ```
 构建产物位于 `build/libs/webdisplays-fabric-2.1.0-1.21.1.jar`。
+
+- **Minecraft 26.3**（需要 **JDK 25**）：
+```bash
+cd versions/26.3
+chmod +x gradlew
+./gradlew build
+```
+构建产物位于 `versions/26.3/build/libs/webdisplays-fabric-2.1.0-26.3.jar`。
 
 ---
 
@@ -63,12 +71,20 @@ Minecraft **1.21.1** Fabric port of [WebDisplays](https://www.mcmod.cn/class/864
    - **HUD, MinePad & Networking**: `MinePadRenderer` caches `PadID` UUID lookups; `ClientProxy` caches laser crosshair raycasts per tick; `WDNetworkRegistry` cleanly releases `RegistryFriendlyByteBuf` instances; updated all 1.21.1 datapack directories (`recipe/`, `advancement/`, `loot_table/`) and `en_us` / `zh_cn` / `ru_ru` translations.
 
 ### Building
-Requires **JDK 21**:
+- **Minecraft 1.21.1** (requires **JDK 21**):
 ```bash
 chmod +x gradlew
 ./gradlew build
 ```
 The standalone `.jar` is generated at `build/libs/webdisplays-fabric-2.1.0-1.21.1.jar`.
+
+- **Minecraft 26.3** (requires **JDK 25**):
+```bash
+cd versions/26.3
+chmod +x gradlew
+./gradlew build
+```
+The standalone `.jar` is generated at `versions/26.3/build/libs/webdisplays-fabric-2.1.0-26.3.jar`.
 
 ---
 
@@ -97,9 +113,17 @@ The standalone `.jar` is generated at `build/libs/webdisplays-fabric-2.1.0-1.21.
    - **Интерфейс, MinePad и сеть**: кэширование `PadID` в `MinePadRenderer`, кэширование рейкаста лазерной указки на тик в `ClientProxy`, корректное освобождение `RegistryFriendlyByteBuf` в `WDNetworkRegistry`, обновление датапака под 1.21.1 (`recipe/`, `advancement/`, `loot_table/`) и полная локализация (`en_us`, `zh_cn`, `ru_ru`).
 
 ### Сборка из исходников
-Требуется **JDK 21**:
+- **Minecraft 1.21.1** (требуется **JDK 21**):
 ```bash
 chmod +x gradlew
 ./gradlew build
 ```
 Готовый `.jar` будет создан по пути `build/libs/webdisplays-fabric-2.1.0-1.21.1.jar`.
+
+- **Minecraft 26.3** (требуется **JDK 25**):
+```bash
+cd versions/26.3
+chmod +x gradlew
+./gradlew build
+```
+Готовый `.jar` будет создан по пути `versions/26.3/build/libs/webdisplays-fabric-2.1.0-26.3.jar`.

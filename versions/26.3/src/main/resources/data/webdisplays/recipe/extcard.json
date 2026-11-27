@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "CTR",
+    "IGD"
+  ],
+  "key": {
+    "C": "minecraft:comparator",
+    "T": "minecraft:redstone_torch",
+    "R": "minecraft:repeater",
+    "I": "minecraft:iron_ingot",
+    "G": "minecraft:gold_ingot",
+    "D": "minecraft:redstone"
+  },
+  "result": {
+    "id": "webdisplays:craftcomp_extcard"
+  }
+}

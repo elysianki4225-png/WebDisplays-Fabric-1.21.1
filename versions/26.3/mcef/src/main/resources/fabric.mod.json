@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "mcef",
+  "version": "${version}",
+  "name": "MCEF",
+  "description": "Minecraft Chromium Embedded Framework (embedded for WebDisplays)",
+  "authors": [
+    "CinemaMod Group",
+    "montoyo"
+  ],
+  "license": "LGPL-2.1",
+  "environment": "client",
+  "entrypoints": {
+    "main": [
+      "com.cinemamod.mcef.FabricMCEFMod"
+    ],
+    "client": [
+      "com.cinemamod.mcef.FabricMCEFClientMod"
+    ]
+  },
+  "mixins": [
+    "mcef.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.20.1",
+    "minecraft": "~26.3",
+    "java": ">=25",
+    "fabric-api-base": "*",
+    "fabric-lifecycle-events-v1": "*"
+  }
+}
