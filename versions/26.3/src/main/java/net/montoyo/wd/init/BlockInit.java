@@ -6,7 +6,6 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockBehaviour;
-import net.minecraft.world.level.material.PushReaction;
 import net.montoyo.wd.block.BlockKeyboardLeft;
 import net.montoyo.wd.block.BlockKeyboardRight;
 import net.montoyo.wd.block.BlockPeripheral;
@@ -26,7 +25,7 @@ public class BlockInit {
     private static BlockBehaviour.Properties props(String name) {
         return BlockBehaviour.Properties.ofFullCopy(Blocks.STONE)
                 .strength(1.5f, 10.f)
-                .pushReaction(PushReaction.BLOCK)
+                .pushReaction(Blocks.OBSIDIAN.defaultBlockState().getPistonPushReaction())
                 .setId(ResourceKey.create(Registries.BLOCK, Identifier.fromNamespaceAndPath("webdisplays", name)));
     }
 

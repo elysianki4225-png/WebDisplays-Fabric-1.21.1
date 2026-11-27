@@ -20,13 +20,13 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.Property;
-import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.level.redstone.Orientation;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
@@ -49,7 +49,7 @@ public class BlockScreen extends BaseEntityBlock {
     private static final Property<?>[] properties = new Property<?>[]{hasTE, emitting};
 
     public BlockScreen(Properties properties) {
-        super(properties.strength(1.5f, 10.f).pushReaction(PushReaction.BLOCK));
+        super(properties.strength(1.5f, 10.f).pushReaction(Blocks.OBSIDIAN.defaultBlockState().getPistonPushReaction()));
         this.registerDefaultState(this.defaultBlockState().setValue(hasTE, false).setValue(emitting, false));
     }
 
