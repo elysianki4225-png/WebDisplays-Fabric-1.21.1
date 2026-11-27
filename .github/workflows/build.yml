@@ -126,6 +126,57 @@ jobs:
           )
           PY
 
+      - name: Verify 26.3 Mixin and AccessWidener targets
+        if: success()
+        working-directory: versions/26.3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import glob, os, subprocess, sys
+
+          jars = glob.glob(".gradle/loom-cache/**/minecraft*.jar", recursive=True)
+          jars += glob.glob(os.path.expanduser("~/.gradle/caches/fabric-loom/**/minecraft*.jar"), recursive=True)
+          jars = [j for j in jars if not j.endswith(("-sources.jar", "-javadoc.jar"))]
+          print("Candidate MC jars:", jars)
+          if not jars:
+              print("No cached minecraft jar found; skipping javap verification.")
+              sys.exit(0)
+          mc_jar = max(jars, key=os.path.getsize)
+          print("Using MC jar:", mc_jar)
+
+          checks = {
+              "net.minecraft.world.entity.LivingEntity": ["createItemStackToDrop(net.minecraft.world.item.ItemStack, boolean, boolean)", "(Lnet/minecraft/world/item/ItemStack;ZZ)Lnet/minecraft/world/entity/item/ItemEntity;"],
+              "net.minecraft.world.entity.player.Player": [],
+              "net.minecraft.world.entity.item.ItemEntity": ["tick()"],
+              "net.minecraft.client.MouseHandler": ["onButton(", "mouseGrabbed"],
+              "net.minecraft.client.gui.Gui": ["setScreen("],
+              "net.minecraft.client.Minecraft": ["renderFrame(", "close()"],
+              "net.minecraft.client.resources.ClientPackSource": ["static {};"],
+              "net.minecraft.world.phys.AABB": ["minX", "minY", "minZ", "maxX", "maxY", "maxZ"],
+          }
+
+          missing = []
+          details = []
+          for cls, needles in checks.items():
+              out = subprocess.check_output(["javap", "-s", "-p", "-cp", mc_jar, cls], text=True, errors="replace")
+              for n in needles:
+                  if n not in out:
+                      missing.append(f"{cls} :: missing '{n}'")
+              interesting = [line.strip() for line in out.splitlines() if any(k in line for k in ("drop", "Drop", "tick(", "onButton", "mouseGrabbed", "setScreen", "renderFrame", "runTick", "close(", "exitWorld", "static {", "minX", "descriptor:"))]
+              details.append(f"=== {cls} ===\n" + "\n".join(interesting[:60]))
+
+          report = "\n\n".join(details)
+          if missing:
+              body = "### 26.3 Mixin / AccessWidener target check FAILED\nMissing:\n" + "\n".join(f"- {m}" for m in missing) + "\n\n```text\n" + report[:50000] + "\n```"
+              repo = os.environ["GITHUB_REPOSITORY"]
+              sha = os.environ["GITHUB_SHA"]
+              subprocess.run(["gh", "api", f"repos/{repo}/commits/{sha}/comments", "-f", f"body={body}"], check=True)
+              print("MISSING:", missing)
+              sys.exit(1)
+          print("All Mixin and AccessWidener targets verified OK!")
+          PY
+
       - name: Inspect and summarize 26.3 JAR
         if: success()
         working-directory: versions/26.3
