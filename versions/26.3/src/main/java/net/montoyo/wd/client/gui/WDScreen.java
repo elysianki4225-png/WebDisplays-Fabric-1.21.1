@@ -121,14 +121,17 @@ public abstract class WDScreen extends Screen {
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
-        if(defaultBackground)
-            extractBackground(graphics, mouseX, mouseY, ptt);
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
+        if (defaultBackground)
+            super.extractBackground(graphics, mouseX, mouseY, ptt);
+    }
 
-        for(Control ctrl: controls)
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
+        for (Control ctrl : controls)
             ctrl.draw(graphics, mouseX, mouseY, ptt);
 
-        for(Control ctrl: postDrawList)
+        for (Control ctrl : postDrawList)
             ctrl.postDraw(graphics, mouseX, mouseY, ptt);
     }
 

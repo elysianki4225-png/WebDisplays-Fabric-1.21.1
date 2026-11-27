@@ -70,13 +70,16 @@ public class GuiMinePad extends WDScreen {
 	}
 
 	@Override
-	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
+	public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
 		width = trueWidth;
 		height = trueHeight;
-		extractBackground(graphics, mouseX, mouseY, ptt);
+		super.extractBackground(graphics, mouseX, mouseY, ptt);
 		width = (int) vw;
 		height = (int) vh;
+	}
 
+	@Override
+	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float ptt) {
 		int bx = (int) vx;
 		int by = (int) vy;
 		int bw = (int) vw;

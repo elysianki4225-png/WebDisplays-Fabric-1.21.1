@@ -40,8 +40,6 @@ public class RenderRecipe extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        extractBackground(graphics, mouseX, mouseY, partialTick);
-
         for(int sy = 0; sy < 3; sy++) {
             for(int sx = 0; sx < 3; sx++) {
                 ItemStack is = recipe[sy * 3 + sx];

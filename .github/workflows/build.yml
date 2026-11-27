@@ -190,19 +190,11 @@ jobs:
                               interesting.append("  " + lines[i + 1].strip())
                   details.append(f"=== {cls} ===\n" + "\n".join(interesting[:60]))
 
-              with zipfile.ZipFile(mc_jar) as zf:
-                  if "version.json" in zf.namelist():
-                      details.append("=== version.json ===\n" + zf.read("version.json").decode("utf-8", errors="replace"))
-              screen_out = subprocess.check_output(["javap", "-c", "-p", "-cp", mc_jar, "net.minecraft.client.gui.screens.Screen"], text=True, errors="replace")
-              for marker in ("extractRenderStateWithTooltipAndSubtitles", "extractRenderState(", "extractBackground(", "extractBlurredBackground("):
-                  idx = screen_out.find(marker)
-                  if idx != -1:
-                      details.append(f"=== Screen::{marker} ===\n" + screen_out[max(0, idx - 60):idx + 1200])
               report = "\n\n".join(details)
               if missing:
                   post_comment("### 26.3 Mixin / AccessWidener check FAILED\nMissing:\n" + "\n".join(f"- {m}" for m in missing) + "\n\n```text\n" + report[:50000] + "\n```")
                   sys.exit(1)
-              post_comment("### 26.3 Mixin / AccessWidener check PASSED\n```text\n" + report[:50000] + "\n```")
+              print("All Mixin and AccessWidener targets verified OK!")
           except Exception:
               post_comment("### 26.3 Mixin check crashed\n```text\n" + traceback.format_exc() + "\n```")
               sys.exit(1)
