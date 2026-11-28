@@ -7,7 +7,7 @@ package net.montoyo.wd.net.client_bound
 import net.minecraft.network.FriendlyByteBuf
 import net.minecraft.world.level.Level
 import net.montoyo.wd.WebDisplays
-import net.montoyo.wd.block.BlockScreen.hasTE
+import net.montoyo.wd.block.BlockScreen
 import net.montoyo.wd.entity.TileEntityScreen
 import net.montoyo.wd.net.BufferUtils
 import net.montoyo.wd.net.Packet
@@ -94,7 +94,7 @@ class S2CMessageAddScreen : Packet {
                 val lvl = WebDisplays.PROXY.getWorld(ctx) as Level
                 var te = lvl.getBlockEntity(pos.toBlock())
                 if (te !is TileEntityScreen) {
-                    lvl.setBlockAndUpdate(pos.toBlock(), lvl.getBlockState(pos.toBlock()).setValue(hasTE, true))
+                    lvl.setBlockAndUpdate(pos.toBlock(), lvl.getBlockState(pos.toBlock()).setValue(BlockScreen.hasTE, true))
                     te = lvl.getBlockEntity(pos.toBlock())
 
                     if (te !is TileEntityScreen) {
