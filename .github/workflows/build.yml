@@ -195,26 +195,28 @@ jobs:
 
               report = "\n\n".join(details)
               inspect_classes = [
-                  "com.mojang.blaze3d.platform.NativeImage",
                   "net.minecraft.client.renderer.texture.DynamicTexture",
-                  "com.mojang.blaze3d.systems.CommandEncoder",
-                  "com.mojang.blaze3d.textures.GpuTexture",
-                  "com.mojang.blaze3d.systems.GpuDevice",
-                  "com.mojang.blaze3d.buffers.GpuBuffer",
-                  "com.mojang.blaze3d.systems.RenderSystem",
-                  "net.minecraft.client.MouseHandler",
-                  "net.minecraft.client.Minecraft",
+                  "net.minecraft.client.renderer.texture.AbstractTexture",
+                  "com.mojang.renderpearl.api.device.GpuDevice",
+                  "com.mojang.renderpearl.api.device.CommandEncoder",
+                  "com.mojang.renderpearl.api.textures.GpuTexture",
+                  "com.mojang.renderpearl.api.textures.FilterMode",
+                  "com.mojang.renderpearl.api.textures.TextureFormat",
+                  "com.mojang.renderpearl.api.samplers.Sampler",
               ]
               dump = []
               for c in inspect_classes:
                   p = subprocess.run(["javap", "-p", "-cp", mc_jar, c], capture_output=True, text=True, errors="replace")
                   dump.append(f"=== {c} ===\n" + p.stdout[:6000])
-              p_hm = subprocess.run(["javap", "-c", "-p", "-cp", mc_jar, "net.minecraft.client.MouseHandler"], capture_output=True, text=True, errors="replace")
-              hm = p_hm.stdout
-              idx = hm.find("public void handleAccumulatedMovement(")
-              if idx >= 0:
-                  dump.append("=== MouseHandler.handleAccumulatedMovement ===\n" + hm[idx:idx+3500])
-              post_comment("### 26.3 GPU & Input API inspection\n```text\n" + "\n\n".join(dump)[:58000] + "\n```")
+              p_dt = subprocess.run(["javap", "-c", "-p", "-cp", mc_jar, "net.minecraft.client.renderer.texture.DynamicTexture"], capture_output=True, text=True, errors="replace")
+              dump.append("=== DynamicTexture bytecode ===\n" + p_dt.stdout[:4500])
+              p_mc = subprocess.run(["javap", "-c", "-p", "-cp", mc_jar, "net.minecraft.client.Minecraft"], capture_output=True, text=True, errors="replace")
+              mc_txt = p_mc.stdout
+              for m in ["private boolean startAttack(", "private void startUseItem(", "private void continueAttack("]:
+                  idx = mc_txt.find(m)
+                  if idx >= 0:
+                      dump.append(f"=== {m} ===\n" + mc_txt[idx:idx+2500])
+              post_comment("### 26.3 RenderPearl GPU & Minecraft Input inspection\n```text\n" + "\n\n".join(dump)[:58000] + "\n```")
               if missing:
                   post_comment("### 26.3 Mixin / AccessWidener check FAILED\nMissing:\n" + "\n".join(f"- {m}" for m in missing) + "\n\n```text\n" + report[:50000] + "\n```")
                   sys.exit(1)
