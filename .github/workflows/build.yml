@@ -191,6 +191,30 @@ jobs:
                   details.append(f"=== {cls} ===\n" + "\n".join(interesting[:60]))
 
               report = "\n\n".join(details)
+              inspect_classes = [
+                  "net.minecraft.client.MouseHandler",
+                  "com.mojang.blaze3d.platform.InputConstants",
+                  "net.minecraft.client.input.MouseButtonInfo",
+                  "net.minecraft.client.input.MouseButtonEvent",
+                  "net.minecraft.client.gui.screens.Screen",
+                  "net.minecraft.client.renderer.entity.ItemEntityRenderer",
+                  "net.minecraft.client.renderer.entity.state.ItemEntityRenderState",
+                  "net.minecraft.client.renderer.ItemInHandRenderer",
+                  "net.minecraft.client.model.HumanoidModel",
+                  "net.minecraft.client.renderer.entity.player.AvatarRenderer",
+                  "net.minecraft.client.renderer.entity.state.AvatarRenderState",
+                  "net.minecraft.client.renderer.entity.player.PlayerRenderer",
+                  "net.minecraft.client.renderer.entity.state.PlayerRenderState",
+              ]
+              inspect_out = []
+              for ic in inspect_classes:
+                  p = subprocess.run(["javap", "-s", "-p", "-cp", mc_jar, ic], capture_output=True, text=True, errors="replace")
+                  if p.returncode == 0:
+                      lines = [l for l in p.stdout.splitlines() if "private" not in l or "descriptor:" in l]
+                      inspect_out.append(f"=== {ic} ===\n" + "\n".join(p.stdout.splitlines()[:90]))
+                  else:
+                      inspect_out.append(f"=== {ic} === NOT FOUND")
+              post_comment("### 26.3 API inspection\n```text\n" + "\n\n".join(inspect_out)[:58000] + "\n```")
               if missing:
                   post_comment("### 26.3 Mixin / AccessWidener check FAILED\nMissing:\n" + "\n".join(f"- {m}" for m in missing) + "\n\n```text\n" + report[:50000] + "\n```")
                   sys.exit(1)

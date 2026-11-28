@@ -38,7 +38,9 @@ import net.minecraft.server.packs.PackType
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener
 import net.minecraft.world.InteractionHand
 import net.minecraft.world.entity.HumanoidArm
+import net.minecraft.world.entity.item.ItemEntity
 import net.minecraft.world.entity.player.Inventory
+import net.minecraft.world.entity.player.Player
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.level.BlockGetter
 import net.minecraft.world.level.ClipContext
@@ -165,7 +167,7 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
                 ): Boolean {
                     if (!targetUrl.isNullOrBlank() && !targetUrl.equals("about:blank", ignoreCase = true)) {
                         val safeUrl = WebDisplays.applyBlacklist(targetUrl) ?: targetUrl
-                        browser?.loadURL(safeUrl)
+                        mc.execute { browser?.loadURL(safeUrl) }
                     }
                     return true
                 }
@@ -179,7 +181,7 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
                 ): Boolean {
                     if (!targetUrl.isNullOrBlank() && !targetUrl.equals("about:blank", ignoreCase = true)) {
                         val safeUrl = WebDisplays.applyBlacklist(targetUrl) ?: targetUrl
-                        browser?.loadURL(safeUrl)
+                        mc.execute { browser?.loadURL(safeUrl) }
                     }
                     return true
                 }
@@ -408,6 +410,12 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
 
     override fun isShiftDown(): Boolean = Minecraft.getInstance().hasShiftDown()
 
+    override fun onSmartphoneUsed(player: Player, hand: InteractionHand) {
+        if (player === mc.player) {
+            lastSmartphoneUseMs = System.currentTimeMillis()
+        }
+    }
+
     override fun onAddressChange(browser: CefBrowser?, cefFrame: CefFrame?, url: String) {
         if (browser != null) {
             val t = System.currentTimeMillis()
@@ -511,6 +519,29 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
 
             if (ep != null) {
                 updateInventory(ep.inventory, ep.getItemInHand(InteractionHand.MAIN_HAND), ep.offhandItem, ep.getItemInHand(InteractionHand.OFF_HAND))
+                val lvl = mc.level
+                if (lvl != null) {
+                    val nearbyDrops = lvl.getEntitiesOfClass(ItemEntity::class.java, ep.boundingBox.inflate(48.0))
+                    for (drop in nearbyDrops) {
+                        val stack = drop.item
+                        val padItem = stack.item
+                        if (padItem is ItemMinePad2) {
+                            val data = stack.get(DataComponents.CUSTOM_DATA)
+                            if (data != null) {
+                                val tag = data.copyTag()
+                                if (NbtCompat.hasUUID(tag, "PadID")) {
+                                    val id = NbtCompat.getUUID(tag, "PadID")
+                                    if (id != null) {
+                                        if (!tag.contains("PadURL")) {
+                                            tag.putString("PadURL", CommonConfig.Browser.homepage)
+                                        }
+                                        updatePad(id, tag, true, padItem.isMobileLayout())
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             for (i in padList.size - 1 downTo 0) {
@@ -648,6 +679,14 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
         private var cachedCrosshairTick = Long.MIN_VALUE
         private var cachedCrosshairX = 240
         private var cachedCrosshairY = 240
+        private var lastSmartphoneUseMs = 0L
+
+        @JvmStatic
+        fun getSmartphoneTapProgress(): Float {
+            val elapsed = System.currentTimeMillis() - lastSmartphoneUseMs
+            if (elapsed <= 0L || elapsed >= 450L) return 0.0f
+            return elapsed.toFloat() / 450.0f
+        }
 
         @JvmField
         val KEY_MOUSE = KeyMapping("webdisplays.key.toggle_mouse", InputConstants.KEY_R, KeyMapping.Category.MISC)

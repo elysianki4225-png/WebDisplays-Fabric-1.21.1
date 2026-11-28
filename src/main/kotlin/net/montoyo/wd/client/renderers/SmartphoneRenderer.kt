@@ -70,18 +70,22 @@ class SmartphoneRenderer : IItemRenderer {
         sinSwingProg2 = sin((swingProgress * swingProgress * piF).toDouble()).toFloat()
 
         val player = mc.player
+        val tapProg = ClientProxy.getSmartphoneTapProgress()
+        val tapSin = sin((tapProg * piF).toDouble()).toFloat()
+
         if (player != null && !player.isInvisible) {
             stack.pushPose()
+            stack.translate(handSideSign * -0.04f * tapSin, 0.05f * tapSin, -0.05f * tapSin)
             renderArmFirstPerson(stack, multiBufferSource, packedLight, equipProgress, handSideSign)
             stack.popPose()
         }
 
         stack.pushPose()
-        stack.translate(handSideSign * -0.4f * sinSqrtSwingProg1, 0.2f * sinSqrtSwingProg2, -0.2f * sinSwingProg1)
+        stack.translate(handSideSign * (-0.4f * sinSqrtSwingProg1 - 0.04f * tapSin), 0.2f * sinSqrtSwingProg2 + 0.05f * tapSin, -0.2f * sinSwingProg1 - 0.05f * tapSin)
         stack.translate(handSideSign * 0.52f, -0.48f - equipProgress * 0.6f, -0.78f)
-        stack.mulPose(YP.rotationDegrees(handSideSign * (18.0f - sinSwingProg2 * 12.0f)))
+        stack.mulPose(YP.rotationDegrees(handSideSign * (18.0f - sinSwingProg2 * 12.0f - tapSin * 6.0f)))
         stack.mulPose(ZP.rotationDegrees(handSideSign * sinSqrtSwingProg1 * -14.0f))
-        stack.mulPose(XP.rotationDegrees(sinSqrtSwingProg1 * -55.0f - 8.0f))
+        stack.mulPose(XP.rotationDegrees(sinSqrtSwingProg1 * -55.0f - 8.0f - tapSin * 14.0f))
 
         if (handSideSign >= 0) {
             stack.translate(-0.24f, 0.06f, 0.0f)
@@ -155,5 +159,49 @@ class SmartphoneRenderer : IItemRenderer {
         } else {
             playerRenderer.renderLeftHand(stack, buffer, combinedLight, player)
         }
+    }
+
+    fun renderDropped(
+        isItem: ItemStack,
+        multiBufferSource: MultiBufferSource,
+        stack: PoseStack,
+        packedLight: Int
+    ) {
+        val data = isItem.get(DataComponents.CUSTOM_DATA)
+        val isLit = data != null && data.contains("PadID")
+
+        stack.pushPose()
+        stack.translate(-ModelSmartphone.BODY_W * 0.5f, -ModelSmartphone.BODY_H * 0.5f, 0.0f)
+        model.render(multiBufferSource, stack, packedLight, isLit)
+
+        if (multiBufferSource is MultiBufferSource.BufferSource) {
+            multiBufferSource.endBatch()
+        }
+
+        if (isLit && MCEF.isInitialized() && data != null) {
+            val padId = extractPadId(data)
+            val pd = if (padId == null) null else clientProxy.getPadByID(padId)
+            val view = pd?.view
+
+            if (view is MCEFBrowser) {
+                val texId = view.renderer.textureID
+                if (texId != 0) {
+                    RenderSystem.enableDepthTest()
+                    RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f)
+                    RenderSystem.setShader(GameRenderer::getPositionTexColorShader)
+                    RenderSystem.setShaderTexture(0, texId)
+                    val buffer = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR)
+                    val mat = stack.last().pose()
+                    buffer.addVertex(mat, ModelSmartphone.SCREEN_X1, ModelSmartphone.SCREEN_Y1, 0.002f).setUv(0.0f, 1.0f).setColor(255, 255, 255, 255)
+                    buffer.addVertex(mat, ModelSmartphone.SCREEN_X2, ModelSmartphone.SCREEN_Y1, 0.002f).setUv(1.0f, 1.0f).setColor(255, 255, 255, 255)
+                    buffer.addVertex(mat, ModelSmartphone.SCREEN_X2, ModelSmartphone.SCREEN_Y2, 0.002f).setUv(1.0f, 0.0f).setColor(255, 255, 255, 255)
+                    buffer.addVertex(mat, ModelSmartphone.SCREEN_X1, ModelSmartphone.SCREEN_Y2, 0.002f).setUv(0.0f, 0.0f).setColor(255, 255, 255, 255)
+                    BufferUploader.drawWithShader(buffer.buildOrThrow())
+                }
+            }
+        }
+
+        stack.popPose()
+        RenderSystem.enableCull()
     }
 }

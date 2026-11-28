@@ -18,7 +18,8 @@ import org.joml.Matrix4f
 @Environment(EnvType.CLIENT)
 class ModelMinePad {
     @JvmOverloads
-    fun render(buffers: MultiBufferSource, stack: PoseStack, packedLight: Int = LightTexture.FULL_BRIGHT) {
+    fun render(buffers: MultiBufferSource, stack: PoseStack, packedLight: Int = LightTexture.FULL_BRIGHT, screenLit: Boolean = true) {
+        val frontLight = if (screenLit) LightTexture.FULL_BRIGHT else packedLight
         val x1 = 0.0f
         val y1 = 0.0f
         val x2 = 27.65f / 32.0f + 0.01f
@@ -42,11 +43,11 @@ class ModelMinePad {
 
         addQuad(
             consumer, positionMatrix, pose, x1, y1 - padding, x2, y2 + padding, zFront,
-            1f / width, 12f / height, 19f / width, 0f / height, LightTexture.FULL_BRIGHT, 0f, 0f, 1f
+            1f / width, 12f / height, 19f / width, 0f / height, frontLight, 0f, 0f, 1f
         )
         addQuad(
             consumer, positionMatrix, pose, x1 - padding1, y1, x2 + padding1, y2, zFront,
-            0f / width, 10f / height, 20f / width, 1f / height, LightTexture.FULL_BRIGHT, 0f, 0f, 1f
+            0f / width, 10f / height, 20f / width, 1f / height, frontLight, 0f, 0f, 1f
         )
 
         consumer.addVertex(positionMatrix, bx2, by1, zBack).setColor(255, 255, 255, 255).setUv(0f / width, 24f / height).setOverlay(OverlayTexture.NO_OVERLAY).setLight(packedLight).setNormal(pose, 0f, 0f, -1f)

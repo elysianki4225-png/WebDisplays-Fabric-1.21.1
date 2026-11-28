@@ -10,6 +10,7 @@ import com.mojang.authlib.GameProfile
 import com.mojang.blaze3d.platform.GlStateManager
 import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.PoseStack
+import com.mojang.math.Axis
 import net.fabricmc.api.EnvType
 import net.fabricmc.api.Environment
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
@@ -39,6 +40,8 @@ import net.minecraft.server.packs.PackType
 import net.minecraft.server.packs.resources.ResourceManager
 import net.minecraft.world.InteractionHand
 import net.minecraft.world.entity.HumanoidArm
+import net.minecraft.world.entity.item.ItemEntity
+import net.minecraft.world.entity.player.Player
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.level.BlockGetter
 import net.minecraft.world.level.ClipContext
@@ -177,7 +180,7 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
                 ): Boolean {
                     if (!targetUrl.isNullOrBlank() && !targetUrl.equals("about:blank", ignoreCase = true)) {
                         val safeUrl = WebDisplays.applyBlacklist(targetUrl) ?: targetUrl
-                        browser?.loadURL(safeUrl)
+                        mc.execute { browser?.loadURL(safeUrl) }
                     }
                     return true
                 }
@@ -191,7 +194,7 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
                 ): Boolean {
                     if (!targetUrl.isNullOrBlank() && !targetUrl.equals("about:blank", ignoreCase = true)) {
                         val safeUrl = WebDisplays.applyBlacklist(targetUrl) ?: targetUrl
-                        browser?.loadURL(safeUrl)
+                        mc.execute { browser?.loadURL(safeUrl) }
                     }
                     return true
                 }
@@ -423,6 +426,12 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
 
     override fun isShiftDown(): Boolean = Screen.hasShiftDown()
 
+    override fun onSmartphoneUsed(player: Player, hand: InteractionHand) {
+        if (player === mc.player) {
+            lastSmartphoneUseMs = System.currentTimeMillis()
+        }
+    }
+
     override fun onAddressChange(browser: CefBrowser?, cefFrame: CefFrame?, url: String) {
         if (browser != null) {
             val t = System.currentTimeMillis()
@@ -527,6 +536,24 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
             if (ep != null) {
                 updateInventory(ep.inventory.items, ep.getItemInHand(InteractionHand.MAIN_HAND), 9)
                 updateInventory(ep.inventory.offhand, ep.getItemInHand(InteractionHand.OFF_HAND), 1)
+                val lvl = mc.level
+                if (lvl != null) {
+                    val nearbyDrops = lvl.getEntitiesOfClass(ItemEntity::class.java, ep.boundingBox.inflate(48.0))
+                    for (drop in nearbyDrops) {
+                        val stack = drop.item
+                        val padItem = stack.item
+                        if (padItem is ItemMinePad2) {
+                            val data = stack.get(DataComponents.CUSTOM_DATA)
+                            if (data != null && data.contains("PadID")) {
+                                val tag = data.copyTag()
+                                if (!tag.contains("PadURL")) {
+                                    tag.putString("PadURL", CommonConfig.Browser.homepage)
+                                }
+                                updatePad(tag.getUUID("PadID"), tag, true, padItem.isMobileLayout())
+                            }
+                        }
+                    }
+                }
             }
 
             for (i in padList.size - 1 downTo 0) {
@@ -647,6 +674,50 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
         private var cachedCrosshairTick = Long.MIN_VALUE
         private var cachedCrosshairX = 240
         private var cachedCrosshairY = 240
+        private var lastSmartphoneUseMs = 0L
+
+        @JvmStatic
+        fun getSmartphoneTapProgress(): Float {
+            val elapsed = System.currentTimeMillis() - lastSmartphoneUseMs
+            if (elapsed <= 0L || elapsed >= 450L) return 0.0f
+            return elapsed.toFloat() / 450.0f
+        }
+
+        @JvmStatic
+        fun renderDroppedPad(
+            entity: ItemEntity,
+            partialTicks: Float,
+            pose: PoseStack,
+            buffers: MultiBufferSource,
+            light: Int
+        ): Boolean {
+            val stack = entity.item
+            val item = stack.item
+            if (item !is ItemMinePad2) return false
+
+            val proxy = INSTANCE ?: return false
+            if (proxy.minePadRenderer == null) proxy.minePadRenderer = MinePadRenderer()
+            if (proxy.smartphoneRenderer == null) proxy.smartphoneRenderer = SmartphoneRenderer()
+
+            val yaw = ((entity.uuid.leastSignificantBits and 0xFFFFL).toFloat() / 65535.0f) * 360.0f
+            val isMobile = item.isMobileLayout()
+            val scale = if (isMobile) 0.50f else 0.62f
+
+            pose.pushPose()
+            pose.translate(0.0, 0.022, 0.0)
+            pose.mulPose(Axis.YP.rotationDegrees(yaw))
+            pose.mulPose(Axis.XP.rotationDegrees(-90.0f))
+            pose.scale(scale, scale, scale)
+
+            if (isMobile) {
+                proxy.smartphoneRenderer!!.renderDropped(stack, buffers, pose, light)
+            } else {
+                proxy.minePadRenderer!!.renderDropped(stack, buffers, pose, light)
+            }
+
+            pose.popPose()
+            return true
+        }
 
         @JvmField
         val KEY_MOUSE = KeyMapping("webdisplays.key.toggle_mouse", GLFW.GLFW_KEY_R, "key.categories.misc")

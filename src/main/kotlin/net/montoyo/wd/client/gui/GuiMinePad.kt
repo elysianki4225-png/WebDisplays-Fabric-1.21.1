@@ -637,6 +637,7 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
         }
 
         mouse(button, true, mouseX.toInt(), mouseY.toInt(), 0.0)
+        if (inViewport(mouseX, mouseY)) return true
         return super.mouseClicked(mouseX, mouseY, button)
     }
 
@@ -681,6 +682,7 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
 
         if (p != null && !p.mobile && inViewport(mouseX, mouseY)) {
             (p.view as? MCEFBrowser)?.sendMouseMove(toClampedBrowserX(mouseX, p.resX), toClampedBrowserY(mouseY, p.resY))
+            return true
         }
 
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY)
@@ -714,6 +716,7 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
         }
 
         mouse(button, false, mouseX.toInt(), mouseY.toInt(), 0.0)
+        if (inViewport(mouseX, mouseY)) return true
         return super.mouseReleased(mouseX, mouseY, button)
     }
 
