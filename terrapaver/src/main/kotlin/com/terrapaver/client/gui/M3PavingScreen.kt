@@ -426,7 +426,8 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
         g.drawString(font, M3Draw.fitText(font, "${I18n.get("terrapaver.cfg.mode")}: ${I18n.get(cfg.pavingMode.key)}", rightW - 24), rightX + 12, sy, t.onSurface, false)
         g.drawString(font, M3Draw.fitText(font, "${I18n.get("terrapaver.cfg.align")}: ${I18n.get(cfg.alignmentMode.key)}", rightW - 24), rightX + 12, sy + 14, t.onSurfaceVariant, false)
         g.drawString(font, M3Draw.fitText(font, "${I18n.get("terrapaver.cfg.obstacle")}: ${I18n.get(cfg.obstacleMode.key)}", rightW - 24), rightX + 12, sy + 28, t.onSurfaceVariant, false)
-        g.drawString(font, M3Draw.fitText(font, "Grade 1:${cfg.maxSlopeRun} · Smooth ${if (cfg.terrainBlending) "${cfg.blendRadius}m" else "Off"}", rightW - 24), rightX + 12, sy + 42, t.primary, false)
+        val smoothVal = if (cfg.terrainBlending) "${cfg.blendRadius}m" else I18n.get("terrapaver.common.off")
+        g.drawString(font, M3Draw.fitText(font, I18n.get("terrapaver.overview.grade_smooth", cfg.maxSlopeRun, smoothVal), rightW - 24), rightX + 12, sy + 42, t.primary, false)
 
         return max(leftBottom, rightY + rightH) - y
     }

@@ -1,18 +1,24 @@
 package com.terrapaver.client.gui
 
+import com.mojang.blaze3d.vertex.VertexConsumer
 import com.terrapaver.config.PavingConfig
 import com.terrapaver.config.PavingMode
 import com.terrapaver.config.TunnelShape
 import net.minecraft.client.gui.Font
 import net.minecraft.client.gui.GuiGraphics
-import kotlin.math.ceil
-import kotlin.math.floor
+import net.minecraft.client.renderer.RenderType
+import net.minecraft.client.resources.language.I18n
+import org.joml.Matrix4f
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
-import kotlin.math.sqrt
+import kotlin.math.sin
 
 object M3Draw {
+    private const val CORNER_SEGS = 10 // 10 segs/corner -> 40 + 4 = 44 segs (even)
+
     fun fitText(font: Font, text: String, maxWidth: Int): String {
         if (maxWidth <= 4) return ""
         if (font.width(text) <= maxWidth) return text
@@ -23,81 +29,254 @@ object M3Draw {
     }
 
     fun fillRoundedRect(g: GuiGraphics, x: Int, y: Int, w: Int, h: Int, radius: Int, color: Int) {
-        if (w <= 0 || h <= 0) return
-        val r = radius.coerceIn(0, min(w, h) / 2)
-        if (r <= 1) {
-            g.fill(x, y, x + w, y + h, color)
+        fillRoundedRectF(g, x.toFloat(), y.toFloat(), w.toFloat(), h.toFloat(), radius.toFloat(), color)
+    }
+
+    fun fillRoundedRectF(g: GuiGraphics, x: Float, y: Float, w: Float, h: Float, radius: Float, color: Int) {
+        if (w <= 0f || h <= 0f) return
+        val a = (color ushr 24) and 0xFF
+        if (a <= 0) return
+        val rCol = (color ushr 16) and 0xFF
+        val gCol = (color ushr 8) and 0xFF
+        val bCol = color and 0xFF
+
+        val pose = g.pose().last().pose()
+        val buf = g.bufferSource().getBuffer(RenderType.gui())
+
+        val rad = radius.coerceIn(0f, min(w, h) * 0.5f)
+        if (rad <= 0.6f) {
+            emitQuad(buf, pose, x, y, x + w, y + h, rCol, gCol, bCol, a)
             return
         }
-        // Center body
-        g.fill(x + r, y, x + w - r, y + h, color)
-        // Left & right middle strips
-        g.fill(x, y + r, x + r, y + h - r, color)
-        g.fill(x + w - r, y + r, x + w, y + h - r, color)
 
-        // Smooth circular corner scanlines
-        for (dy in 0 until r) {
-            val cy = r - dy - 0.5
-            val dx = floor(r - sqrt(max(0.0, r * r - cy * cy))).toInt()
-            val xL = x + dx
-            val xR = x + w - dx
-            g.fill(xL, y + dy, x + r, y + dy + 1, color)
-            g.fill(x + w - r, y + dy, xR, y + dy + 1, color)
-            val by = y + h - 1 - dy
-            g.fill(xL, by, x + r, by + 1, color)
-            g.fill(x + w - r, by, xR, by + 1, color)
+        val innerRad = (rad - 0.35f).coerceAtLeast(0f)
+        val outerRad = rad + 0.45f
+        val cx = x + w * 0.5f
+        val cy = y + h * 0.5f
+
+        val ix1 = x + rad
+        val iy1 = y + rad
+        val ix2 = x + w - rad
+        val iy2 = y + h - rad
+
+        val count = CORNER_SEGS * 4 + 4
+        val inX = FloatArray(count)
+        val inY = FloatArray(count)
+        val outX = FloatArray(count)
+        val outY = FloatArray(count)
+
+        buildPerimeter(ix1, iy1, ix2, iy2, innerRad, inX, inY)
+        buildPerimeter(ix1, iy1, ix2, iy2, outerRad, outX, outY)
+
+        // Solid interior fan (2 perimeter segments per quad)
+        var i = 0
+        while (i < count) {
+            val i1 = (i + 1) % count
+            val i2 = (i + 2) % count
+            buf.addVertex(pose, cx, cy, 0f).setColor(rCol, gCol, bCol, a)
+            buf.addVertex(pose, inX[i2], inY[i2], 0f).setColor(rCol, gCol, bCol, a)
+            buf.addVertex(pose, inX[i1], inY[i1], 0f).setColor(rCol, gCol, bCol, a)
+            buf.addVertex(pose, inX[i], inY[i], 0f).setColor(rCol, gCol, bCol, a)
+            i += 2
+        }
+
+        // Sub-pixel AA outer fringe (alpha -> 0)
+        for (k in 0 until count) {
+            val next = (k + 1) % count
+            buf.addVertex(pose, inX[k], inY[k], 0f).setColor(rCol, gCol, bCol, a)
+            buf.addVertex(pose, inX[next], inY[next], 0f).setColor(rCol, gCol, bCol, a)
+            buf.addVertex(pose, outX[next], outY[next], 0f).setColor(rCol, gCol, bCol, 0)
+            buf.addVertex(pose, outX[k], outY[k], 0f).setColor(rCol, gCol, bCol, 0)
         }
     }
 
-    fun strokeRoundedRect(g: GuiGraphics, x: Int, y: Int, w: Int, h: Int, radius: Int, color: Int) {
-        if (w <= 2 || h <= 2) return
-        val r = radius.coerceIn(0, min(w, h) / 2)
-        if (r <= 1) {
-            g.fill(x, y, x + w, y + 1, color)
-            g.fill(x, y + h - 1, x + w, y + h, color)
-            g.fill(x, y, x + 1, y + h, color)
-            g.fill(x + w - 1, y, x + w, y + h, color)
-            return
-        }
-        // Straight edges
-        g.fill(x + r, y, x + w - r, y + 1, color)
-        g.fill(x + r, y + h - 1, x + w - r, y + h, color)
-        g.fill(x, y + r, x + 1, y + h - r, color)
-        g.fill(x + w - 1, y + r, x + w, y + h - r, color)
+    fun strokeRoundedRect(
+        g: GuiGraphics,
+        x: Int,
+        y: Int,
+        w: Int,
+        h: Int,
+        radius: Int,
+        color: Int,
+        thickness: Float = 1.0f
+    ) {
+        strokeRoundedRectF(g, x.toFloat(), y.toFloat(), w.toFloat(), h.toFloat(), radius.toFloat(), color, thickness)
+    }
 
-        var prevDx = r
-        for (dy in 0 until r) {
-            val cy = r - dy - 0.5
-            val dx = floor(r - sqrt(max(0.0, r * r - cy * cy))).toInt()
-            val span = max(1, prevDx - dx)
-            // Top-left & top-right
-            g.fill(x + dx, y + dy, x + dx + span, y + dy + 1, color)
-            g.fill(x + w - dx - span, y + dy, x + w - dx, y + dy + 1, color)
-            // Bottom-left & bottom-right
-            val by = y + h - 1 - dy
-            g.fill(x + dx, by, x + dx + span, by + 1, color)
-            g.fill(x + w - dx - span, by, x + w - dx, by + 1, color)
-            prevDx = dx
+    fun strokeRoundedRectF(
+        g: GuiGraphics,
+        x: Float,
+        y: Float,
+        w: Float,
+        h: Float,
+        radius: Float,
+        color: Int,
+        thickness: Float = 1.0f
+    ) {
+        if (w <= 1f || h <= 1f) return
+        val a = (color ushr 24) and 0xFF
+        if (a <= 0) return
+        val rCol = (color ushr 16) and 0xFF
+        val gCol = (color ushr 8) and 0xFF
+        val bCol = color and 0xFF
+
+        val pose = g.pose().last().pose()
+        val buf = g.bufferSource().getBuffer(RenderType.gui())
+        val rad = radius.coerceIn(0f, min(w, h) * 0.5f)
+        val halfT = (thickness * 0.5f).coerceAtLeast(0.25f)
+
+        val ix1 = x + rad
+        val iy1 = y + rad
+        val ix2 = x + w - rad
+        val iy2 = y + h - rad
+
+        val count = CORNER_SEGS * 4 + 4
+        val aa = 0.45f
+
+        val rInEdge = -halfT - aa
+        val rInSolid = (-halfT + 0.12f).coerceAtMost(0f)
+        val rOutSolid = (halfT - 0.12f).coerceAtLeast(0f)
+        val rOutEdge = halfT + aa
+
+        val p0x = FloatArray(count)
+        val p0y = FloatArray(count)
+        val p1x = FloatArray(count)
+        val p1y = FloatArray(count)
+        val p2x = FloatArray(count)
+        val p2y = FloatArray(count)
+        val p3x = FloatArray(count)
+        val p3y = FloatArray(count)
+
+        buildOffsetPerimeter(ix1, iy1, ix2, iy2, rad, rInEdge, p0x, p0y)
+        buildOffsetPerimeter(ix1, iy1, ix2, iy2, rad, rInSolid, p1x, p1y)
+        buildOffsetPerimeter(ix1, iy1, ix2, iy2, rad, rOutSolid, p2x, p2y)
+        buildOffsetPerimeter(ix1, iy1, ix2, iy2, rad, rOutEdge, p3x, p3y)
+
+        for (k in 0 until count) {
+            val next = (k + 1) % count
+            // Inner AA fade
+            buf.addVertex(pose, p0x[k], p0y[k], 0f).setColor(rCol, gCol, bCol, 0)
+            buf.addVertex(pose, p0x[next], p0y[next], 0f).setColor(rCol, gCol, bCol, 0)
+            buf.addVertex(pose, p1x[next], p1y[next], 0f).setColor(rCol, gCol, bCol, a)
+            buf.addVertex(pose, p1x[k], p1y[k], 0f).setColor(rCol, gCol, bCol, a)
+
+            // Solid core stroke
+            buf.addVertex(pose, p1x[k], p1y[k], 0f).setColor(rCol, gCol, bCol, a)
+            buf.addVertex(pose, p1x[next], p1y[next], 0f).setColor(rCol, gCol, bCol, a)
+            buf.addVertex(pose, p2x[next], p2y[next], 0f).setColor(rCol, gCol, bCol, a)
+            buf.addVertex(pose, p2x[k], p2y[k], 0f).setColor(rCol, gCol, bCol, a)
+
+            // Outer AA fade
+            buf.addVertex(pose, p2x[k], p2y[k], 0f).setColor(rCol, gCol, bCol, a)
+            buf.addVertex(pose, p2x[next], p2y[next], 0f).setColor(rCol, gCol, bCol, a)
+            buf.addVertex(pose, p3x[next], p3y[next], 0f).setColor(rCol, gCol, bCol, 0)
+            buf.addVertex(pose, p3x[k], p3y[k], 0f).setColor(rCol, gCol, bCol, 0)
         }
+    }
+
+    private fun buildPerimeter(
+        ix1: Float,
+        iy1: Float,
+        ix2: Float,
+        iy2: Float,
+        r: Float,
+        outX: FloatArray,
+        outY: FloatArray
+    ) {
+        var idx = 0
+        // BR (0 -> PI/2)
+        for (s in 0..CORNER_SEGS) {
+            val ang = (PI * 0.5 * s / CORNER_SEGS)
+            outX[idx] = ix2 + (cos(ang) * r).toFloat()
+            outY[idx] = iy2 + (sin(ang) * r).toFloat()
+            idx++
+        }
+        // BL (PI/2 -> PI)
+        for (s in 0..CORNER_SEGS) {
+            val ang = PI * 0.5 + (PI * 0.5 * s / CORNER_SEGS)
+            outX[idx] = ix1 + (cos(ang) * r).toFloat()
+            outY[idx] = iy2 + (sin(ang) * r).toFloat()
+            idx++
+        }
+        // TL (PI -> 3*PI/2)
+        for (s in 0..CORNER_SEGS) {
+            val ang = PI + (PI * 0.5 * s / CORNER_SEGS)
+            outX[idx] = ix1 + (cos(ang) * r).toFloat()
+            outY[idx] = iy1 + (sin(ang) * r).toFloat()
+            idx++
+        }
+        // TR (3*PI/2 -> 2*PI)
+        for (s in 0..CORNER_SEGS) {
+            val ang = PI * 1.5 + (PI * 0.5 * s / CORNER_SEGS)
+            outX[idx] = ix2 + (cos(ang) * r).toFloat()
+            outY[idx] = iy1 + (sin(ang) * r).toFloat()
+            idx++
+        }
+    }
+
+    private fun buildOffsetPerimeter(
+        ix1: Float,
+        iy1: Float,
+        ix2: Float,
+        iy2: Float,
+        baseRad: Float,
+        offset: Float,
+        outX: FloatArray,
+        outY: FloatArray
+    ) {
+        val r = (baseRad + offset).coerceAtLeast(0f)
+        val extra = if (baseRad + offset < 0f) -(baseRad + offset) else 0f
+        buildPerimeter(
+            (ix1 + extra).coerceAtMost((ix1 + ix2) * 0.5f),
+            (iy1 + extra).coerceAtMost((iy1 + iy2) * 0.5f),
+            (ix2 - extra).coerceAtLeast((ix1 + ix2) * 0.5f),
+            (iy2 - extra).coerceAtLeast((iy1 + iy2) * 0.5f),
+            r, outX, outY
+        )
+    }
+
+    private fun emitQuad(
+        buf: VertexConsumer,
+        pose: Matrix4f,
+        x1: Float,
+        y1: Float,
+        x2: Float,
+        y2: Float,
+        r: Int,
+        g: Int,
+        b: Int,
+        a: Int
+    ) {
+        buf.addVertex(pose, x1, y2, 0f).setColor(r, g, b, a)
+        buf.addVertex(pose, x2, y2, 0f).setColor(r, g, b, a)
+        buf.addVertex(pose, x2, y1, 0f).setColor(r, g, b, a)
+        buf.addVertex(pose, x1, y1, 0f).setColor(r, g, b, a)
     }
 
     fun drawElevationShadow(g: GuiGraphics, x: Int, y: Int, w: Int, h: Int, radius: Int, layers: Int = 3) {
-        for (i in layers downTo 1) {
-            val alpha = 10 + (layers - i) * 5
-            fillRoundedRect(
+        val count = layers.coerceIn(1, 5)
+        for (i in count downTo 1) {
+            val spread = i * 1.4f
+            val yOff = i * 1.1f
+            val alpha = 5 + (count - i) * 3
+            fillRoundedRectF(
                 g,
-                x - i + 1,
-                y + i,
-                w + (i - 1) * 2,
-                h + 1,
-                radius + i,
-                M3Theme.withAlpha(0x00102030, alpha)
+                x - spread * 0.6f,
+                y + yOff - spread * 0.25f,
+                w + spread * 1.2f,
+                h + spread * 0.9f,
+                radius + spread,
+                M3Theme.withAlpha(0x000F172A, alpha)
             )
         }
     }
 
     fun fillCircle(g: GuiGraphics, cx: Int, cy: Int, r: Int, color: Int) {
-        fillRoundedRect(g, cx - r, cy - r, r * 2, r * 2, r, color)
+        fillCircleF(g, cx.toFloat(), cy.toFloat(), r.toFloat(), color)
+    }
+
+    fun fillCircleF(g: GuiGraphics, cx: Float, cy: Float, r: Float, color: Int) {
+        fillRoundedRectF(g, cx - r, cy - r, r * 2f, r * 2f, r, color)
     }
 
     fun drawLinearProgress(
@@ -110,20 +289,20 @@ object M3Draw {
         theme: M3Palette,
         indeterminate: Boolean = false
     ) {
-        val r = h / 2
-        fillRoundedRect(g, x, y, w, h, r, theme.surfaceHigh)
+        val r = h * 0.5f
+        fillRoundedRectF(g, x.toFloat(), y.toFloat(), w.toFloat(), h.toFloat(), r, theme.surfaceHigh)
         if (indeterminate) {
             val phase = ((System.currentTimeMillis() % 1400L) / 1400.0f)
-            val segW = max(h * 2, (w * 0.34f).toInt())
-            val start = x + ((w - segW) * phase).toInt()
-            fillRoundedRect(g, start, y, segW, h, r, theme.primary)
+            val segW = max(h * 2f, w * 0.34f)
+            val start = x + (w - segW) * phase
+            fillRoundedRectF(g, start, y.toFloat(), segW, h.toFloat(), r, theme.primary)
         } else {
             val p = progress.coerceIn(0f, 1f)
-            val fillW = (w * p).roundToInt()
+            val fillW = w * p
             if (fillW >= h) {
-                fillRoundedRect(g, x, y, fillW, h, r, theme.primary)
-            } else if (fillW > 0) {
-                fillRoundedRect(g, x, y, h, h, r, theme.primary)
+                fillRoundedRectF(g, x.toFloat(), y.toFloat(), fillW, h.toFloat(), r, theme.primary)
+            } else if (fillW > 0.5f) {
+                fillRoundedRectF(g, x.toFloat(), y.toFloat(), h.toFloat(), h.toFloat(), r, theme.primary)
             }
         }
     }
@@ -141,9 +320,10 @@ object M3Draw {
         if (elevated) {
             drawElevationShadow(g, x, y, w, h, radius, 3)
             fillRoundedRect(g, x, y, w, h, radius, theme.card)
-            strokeRoundedRect(g, x, y, w, h, radius, M3Theme.withAlpha(theme.outlineVariant, 160))
+            strokeRoundedRect(g, x, y, w, h, radius, M3Theme.withAlpha(theme.outlineVariant, 150), 0.9f)
         } else {
             fillRoundedRect(g, x, y, w, h, radius, theme.surfaceContainer)
+            strokeRoundedRect(g, x, y, w, h, radius, M3Theme.withAlpha(theme.outlineVariant, 110), 0.8f)
         }
     }
 
@@ -159,7 +339,7 @@ object M3Draw {
         title: String
     ) {
         fillRoundedRect(g, x, y, w, h, 12, theme.surfaceLow)
-        strokeRoundedRect(g, x, y, w, h, 12, theme.outlineVariant)
+        strokeRoundedRect(g, x, y, w, h, 12, M3Theme.withAlpha(theme.outlineVariant, 160), 0.9f)
 
         g.drawString(font, title, x + 10, y + 8, theme.onSurfaceVariant, false)
 
@@ -179,7 +359,6 @@ object M3Draw {
         val originX = areaX + areaW / 2.0
         val floorY = areaY + areaH - 8.0
 
-        // Draw subtle grid dots
         val dotColor = M3Theme.withAlpha(theme.outlineVariant, 90)
         for (gx in -10..10 step 2) {
             for (gy in 0..14 step 2) {
@@ -191,7 +370,6 @@ object M3Draw {
             }
         }
 
-        // Tunnel outer shell + interior
         val halfTunnelPx = (tunnelW * scale * 0.5).roundToInt()
         val shellThick = max(3, (scale * 0.9).roundToInt())
         val tunnelTopPx = (tunnelH * scale).roundToInt()
@@ -235,7 +413,6 @@ object M3Draw {
                     archR + shellThick,
                     shellColor
                 )
-                // Square bottom corners of arch
                 g.fill(
                     (originX - halfTunnelPx - shellThick).roundToInt(),
                     (floorY - tunnelTopPx * 0.45).roundToInt(),
@@ -282,7 +459,6 @@ object M3Draw {
             }
         }
 
-        // Tunnel ceiling + side-wall lights indicator
         if (cfg.addTunnelLights) {
             fillRoundedRect(g, originX.roundToInt() - 4, (floorY - tunnelTopPx + 1).roundToInt(), 8, 3, 1, 0xFFFFB300.toInt())
             val wallLightY = (floorY - tunnelTopPx * 0.48).roundToInt()
@@ -290,7 +466,6 @@ object M3Draw {
             fillRoundedRect(g, (originX + halfTunnelPx - 4).roundToInt(), wallLightY, 3, 5, 1, 0xFFFFB300.toInt())
         }
 
-        // Roadbed / Create Railbed deck
         val halfRoadPx = (roadW * scale * 0.5).roundToInt()
         val deckH = max(4, scale.roundToInt())
         val deckColor = if (cfg.pavingMode == PavingMode.CREATE_RAIL) 0xFF78909C.toInt() else 0xFF37474F.toInt()
@@ -305,7 +480,6 @@ object M3Draw {
         )
 
         if (cfg.pavingMode == PavingMode.CREATE_RAIL) {
-            // Draw Create Train clearance envelope (dashed outline 3w x 4h)
             val trainHalfW = (1.5 * scale).roundToInt()
             val trainH = (4.0 * scale).roundToInt()
             val envX = originX.roundToInt() - trainHalfW
@@ -318,7 +492,6 @@ object M3Draw {
             g.fill(originX.roundToInt() - 1, (floorY - deckH).roundToInt(), originX.roundToInt() + 1, (floorY - deckH + 2).roundToInt(), 0xFFFFD54F.toInt())
         }
 
-        // Architectural street lamps on cross-section preview
         val activeLayout = if (cfg.pavingMode == PavingMode.CREATE_RAIL) cfg.railLampLayout else cfg.roadLampLayout
         if (activeLayout != com.terrapaver.config.LampLayout.OFF) {
             val postH = max(8, (scale * 3.8).roundToInt())
@@ -328,12 +501,10 @@ object M3Draw {
             val poleColor = 0xFF455A64.toInt()
             val glowColor = 0xFFFFCA28.toInt()
 
-            // Left lamp
             g.fill(leftPostX, postY, leftPostX + 2, (floorY - deckH).roundToInt(), poleColor)
             g.fill(leftPostX, postY, leftPostX + 6, postY + 2, poleColor)
             g.fill(leftPostX + 4, postY + 2, leftPostX + 7, postY + 4, glowColor)
 
-            // Right lamp (dual paired or staggered)
             if (activeLayout != com.terrapaver.config.LampLayout.SINGLE_SIDE) {
                 g.fill(rightPostX, postY, rightPostX + 2, (floorY - deckH).roundToInt(), poleColor)
                 g.fill(rightPostX - 4, postY, rightPostX + 2, postY + 2, poleColor)
@@ -341,8 +512,7 @@ object M3Draw {
             }
         }
 
-        // Bottom dimension badge
-        val dimText = fitText(font, "${roadW}W | Tunnel ${tunnelW}×${tunnelH}", w - 20)
+        val dimText = fitText(font, I18n.get("terrapaver.preview.dims", roadW, tunnelW, tunnelH), w - 20)
         g.drawString(font, dimText, x + 10, y + h - 15, theme.primary, false)
     }
 }

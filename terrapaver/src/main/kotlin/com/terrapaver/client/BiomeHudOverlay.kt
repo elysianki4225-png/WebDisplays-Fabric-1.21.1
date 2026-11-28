@@ -35,14 +35,14 @@ object BiomeHudOverlay {
         val standingLoc = level.getBiome(player.blockPosition()).unwrapKey().orElse(null)?.location()
         val standingName = if (standingLoc != null) formatBiomeName(standingLoc.toString()) else "?"
         val dimLoc = if (cfg.targetDimension.isBlank()) level.dimension().location().toString() else cfg.targetDimension
-        val dimShort = ResourceLocation.tryParse(dimLoc)?.path?.replace('_', ' ') ?: dimLoc
+        val dimShort = formatDimName(dimLoc)
 
         val shapeInfo = when (cfg.shape) {
             BiomeShape.RADIUS_BRUSH -> "${I18n.get(cfg.shape.key)} ${cfg.radius}m"
             BiomeShape.SQUARE_BRUSH -> "${I18n.get(cfg.shape.key)} ${cfg.radius}m"
             BiomeShape.CHUNK_GRID -> {
                 val s = cfg.chunkRadius * 2 + 1
-                "${I18n.get(cfg.shape.key)} ${s}x${s}"
+                I18n.get("terrapaver.biome.fmt.chunks", s, s)
             }
             BiomeShape.BOX_2POINT -> if (ClientBiomeState.hasCorner1) {
                 val c = ClientBiomeState.corner1
@@ -81,6 +81,19 @@ object BiomeHudOverlay {
         val reg = level.registryAccess().registryOrThrow(Registries.BIOME)
         val holder = reg.getHolder(ResourceKey.create(Registries.BIOME, rl)).orElse(null) ?: return 0xFF1B8A5A.toInt()
         return (holder.value().getGrassColor(0.0, 0.0) and 0xFFFFFF) or (0xFF shl 24)
+    }
+
+    private fun formatDimName(idStr: String): String {
+        val rl = ResourceLocation.tryParse(idStr) ?: return idStr
+        if (rl.namespace == "minecraft") {
+            return when (rl.path) {
+                "overworld" -> I18n.get("terrapaver.biome.dim.overworld")
+                "the_nether" -> I18n.get("terrapaver.biome.dim.the_nether")
+                "the_end" -> I18n.get("terrapaver.biome.dim.the_end")
+                else -> rl.path.replace('_', ' ')
+            }
+        }
+        return "${rl.namespace}:${rl.path}"
     }
 
     private fun formatBiomeName(idStr: String): String {
