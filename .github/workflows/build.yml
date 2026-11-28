@@ -194,25 +194,30 @@ jobs:
               inspect_out = []
               p_sdl = subprocess.run(["javap", "-c", "-p", "-cp", mc_jar, "com.mojang.blaze3d.platform.SDLEventHandler"], capture_output=True, text=True, errors="replace")
               sdl_txt = p_sdl.stdout
-              for fn in ["handleMouseButtonEvent", "lambda$handleMouseButtonEvent", "handleMouseMotionEvent", "lambda$handleMouseMotionEvent"]:
-                  idx = sdl_txt.find(fn)
+              for sig in ["private void handleMouseButtonEvent(", "private void handleMouseMotionEvent("]:
+                  idx = sdl_txt.find(sig)
                   if idx >= 0:
-                      inspect_out.append(f"=== SDLEventHandler.{fn} ===\n" + sdl_txt[idx:idx + 1800])
+                      inspect_out.append(f"=== {sig} ===\n" + sdl_txt[idx:idx + 2200])
 
               p_mh = subprocess.run(["javap", "-c", "-p", "-cp", mc_jar, "net.minecraft.client.MouseHandler"], capture_output=True, text=True, errors="replace")
               mh_txt = p_mh.stdout
-              idx1 = mh_txt.find("onMove(")
-              idx2 = mh_txt.find("handleAccumulatedMovement(")
+              idx1 = mh_txt.find("public void onMove(")
+              idx2 = mh_txt.find("public void handleAccumulatedMovement(")
               inspect_out.append("=== MouseHandler.onMove ===\n" + mh_txt[idx1:idx2 if idx2 > idx1 else idx1 + 4500])
 
-              for ic in [
-                  "net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer",
-                  "net.minecraft.client.player.FirstPersonHandsAndItems",
-              ]:
-                  p = subprocess.run(["javap", "-s", "-p", "-cp", mc_jar, ic], capture_output=True, text=True, errors="replace")
-                  lines = [l for l in p.stdout.splitlines() if "private static final" not in l]
-                  inspect_out.append(f"=== {ic} ===\n" + "\n".join(lines[:140]))
-              post_comment("### 26.3 API inspection 5\n```text\n" + "\n\n".join(inspect_out)[:58000] + "\n```")
+              p_fp = subprocess.run(["javap", "-c", "-p", "-cp", mc_jar, "net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer"], capture_output=True, text=True, errors="replace")
+              fp_txt = p_fp.stdout
+              idx_fp = fp_txt.find("private void submitArmWithItem(")
+              if idx_fp >= 0:
+                  inspect_out.append("=== FirstPersonHandsAndItemsRenderer.submitArmWithItem ===\n" + fp_txt[idx_fp:idx_fp + 4500])
+
+              p_ie = subprocess.run(["javap", "-c", "-p", "-cp", mc_jar, "net.minecraft.client.renderer.entity.ItemEntityRenderer"], capture_output=True, text=True, errors="replace")
+              ie_txt = p_ie.stdout
+              idx_ie = ie_txt.find("public void submit(net.minecraft.client.renderer.entity.state.ItemEntityRenderState")
+              if idx_ie >= 0:
+                  inspect_out.append("=== ItemEntityRenderer.submit ===\n" + ie_txt[idx_ie:idx_ie + 2500])
+
+              post_comment("### 26.3 API inspection 6\n```text\n" + "\n\n".join(inspect_out)[:58000] + "\n```")
               if missing:
                   post_comment("### 26.3 Mixin / AccessWidener check FAILED\nMissing:\n" + "\n".join(f"- {m}" for m in missing) + "\n\n```text\n" + report[:50000] + "\n```")
                   sys.exit(1)
