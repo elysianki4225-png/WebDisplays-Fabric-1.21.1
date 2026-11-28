@@ -46,11 +46,14 @@ class WDServerData : SavedData {
             ).apply(instance, ::WDServerData)
         }
 
+        @Suppress("UNCHECKED_CAST")
+        private fun <T> uncheckedNull(): T = null as T
+
         private val TYPE: SavedDataType<WDServerData> = SavedDataType(
             Identifier.fromNamespaceAndPath("webdisplays", "webdisplays"),
             ::WDServerData,
             CODEC,
-            null
+            uncheckedNull()
         )
 
         @JvmStatic

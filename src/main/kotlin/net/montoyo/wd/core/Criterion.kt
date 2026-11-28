@@ -27,7 +27,8 @@ class Criterion(name: String) : CriterionTrigger<Criterion.Instance> {
         }
     }
 
-    private val id: ResourceLocation = ResourceLocation.fromNamespaceAndPath("webdisplays", name)
+    @JvmField
+    val id: ResourceLocation = ResourceLocation.fromNamespaceAndPath("webdisplays", name)
     private val map = HashMap<PlayerAdvancements, ArrayList<Listener<Instance>>>()
 
     fun getId(): ResourceLocation = id

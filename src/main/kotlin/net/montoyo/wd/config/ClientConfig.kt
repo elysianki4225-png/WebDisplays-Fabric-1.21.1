@@ -139,7 +139,7 @@ object ClientConfig {
             AutoVolumeControl.dist0 = AutoVolumeControl.dist100 + 0.1
         }
 
-        WebDisplays.INSTANCE.padResY = padResolution
+        WebDisplays.INSTANCE.padResY = padResolution.toDouble()
         WebDisplays.INSTANCE.padResX = WebDisplays.INSTANCE.padResY * WebDisplays.PAD_RATIO
 
         WebDisplays.INSTANCE.unloadDistance = unloadDistance
