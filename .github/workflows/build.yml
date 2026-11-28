@@ -198,6 +198,35 @@ jobs:
                   post_comment("### 26.3 Mixin / AccessWidener check FAILED\nMissing:\n" + "\n".join(f"- {m}" for m in missing) + "\n\n```text\n" + report[:50000] + "\n```")
                   sys.exit(1)
               print("All Mixin and AccessWidener targets verified OK!")
+
+              dump_cmds = [
+                  (["javap", "-constants", "-p", "-cp", mc_jar, "com.mojang.blaze3d.platform.InputConstants"], "InputConstants"),
+                  (["javap", "-c", "-p", "-cp", mc_jar, "net.minecraft.client.MouseHandler"], "MouseHandler"),
+                  (["javap", "-c", "-p", "-cp", mc_jar, "net.minecraft.client.input.MouseButtonEvent"], "MouseButtonEvent"),
+                  (["javap", "-c", "-p", "-cp", mc_jar, "net.minecraft.client.input.MouseButtonInfo"], "MouseButtonInfo"),
+                  (["javap", "-p", "-cp", mc_jar, "net.minecraft.client.gui.screens.Screen"], "Screen"),
+                  (["javap", "-p", "-cp", mc_jar, "net.minecraft.client.gui.GuiGraphicsExtractor"], "GuiGraphicsExtractor"),
+              ]
+              out_parts = []
+              for cmd, label in dump_cmds:
+                  p = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
+                  txt = p.stdout
+                  if label == "InputConstants":
+                      lines = [l for l in txt.splitlines() if "MOUSE" in l or "PRESS" in l or "RELEASE" in l or "REPEAT" in l or "MOD_" in l or "KEY_" in l][:60]
+                      txt = "\n".join(lines)
+                  elif label == "MouseHandler":
+                      idx = txt.find("private void onButton")
+                      if idx < 0:
+                          idx = txt.find("void onButton")
+                      txt = txt[idx:idx+7000] if idx >= 0 else txt[:4000]
+                  elif label == "Screen":
+                      lines = [l for l in txt.splitlines() if any(k in l for k in ("mouse", "Mouse", "key", "Key", "char", "Char", "width", "height"))]
+                      txt = "\n".join(lines)
+                  elif label == "GuiGraphicsExtractor":
+                      lines = [l for l in txt.splitlines() if "blit(" in l]
+                      txt = "\n".join(lines)
+                  out_parts.append(f"=== {label} ===\n{txt}")
+              post_comment("### 26.3 Input & Gui inspection\n```text\n" + "\n\n".join(out_parts)[:58000] + "\n```")
           except Exception:
               post_comment("### 26.3 Mixin check crashed\n```text\n" + traceback.format_exc() + "\n```")
               sys.exit(1)
