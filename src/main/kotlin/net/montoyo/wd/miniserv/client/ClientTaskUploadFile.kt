@@ -16,7 +16,7 @@ import java.nio.file.Files
 import java.util.function.BiConsumer
 import java.util.function.Consumer
 
-class ClientTaskUploadFile(private val file: File) :
+class ClientTaskUploadFile @Throws(IOException::class) constructor(private val file: File) :
     ClientTask<ClientTaskUploadFile>(),
     Consumer<OutgoingPacket?> {
 
