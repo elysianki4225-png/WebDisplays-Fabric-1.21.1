@@ -2,6 +2,7 @@ package com.cinemamod.mcef.example;
 
 import com.cinemamod.mcef.MCEF;
 import com.cinemamod.mcef.MCEFBrowser;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
@@ -83,16 +84,23 @@ public class ExampleScreen extends Screen {
         }
     }
 
+    private static int toCefButton(int mcButton) {
+        if (mcButton == InputConstants.MOUSE_BUTTON_LEFT) return 0;
+        if (mcButton == InputConstants.MOUSE_BUTTON_RIGHT) return 1;
+        if (mcButton == InputConstants.MOUSE_BUTTON_MIDDLE) return 2;
+        return mcButton;
+    }
+
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        browser.sendMousePress(mouseX(event.x()), mouseY(event.y()), event.button());
+        browser.sendMousePress(mouseX(event.x()), mouseY(event.y()), toCefButton(event.button()));
         browser.setFocus(true);
         return super.mouseClicked(event, doubleClick);
     }
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        browser.sendMouseRelease(mouseX(event.x()), mouseY(event.y()), event.button());
+        browser.sendMouseRelease(mouseX(event.x()), mouseY(event.y()), toCefButton(event.button()));
         browser.setFocus(true);
         return super.mouseReleased(event);
     }

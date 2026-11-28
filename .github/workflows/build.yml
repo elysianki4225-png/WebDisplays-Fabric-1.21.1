@@ -44,7 +44,7 @@ jobs:
               lines = f.readlines()
           out = []
           for i, l in enumerate(lines):
-              if "error:" in l or "FAILURE:" in l or "What went wrong" in l or l.startswith("> Task"):
+              if "error:" in l or l.startswith("e:") or "FAILURE:" in l or "What went wrong" in l or l.startswith("> Task"):
                   start = max(0, i - 2)
                   end = min(len(lines), i + 8)
                   out.extend(lines[start:end])
@@ -108,7 +108,7 @@ jobs:
               lines = f.readlines()
           out = []
           for i, l in enumerate(lines):
-              if "error:" in l or "FAILURE:" in l or "What went wrong" in l or l.startswith("> Task"):
+              if "error:" in l or l.startswith("e:") or "FAILURE:" in l or "What went wrong" in l or l.startswith("> Task"):
                   start = max(0, i - 2)
                   end = min(len(lines), i + 8)
                   out.extend(lines[start:end])

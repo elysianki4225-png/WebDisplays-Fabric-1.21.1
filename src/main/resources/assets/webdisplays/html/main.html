@@ -59,6 +59,40 @@
 		#wd {
 			padding-left: 20px;
 		}
+
+		#wd img {
+			max-width: 100%;
+			height: auto;
+		}
+
+		@media (max-width: 560px) {
+			#centercube {
+				margin-top: 0;
+				position: absolute;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				width: 88vw;
+			}
+
+			#centercube tr,
+			#centercube td {
+				display: block;
+				text-align: center;
+			}
+
+			#cube {
+				margin: 0 auto 22px auto;
+			}
+
+			#wd {
+				padding-left: 0;
+			}
+
+			#wd img {
+				max-width: 84vw;
+			}
+		}
 	</style>
 </head>
 <body>

@@ -27,7 +27,11 @@ public class MouseHandlerMixin {
 		if (minecraft.gui.screen() == null && minecraft.player != null && minecraft.level != null) {
 			if (minecraft.player.getItemInHand(InteractionHand.MAIN_HAND).getItem().equals(ItemInit.LASER_POINTER.get())
 					&& (minecraft.hitResult == null || minecraft.hitResult.getType() == HitResult.Type.BLOCK || minecraft.hitResult.getType() == HitResult.Type.MISS)) {
-				ItemLaserPointer.press(action == InputConstants.PRESS, buttonInfo.button());
+				int btn = buttonInfo.button();
+				if (btn == InputConstants.MOUSE_BUTTON_LEFT) btn = 0;
+				else if (btn == InputConstants.MOUSE_BUTTON_RIGHT) btn = 1;
+				else if (btn == InputConstants.MOUSE_BUTTON_MIDDLE) btn = 2;
+				ItemLaserPointer.press(action == InputConstants.PRESS, btn);
 				ci.cancel();
 			}
 		}
