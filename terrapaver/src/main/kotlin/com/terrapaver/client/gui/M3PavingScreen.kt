@@ -502,7 +502,6 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
             t
         ) { idx ->
             cfg.roadLampLayout = layouts[idx]
-            cfg.addRoadLights = (cfg.roadLampLayout != LampLayout.OFF)
             save()
         }
         cy += 28
@@ -516,7 +515,6 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
             t
         ) { idx ->
             cfg.railLampLayout = layouts[idx]
-            cfg.addRailLights = (cfg.railLampLayout != LampLayout.OFF)
             save()
         }
         cy += 28
