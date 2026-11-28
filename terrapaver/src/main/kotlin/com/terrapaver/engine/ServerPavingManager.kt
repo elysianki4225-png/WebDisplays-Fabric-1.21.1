@@ -298,7 +298,18 @@ object ServerPavingManager {
                     val st = job.stations[job.cursor]
                     job.streamer.ensureAreaLoaded(st.x.roundToInt(), st.z.roundToInt(), 24)
                     job.builder.buildStation(job.stations, job.cursor)
+                    if (job.cursor >= 4) {
+                        job.builder.buildStationDecorations(job.stations, job.cursor - 4)
+                    }
                     job.cursor++
+                }
+                if (job.cursor >= job.stations.size) {
+                    val flushStart = (job.stations.size - 4).coerceAtLeast(0)
+                    for (k in flushStart until job.stations.size) {
+                        val st = job.stations[k]
+                        job.streamer.ensureAreaLoaded(st.x.roundToInt(), st.z.roundToInt(), 24)
+                        job.builder.buildStationDecorations(job.stations, k)
+                    }
                 }
             }
 

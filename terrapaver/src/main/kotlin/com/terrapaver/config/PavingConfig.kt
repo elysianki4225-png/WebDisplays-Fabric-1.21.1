@@ -72,7 +72,7 @@ data class PavingConfig(
     var addTunnelWalls: Boolean = true,
     var addTunnelLights: Boolean = true,
     var tunnelLightInterval: Int = 8,
-    var tunnelCutThreshold: Int = 4,
+    var tunnelCutThreshold: Int = 2,
     var viaductPillarSpacing: Int = 8,
     var addGuardrails: Boolean = true,
     var addLaneMarkings: Boolean = true,
