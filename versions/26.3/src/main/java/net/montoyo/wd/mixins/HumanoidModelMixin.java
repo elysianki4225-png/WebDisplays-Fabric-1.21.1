@@ -33,7 +33,7 @@ public class HumanoidModelMixin {
         holdArm.yRot = -0.32f * sideSign;
         holdArm.zRot = -0.08f * sideSign;
 
-        float attack = state.attackTime;
+        float attack = state.swingAnimation;
         if (attack > 0.0f) {
             float tap = (float) Math.sin(attack * Math.PI);
             tapArm.xRot = -0.92f + 0.35f * tap + (state.isCrouching ? 0.25f : 0.0f);
