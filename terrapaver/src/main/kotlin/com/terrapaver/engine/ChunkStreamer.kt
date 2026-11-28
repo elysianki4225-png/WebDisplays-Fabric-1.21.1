@@ -83,7 +83,8 @@ class ChunkStreamer(private val level: ServerLevel, private val allowUnloaded: B
 
     fun sampleColumn(x: Int, z: Int): ColumnSample {
         ensureLoaded(x, z)
-        val topH = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z)
+        val noLeavesH = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z)
+        val worldSurfH = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z)
         val minY = level.minBuildHeight
 
         var waterTopY = minY
@@ -92,7 +93,7 @@ class ChunkStreamer(private val level: ServerLevel, private val allowUnloaded: B
         var groundY = minY
         var surfaceBlock: BlockState = Blocks.GRASS_BLOCK.defaultBlockState()
 
-        val scanStart = (topH + 2).coerceAtMost(level.maxBuildHeight - 1)
+        val scanStart = (maxOf(noLeavesH, worldSurfH) + 3).coerceAtMost(level.maxBuildHeight - 1)
 
         for (y in scanStart downTo minY) {
             mutablePos.set(x, y, z)
@@ -169,7 +170,21 @@ class ChunkStreamer(private val level: ServerLevel, private val allowUnloaded: B
                 b == Blocks.BAMBOO ||
                 b == Blocks.SUGAR_CANE ||
                 b == Blocks.VINE ||
-                b == Blocks.MOSS_CARPET
+                b == Blocks.MOSS_CARPET ||
+                b == Blocks.SHORT_GRASS ||
+                b == Blocks.TALL_GRASS ||
+                b == Blocks.FERN ||
+                b == Blocks.LARGE_FERN ||
+                b == Blocks.DEAD_BUSH ||
+                b == Blocks.AZALEA ||
+                b == Blocks.FLOWERING_AZALEA ||
+                b == Blocks.MANGROVE_ROOTS ||
+                b == Blocks.MUDDY_MANGROVE_ROOTS ||
+                b == Blocks.BEE_NEST ||
+                b == Blocks.SWEET_BERRY_BUSH ||
+                b == Blocks.HANGING_ROOTS ||
+                b == Blocks.GLOW_LICHEN ||
+                b == Blocks.COCOA
         }
 
         fun isTerrainSolid(state: BlockState): Boolean {

@@ -251,7 +251,13 @@ class IncrementalRoutePlanner(
         }
 
         // Flat plains or calm river crossings stay dead-straight & architectural
-        if (cfg.alignmentMode == AlignmentMode.AI_AUTO && highGain <= 5 && maxRelief <= 7 && maxSlopeAlongLine < 0.35f) {
+        val maxSlope = 1.0 / cfg.maxSlopeRun.toDouble()
+        val dyAbs = abs(legEnd.y - legStart.y).toDouble()
+        val neededSlope = dyAbs / dist
+
+        if (cfg.alignmentMode == AlignmentMode.AI_AUTO && highGain <= 5 && maxRelief <= 7 &&
+            maxSlopeAlongLine < 0.35f && neededSlope <= maxSlope * 0.92
+        ) {
             appendLegNodes(
                 listOf(
                     Point2D(legStart.x + 0.5, legStart.z + 0.5),
@@ -263,9 +269,13 @@ class IncrementalRoutePlanner(
             return
         }
 
-        // Explicit CONTOUR_SWITCHBACK or steep SURFACE_ONLY climb without feasible flanking pass
-        if (cfg.alignmentMode == AlignmentMode.CONTOUR_SWITCHBACK && highGain >= 14 && dist >= 55.0 && waterCells < lineSamples / 3) {
-            val switchback = buildSwitchbackOrContour(dx, dz, dist, highGain)
+        // Steep-slope solver ("如果坡度太斜也想办法"):
+        // Whenever the direct climb exceeds maxSlope (or explicit CONTOUR_SWITCHBACK is active),
+        // synthesize a wide-radius, non-overlapping switchback / horseshoe ramp so grade stays <= maxSlope!
+        val tooSteepDirect = neededSlope > maxSlope * 0.95 && dyAbs >= 4.0 && waterCells < lineSamples / 2
+        val wantsSwitchback = cfg.alignmentMode == AlignmentMode.CONTOUR_SWITCHBACK && highGain >= 12 && dist >= 45.0 && waterCells < lineSamples / 3
+        if (tooSteepDirect || wantsSwitchback) {
+            val switchback = buildGentleSwitchback(dx, dz, dist, dyAbs, maxSlope, highGain)
             if (switchback != null) {
                 appendLegNodes(switchback)
                 legIndex++
@@ -431,7 +441,25 @@ class IncrementalRoutePlanner(
                     else -> gridStep * 1.65
                 }
 
-                val stepCost = stepDist + earthworkCost + verticalOscCost + slopeRoughPenalty + ridgePassBonus + turnCost
+                // Keep safe lateral clearance from earlier multi-waypoint legs so roads never self-intersect
+                val wx = (minGx + nx) * gridStep + gridStep * 0.5
+                val wz = (minGz + nz) * gridStep + gridStep * 0.5
+                var prevOverlapPenalty = 0.0
+                if (allPathNodes.size > 16) {
+                    val minClear = cfg.roadWidth + 10.0
+                    val limitIdx = allPathNodes.size - 12
+                    var k = 0
+                    while (k < limitIdx) {
+                        val pn = allPathNodes[k]
+                        val pd = hypot(wx - pn.x, wz - pn.z)
+                        if (pd < minClear) {
+                            prevOverlapPenalty = max(prevOverlapPenalty, (minClear - pd) * stepDist * 3.5)
+                        }
+                        k += 4
+                    }
+                }
+
+                val stepCost = stepDist + earthworkCost + verticalOscCost + slopeRoughPenalty + ridgePassBonus + turnCost + prevOverlapPenalty
                 val tentativeG = gScore[cs] + stepCost
 
                 if (tentativeG < gScore[ns]) {
@@ -482,15 +510,18 @@ class IncrementalRoutePlanner(
         stage = Stage.INIT_LEG
     }
 
-    private fun buildSwitchbackOrContour(dx: Double, dz: Double, dist: Double, highGain: Int): List<Point2D>? {
+    private fun buildGentleSwitchback(
+        dx: Double,
+        dz: Double,
+        dist: Double,
+        dyAbs: Double,
+        maxSlope: Double,
+        highGain: Int
+    ): List<Point2D>? {
         val ux = dx / dist
         val uz = dz / dist
         val px = -uz
         val pz = ux
-
-        val midX = legStart.x + dx * 0.5
-        val midZ = legStart.z + dz * 0.5
-        val offset = min(108.0, max(32.0, dist * 0.36))
 
         fun sampleGridHeight(wx: Double, wz: Double): Int {
             val gx = (Math.floorDiv(wx.roundToInt(), gridStep) - minGx).coerceIn(0, gridW - 1)
@@ -498,33 +529,67 @@ class IncrementalRoutePlanner(
             return gridGround[gz * gridW + gx]
         }
 
-        val leftH = sampleGridHeight(midX + px * offset, midZ + pz * offset)
-        val rightH = sampleGridHeight(midX - px * offset, midZ - pz * offset)
+        val midX = legStart.x + dx * 0.5
+        val midZ = legStart.z + dz * 0.5
+        val probeOff = min(80.0, max(24.0, dist * 0.35))
+        val leftH = sampleGridHeight(midX + px * probeOff, midZ + pz * probeOff)
+        val rightH = sampleGridHeight(midX - px * probeOff, midZ - pz * probeOff)
         val centerH = sampleGridHeight(midX, midZ)
+        val favoredSide = if (leftH <= rightH) 1.0 else -1.0
 
-        if (min(leftH, rightH) + 8 < centerH) {
-            val side = if (leftH <= rightH) 1.0 else -1.0
+        val requiredLen = max(dist * 1.15, dyAbs / maxSlope)
+        val minLegGap = max(20.0, cfg.roadWidth * 2.6 + 9.0)
+
+        // Case A: Terrain has a broad flanking valley around a central ridge and grade fits a single wide arc
+        if (min(leftH, rightH) + 8 < centerH && requiredLen <= hypot(dist, probeOff * 1.75)) {
+            val amp = max(minLegGap, min(96.0, sqrt(max(0.0, requiredLen * requiredLen - dist * dist)) * 0.58))
             val ctrl = listOf(
                 Point2D(legStart.x + 0.5, legStart.z + 0.5),
-                Point2D(legStart.x + dx * 0.32 + px * offset * 0.85 * side, legStart.z + dz * 0.32 + pz * offset * 0.85 * side),
-                Point2D(legStart.x + dx * 0.68 + px * offset * 0.85 * side, legStart.z + dz * 0.68 + pz * offset * 0.85 * side),
+                Point2D(legStart.x + dx * 0.30 + px * amp * favoredSide, legStart.z + dz * 0.30 + pz * amp * favoredSide),
+                Point2D(legStart.x + dx * 0.70 + px * amp * favoredSide, legStart.z + dz * 0.70 + pz * amp * favoredSide),
                 Point2D(legEnd.x + 0.5, legEnd.z + 0.5)
             )
-            return centripetalCatmullRom(ctrl, 12)
+            return centripetalCatmullRom(ctrl, 14)
         }
 
-        if (highGain >= 14) {
-            val amp = min(56.0, max(24.0, highGain * 1.45))
+        // Case B: Very steep cliff / short horizontal distance -> wide horseshoe / sweeping multi-bend switchback
+        if (dist < minLegGap * 1.8) {
+            val amp = max(minLegGap * 1.15, min(92.0, requiredLen * 0.42))
             val ctrl = listOf(
                 Point2D(legStart.x + 0.5, legStart.z + 0.5),
-                Point2D(legStart.x + dx * 0.25 + px * amp, legStart.z + dz * 0.25 + pz * amp),
-                Point2D(legStart.x + dx * 0.50 - px * amp, legStart.z + dz * 0.50 - pz * amp),
-                Point2D(legStart.x + dx * 0.75 + px * amp, legStart.z + dz * 0.75 + pz * amp),
+                Point2D(legStart.x + dx * 0.15 + px * amp * 0.70 * favoredSide, legStart.z + dz * 0.15 + pz * amp * 0.70 * favoredSide),
+                Point2D(legStart.x + dx * 0.50 + px * amp * favoredSide, legStart.z + dz * 0.50 + pz * amp * favoredSide),
+                Point2D(legStart.x + dx * 0.85 + px * amp * 0.70 * favoredSide, legStart.z + dz * 0.85 + pz * amp * 0.70 * favoredSide),
                 Point2D(legEnd.x + 0.5, legEnd.z + 0.5)
             )
-            return centripetalCatmullRom(ctrl, 12)
+            return centripetalCatmullRom(ctrl, 14)
         }
-        return null
+
+        // Case C: Multi-bend S-curve switchback with guaranteed minLegGap spacing between bends!
+        val maxBends = max(1, min(3, (dist / minLegGap).toInt()))
+        var chosenBends = 1
+        var chosenAmp = minLegGap
+        for (bends in 1..maxBends) {
+            val segL = dist / (bends + 1).toDouble()
+            val segTarget = requiredLen / (bends + 1).toDouble()
+            val neededAmp = if (segTarget > segL) sqrt(segTarget * segTarget - segL * segL) * 0.55 else minLegGap * 0.85
+            chosenBends = bends
+            chosenAmp = neededAmp.coerceIn(minLegGap, 92.0)
+            if (neededAmp <= 68.0) break
+        }
+        if (highGain >= 14 && chosenAmp < minLegGap) {
+            chosenAmp = minLegGap
+        }
+
+        val ctrl = ArrayList<Point2D>(chosenBends + 2)
+        ctrl.add(Point2D(legStart.x + 0.5, legStart.z + 0.5))
+        for (b in 1..chosenBends) {
+            val t = b.toDouble() / (chosenBends + 1).toDouble()
+            val sign = if (b % 2 == 1) favoredSide else -favoredSide
+            ctrl.add(Point2D(legStart.x + dx * t + px * chosenAmp * sign, legStart.z + dz * t + pz * chosenAmp * sign))
+        }
+        ctrl.add(Point2D(legEnd.x + 0.5, legEnd.z + 0.5))
+        return centripetalCatmullRom(ctrl, 14)
     }
 
     private fun appendLegNodes(pts: List<Point2D>) {
@@ -645,11 +710,7 @@ class IncrementalRoutePlanner(
         val grade = target.copyOf()
         val maxStep = 1.0 / cfg.maxSlopeRun.toDouble()
         val neededTotalSlope = abs(target[n - 1] - target[0]) / max(1, n - 1).toDouble()
-        val strictStep = if (cfg.obstacleMode == ObstacleMode.SURFACE_ONLY) {
-            max(maxStep, min(1.0, neededTotalSlope + 0.15))
-        } else {
-            max(maxStep, neededTotalSlope + 0.02)
-        }
+        val strictStep = max(maxStep, neededTotalSlope + 0.02)
 
         for (iter in 0 until 40) {
             val prevG = grade.copyOf()
@@ -674,15 +735,15 @@ class IncrementalRoutePlanner(
             }
         }
 
-        // In SURFACE_ONLY mode, lift deep trenches cleanly to hug mountain contours without digging canyons
+        // In SURFACE_ONLY mode, lift deep trenches gently while STILL respecting slope limits!
         if (cfg.obstacleMode == ObstacleMode.SURFACE_ONLY) {
             for (i in 1 until n - 1) {
                 val s = samples[i]
-                if (!s.hasLiquid && s.groundY - grade[i] > 3.0) {
-                    grade[i] = s.groundY - 1.0
+                if (!s.hasLiquid && s.groundY - grade[i] > 4.0) {
+                    grade[i] = grade[i] + min(3.0, (s.groundY - grade[i]) * 0.45)
                 }
             }
-            for (pass in 0 until 6) {
+            for (pass in 0 until 8) {
                 val src = grade.copyOf()
                 for (i in 1 until n - 1) {
                     if (!pinned[i]) {
@@ -691,7 +752,12 @@ class IncrementalRoutePlanner(
                 }
             }
             for (i in 1 until n) {
-                grade[i] = grade[i].coerceIn(grade[i - 1] - 1.0, grade[i - 1] + 1.0)
+                grade[i] = grade[i].coerceIn(grade[i - 1] - strictStep, grade[i - 1] + strictStep)
+            }
+            for (i in n - 2 downTo 0) {
+                if (!pinned[i]) {
+                    grade[i] = grade[i].coerceIn(grade[i + 1] - strictStep, grade[i + 1] + strictStep)
+                }
             }
         }
 

@@ -56,12 +56,62 @@ class BlockBuilder(
 
     private val mPos = BlockPos.MutableBlockPos()
     private val blendedColumns = LinkedHashMap<Long, BlendColMeta>(1024)
+    private val deckOwnerDist = HashMap<Long, Double>(4096)
+    private var indexedStations: List<RouteStation>? = null
+    private val stationBuckets = HashMap<Long, ArrayList<Int>>(512)
     private var healList: List<BlendColMeta>? = null
     private var healPass = 0
     private var healCursor = 0
 
     var placedCount: Int = 0
         private set
+
+    private fun ensureSpatialIndex(stations: List<RouteStation>) {
+        if (indexedStations === stations) return
+        indexedStations = stations
+        stationBuckets.clear()
+        for (i in stations.indices) {
+            val bx = floor(stations[i].x).toInt() shr 3
+            val bz = floor(stations[i].z).toInt() shr 3
+            val key = (bx.toLong() shl 32) or (bz.toLong() and 0xFFFFFFFFL)
+            stationBuckets.getOrPut(key) { ArrayList(8) }.add(i)
+        }
+    }
+
+    /**
+     * Returns true if column (bx, bz) belongs to another non-adjacent leg of the road
+     * (e.g., a switchback bend or multi-waypoint intersection) so this station must not overwrite it.
+     */
+    private fun isOwnedByAnotherLeg(
+        stations: List<RouteStation>,
+        curIdx: Int,
+        bx: Int,
+        bz: Int,
+        radius: Double
+    ): Boolean {
+        ensureSpatialIndex(stations)
+        val cx = bx shr 3
+        val cz = bz shr 3
+        val px = bx + 0.5
+        val pz = bz + 0.5
+        val rSq = radius * radius
+        val curDistSq = (px - stations[curIdx].x).let { it * it } + (pz - stations[curIdx].z).let { it * it }
+        for (ox in -1..1) {
+            for (oz in -1..1) {
+                val key = ((cx + ox).toLong() shl 32) or ((cz + oz).toLong() and 0xFFFFFFFFL)
+                val list = stationBuckets[key] ?: continue
+                for (k in list) {
+                    if (abs(k - curIdx) <= 8) continue
+                    val s = stations[k]
+                    val dx = px - s.x
+                    val dz = pz - s.z
+                    val dSq = dx * dx + dz * dz
+                    if (dSq <= rSq && dSq < curDistSq) return true
+                }
+            }
+        }
+        return false
+    }
 
     private data class Palette(
         val deck: BlockState,
@@ -249,7 +299,7 @@ class BlockBuilder(
             for (side in intArrayOf(-1, 1)) {
                 val gx = (st.x + st.px * railEdgeOff * side).roundToInt()
                 val gz = (st.z + st.pz * railEdgeOff * side).roundToInt()
-                if (!isInsideAnyRoadDeck(stations, index, gx, gz, roadHalfW) &&
+                if (!isInsideAnyRoadDeck(stations, index, gx, gz, roadHalfW + 0.45) &&
                     countOrthogonalGuardrails(gx, st.roadY + 1, gz) < 2
                 ) {
                     if (st.type != StationType.VIADUCT) {
@@ -266,7 +316,7 @@ class BlockBuilder(
         }
 
         // 2. Architectural dual/staggered street lamps (placed AFTER all air-clearing & terrain blending!)
-        placeStationStreetLights(st, index, lampEdgeOff, isViaduct = (st.type == StationType.VIADUCT))
+        placeStationStreetLights(stations, st, index, lampEdgeOff, isViaduct = (st.type == StationType.VIADUCT))
     }
 
     private fun countOrthogonalGuardrails(x: Int, y: Int, z: Int): Int {
@@ -287,13 +337,24 @@ class BlockBuilder(
         bz: Int,
         roadHalfW: Double
     ): Boolean {
-        val from = max(0, centerIdx - 5)
-        val to = minOf(stations.lastIndex, centerIdx + 5)
-        val safeR = max(0.5, roadHalfW - 0.1)
-        for (k in from..to) {
-            val s = stations[k]
-            val d = hypot((bx + 0.5) - s.x, (bz + 0.5) - s.z)
-            if (d <= safeR) return true
+        ensureSpatialIndex(stations)
+        val cx = bx shr 3
+        val cz = bz shr 3
+        val px = bx + 0.5
+        val pz = bz + 0.5
+        val safeR = max(0.5, roadHalfW)
+        val safeRSq = safeR * safeR
+        for (ox in -1..1) {
+            for (oz in -1..1) {
+                val key = ((cx + ox).toLong() shl 32) or ((cz + oz).toLong() and 0xFFFFFFFFL)
+                val list = stationBuckets[key] ?: continue
+                for (k in list) {
+                    val s = stations[k]
+                    val dx = px - s.x
+                    val dz = pz - s.z
+                    if (dx * dx + dz * dz <= safeRSq) return true
+                }
+            }
         }
         return false
     }
@@ -303,15 +364,15 @@ class BlockBuilder(
         val prev = stations.getOrNull(index - 1)
         val next = stations.getOrNull(index + 1)
         val roadHalfW = cfg.roadWidth / 2.0
-        val clearHalfW = roadHalfW + if (st.type == StationType.CUT) 1.25 else 0.75
+        // Cover road + shoulder + guardrail + lamp base completely so no foliage/cliff clings to curbs!
+        val clearHalfW = roadHalfW + 1.55
         val minClearHeight = 6
-        val nearPortal = prev?.type == StationType.TUNNEL ||
-            next?.type == StationType.TUNNEL ||
-            stations.getOrNull(index + 2)?.type == StationType.TUNNEL
+        val immediatelyAtPortal = prev?.type == StationType.TUNNEL || next?.type == StationType.TUNNEL
 
-        // Sweep tree canopies + snow-on-leaves slightly wider than the roadbed so no floating crowns remain
-        val canopyHalfW = clearHalfW + 3.0
-        forEachOffsetPoint(st, canopyHalfW, 0.8) { bx, bz, _ ->
+        // Sweep tree canopies + snow-on-leaves + vines well beyond the roadbed so no floating crowns or curb foliage remain
+        val canopyHalfW = clearHalfW + 3.5
+        forEachOffsetPoint(st, canopyHalfW, 0.5) { bx, bz, _ ->
+            if (isOwnedByAnotherLeg(stations, index, bx, bz, roadHalfW + 1.25)) return@forEachOffsetPoint
             val worldTopY = level.getHeight(Heightmap.Types.WORLD_SURFACE, bx, bz)
             for (wy in (st.roadY + 1)..(worldTopY + 3)) {
                 mPos.set(bx, wy, bz)
@@ -326,12 +387,25 @@ class BlockBuilder(
             }
         }
 
-        forEachOffsetPoint(st, clearHalfW, 0.5) { bx, bz, t ->
+        forEachOffsetPoint(st, clearHalfW, 0.5) { bx, bz, _ ->
+            if (isOwnedByAnotherLeg(stations, index, bx, bz, roadHalfW + 1.25)) return@forEachOffsetPoint
+
             val perpDist = abs(((bx + 0.5) - st.x) * st.px + ((bz + 0.5) - st.z) * st.pz)
             val isOnRoad = perpDist <= roadHalfW + 0.05
+            val colKey = (bx.toLong() shl 32) or (bz.toLong() and 0xFFFFFFFFL)
+            val distSqToSt = ((bx + 0.5) - st.x).let { it * it } + ((bz + 0.5) - st.z).let { it * it }
+
+            // Check Voronoi ownership among nearby stations so adjacent half-slabs/stripes/shoulders never fight each other!
+            val prevOwnerDist = deckOwnerDist[colKey]
+            val ownsCol = prevOwnerDist == null || distSqToSt <= prevOwnerDist + 0.02
+            if (prevOwnerDist != null && (!isOnRoad || !ownsCol)) return@forEachOffsetPoint
+            if (isOnRoad) {
+                deckOwnerDist[colKey] = distSqToSt
+            }
 
             val worldTopY = level.getHeight(Heightmap.Types.WORLD_SURFACE, bx, bz)
-            val clearTopY = if (nearPortal) {
+            // Only preserve portal arch roof strictly inside the road width right next to the tunnel mouth!
+            val clearTopY = if (immediatelyAtPortal && perpDist <= roadHalfW + 0.35) {
                 st.roadY + cfg.effectiveTunnelHeight() + 1
             } else {
                 max(st.roadY + minClearHeight, worldTopY + 3)
@@ -355,26 +429,31 @@ class BlockBuilder(
                     if (ChunkStreamer.isTerrainSolid(cur)) break
                     setBlockSafe(bx, st.roadY - d, bz, palette.subBase)
                 }
-            } else if (st.type == StationType.CUT) {
+            } else if (st.type == StationType.CUT && ownsCol) {
                 setBlockSafe(bx, st.roadY, bz, palette.shoulder)
+                for (d in 1..4) {
+                    mPos.set(bx, st.roadY - d, bz)
+                    if (ChunkStreamer.isTerrainSolid(level.getBlockState(mPos))) break
+                    setBlockSafe(bx, st.roadY - d, bz, palette.subBase)
+                }
             }
         }
 
-        // True Cosine-Falloff AI Terrain Smoothing beyond the roadbed/cut
-        if (cfg.terrainBlending && !nearPortal) {
-            applyTerrainBlending(st, clearHalfW)
+        // Always run Cosine-Falloff AI Terrain Smoothing beyond the roadbed/cut (even near portals!)
+        if (cfg.terrainBlending) {
+            applyTerrainBlending(stations, index, st, clearHalfW)
         }
     }
 
     private fun clearConnectedTree(startX: Int, startY: Int, startZ: Int) {
-        val queue = ArrayDeque<BlockPos>(32)
-        val visited = HashSet<Long>(64)
+        val queue = ArrayDeque<BlockPos>(64)
+        val visited = HashSet<Long>(128)
         val origin = BlockPos(startX, startY, startZ)
         queue.addLast(origin)
         visited.add(origin.asLong())
 
         var cleared = 0
-        while (queue.isNotEmpty() && cleared < 96) {
+        while (queue.isNotEmpty() && cleared < 512) {
             val cur = queue.removeFirst()
             val curState = level.getBlockState(cur)
             if (!ChunkStreamer.isTreeOrFoliage(curState) && !curState.`is`(Blocks.SNOW)) continue
@@ -388,13 +467,13 @@ class BlockBuilder(
             }
 
             for (dx in -1..1) {
-                for (dy in 0..1) {
+                for (dy in -1..2) {
                     for (dz in -1..1) {
                         if (dx == 0 && dy == 0 && dz == 0) continue
                         val nx = cur.x + dx
                         val ny = cur.y + dy
                         val nz = cur.z + dz
-                        if (abs(nx - startX) > 4 || abs(nz - startZ) > 4 || ny - startY > 10) continue
+                        if (abs(nx - startX) > 7 || abs(nz - startZ) > 7 || ny - startY > 14 || ny < startY - 4) continue
                         val np = BlockPos(nx, ny, nz)
                         if (visited.add(np.asLong())) {
                             val ns = level.getBlockState(np)
@@ -420,11 +499,14 @@ class BlockBuilder(
             state == palette.lampArm ||
             state == palette.lampHead ||
             state == palette.slopeSlab ||
-            state == palette.viaductGirder
+            state == palette.viaductGirder ||
+            state == palette.tunnelWall ||
+            state == palette.tunnelLight
     }
 
-    private fun applyTerrainBlending(st: RouteStation, edgeHalfW: Double) {
+    private fun applyTerrainBlending(stations: List<RouteStation>, index: Int, st: RouteStation, edgeHalfW: Double) {
         val blendW = cfg.blendRadius
+        val roadHalfW = cfg.roadWidth / 2.0
         val seen = HashSet<Long>(48)
 
         for (fwdStep in 0..1) {
@@ -449,8 +531,11 @@ class BlockBuilder(
                     val bx = (sx + st.px * t).roundToInt()
                     val bz = (sz + st.pz * t).roundToInt()
                     val key = (bx.toLong() shl 32) or (bz.toLong() and 0xFFFFFFFFL)
+                    val curStepD = stepD
                     stepD += 0.5
                     if (!seen.add(key)) continue
+
+                    if (isInsideAnyRoadDeck(stations, index, bx, bz, roadHalfW + 1.15)) continue
 
                     mPos.set(bx, st.roadY, bz)
                     if (isProtectedRoadBlock(level.getBlockState(mPos))) continue
@@ -472,7 +557,7 @@ class BlockBuilder(
                         }
                     } else if (col.groundY > targetY) {
                         val worldTopY = level.getHeight(Heightmap.Types.WORLD_SURFACE, bx, bz)
-                        val topClear = max(col.topSolidY + 2, worldTopY + 2)
+                        val topClear = max(col.topSolidY + 3, worldTopY + 3)
                         for (y in (targetY + 1)..topClear) {
                             mPos.set(bx, y, bz)
                             if (isProtectedRoadBlock(level.getBlockState(mPos))) continue
@@ -481,6 +566,19 @@ class BlockBuilder(
                         setBlockSafe(bx, targetY, bz, naturalTop)
                         if (col.hasSnowCover && naturalTop.`is`(Blocks.GRASS_BLOCK)) {
                             setBlockSafe(bx, targetY + 1, bz, Blocks.SNOW.defaultBlockState())
+                        }
+                    } else if (curStepD <= 3.5) {
+                        // Even when groundY == targetY, clear overhanging vines, leaves, or cliff shelves directly above!
+                        val worldTopY = level.getHeight(Heightmap.Types.WORLD_SURFACE, bx, bz)
+                        val topClear = max(col.topSolidY + 3, worldTopY + 3)
+                        for (y in (targetY + 1)..topClear) {
+                            mPos.set(bx, y, bz)
+                            val bs = level.getBlockState(mPos)
+                            if (isProtectedRoadBlock(bs)) continue
+                            if (!bs.isAir) {
+                                if (y == targetY + 1 && bs.`is`(Blocks.SNOW) && col.hasSnowCover) continue
+                                setBlockSafe(bx, y, bz, Blocks.AIR.defaultBlockState())
+                            }
                         }
                     }
                 }
@@ -795,7 +893,13 @@ class BlockBuilder(
         }
     }
 
-    private fun placeStationStreetLights(st: RouteStation, index: Int, edgeOffset: Double, isViaduct: Boolean) {
+    private fun placeStationStreetLights(
+        stations: List<RouteStation>,
+        st: RouteStation,
+        index: Int,
+        edgeOffset: Double,
+        isViaduct: Boolean
+    ) {
         val layout = cfg.activeLampLayout()
         if (layout == LampLayout.OFF) return
         val interval = cfg.lightInterval
@@ -804,30 +908,38 @@ class BlockBuilder(
         when (layout) {
             LampLayout.DUAL_PAIRED -> {
                 if (index % interval == 0) {
-                    placeArchitecturalLamp(st, edgeOffset, 1, isViaduct)
-                    placeArchitecturalLamp(st, edgeOffset, -1, isViaduct)
+                    placeArchitecturalLamp(stations, index, st, edgeOffset, 1, isViaduct)
+                    placeArchitecturalLamp(stations, index, st, edgeOffset, -1, isViaduct)
                 }
             }
             LampLayout.DUAL_STAGGERED -> {
                 if (index % interval == 0) {
-                    placeArchitecturalLamp(st, edgeOffset, 1, isViaduct)
+                    placeArchitecturalLamp(stations, index, st, edgeOffset, 1, isViaduct)
                 } else if (index % interval == halfInterval) {
-                    placeArchitecturalLamp(st, edgeOffset, -1, isViaduct)
+                    placeArchitecturalLamp(stations, index, st, edgeOffset, -1, isViaduct)
                 }
             }
             LampLayout.SINGLE_SIDE -> {
                 if (index % interval == 0) {
-                    placeArchitecturalLamp(st, edgeOffset, 1, isViaduct)
+                    placeArchitecturalLamp(stations, index, st, edgeOffset, 1, isViaduct)
                 }
             }
             LampLayout.OFF -> Unit
         }
     }
 
-    private fun placeArchitecturalLamp(st: RouteStation, edgeOffset: Double, sideSign: Int, isViaduct: Boolean) {
+    private fun placeArchitecturalLamp(
+        stations: List<RouteStation>,
+        index: Int,
+        st: RouteStation,
+        edgeOffset: Double,
+        sideSign: Int,
+        isViaduct: Boolean
+    ) {
         val postOff = edgeOffset * sideSign
         val lx = (st.x + st.px * postOff).roundToInt()
         val lz = (st.z + st.pz * postOff).roundToInt()
+        if (isInsideAnyRoadDeck(stations, index, lx, lz, cfg.roadWidth / 2.0 + 0.35)) return
 
         // Always pick a strictly 4-connected cardinal neighbor inward toward road center so arm NEVER overlaps or floats!
         val dirX = -st.px * sideSign
