@@ -105,12 +105,13 @@ object WebDisplaysFabric : ModInitializer {
 
         if (cleaned == "ironic he could save others from death but not himself") {
             val ply: Player = player
+            val sound = WebDisplays.INSTANCE.soundIronic ?: return
             ply.level().playSound(
                 null,
                 ply.x,
                 ply.y,
                 ply.z,
-                WebDisplays.INSTANCE.soundIronic,
+                sound,
                 SoundSource.PLAYERS,
                 1.0f,
                 1.0f

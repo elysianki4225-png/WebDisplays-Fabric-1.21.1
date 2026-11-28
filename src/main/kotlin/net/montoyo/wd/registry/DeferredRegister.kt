@@ -10,7 +10,7 @@ import java.util.function.Supplier
 /**
  * Registers into the vanilla registries right away, which is when Fabric calls entrypoints.
  */
-class DeferredRegister<T> private constructor(
+class DeferredRegister<T : Any> private constructor(
     private val key: ResourceKey<out Registry<T>>,
     private val namespace: String
 ) {
@@ -43,7 +43,7 @@ class DeferredRegister<T> private constructor(
 
     companion object {
         @JvmStatic
-        fun <T> create(key: ResourceKey<out Registry<T>>, namespace: String): DeferredRegister<T> =
+        fun <T : Any> create(key: ResourceKey<out Registry<T>>, namespace: String): DeferredRegister<T> =
             DeferredRegister(key, namespace)
     }
 }
