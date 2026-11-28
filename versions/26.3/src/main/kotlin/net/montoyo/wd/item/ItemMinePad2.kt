@@ -52,11 +52,8 @@ open class ItemMinePad2(properties: Properties) :
             if (isMobileLayout()) WebDisplays.PROXY.openMinePadGui(uuid)
         }
 
-        if (isMobileLayout()) {
-            ply.swing(hand)
-            if (world.isClientSide()) {
-                WebDisplays.PROXY.onSmartphoneUsed(ply, hand)
-            }
+        if (isMobileLayout() && world.isClientSide()) {
+            WebDisplays.PROXY.onSmartphoneUsed(ply, hand)
         }
 
         return InteractionResult.SUCCESS

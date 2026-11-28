@@ -205,13 +205,23 @@ jobs:
                   "net.minecraft.client.renderer.entity.state.AvatarRenderState",
                   "net.minecraft.client.renderer.entity.player.PlayerRenderer",
                   "net.minecraft.client.renderer.entity.state.PlayerRenderState",
+                  "net.minecraft.world.entity.LivingEntity",
               ]
               inspect_out = []
               for ic in inspect_classes:
                   p = subprocess.run(["javap", "-s", "-p", "-cp", mc_jar, ic], capture_output=True, text=True, errors="replace")
                   if p.returncode == 0:
-                      lines = [l for l in p.stdout.splitlines() if "private" not in l or "descriptor:" in l]
-                      inspect_out.append(f"=== {ic} ===\n" + "\n".join(p.stdout.splitlines()[:90]))
+                      if ic == "net.minecraft.world.entity.LivingEntity":
+                          lines = p.stdout.splitlines()
+                          filtered = []
+                          for idx, ln in enumerate(lines):
+                              if "swing" in ln.lower() or "arm" in ln.lower():
+                                  filtered.append(ln)
+                                  if idx + 1 < len(lines) and "descriptor:" in lines[idx + 1]:
+                                      filtered.append(lines[idx + 1])
+                          inspect_out.append(f"=== {ic} (swing/arm) ===\n" + "\n".join(filtered[:60]))
+                      else:
+                          inspect_out.append(f"=== {ic} ===\n" + "\n".join(p.stdout.splitlines()[:90]))
                   else:
                       inspect_out.append(f"=== {ic} === NOT FOUND")
               post_comment("### 26.3 API inspection\n```text\n" + "\n\n".join(inspect_out)[:58000] + "\n```")
