@@ -5,6 +5,7 @@ import com.cinemamod.mcef.MCEFBrowser
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.math.Axis
 import com.mojang.serialization.MapCodec
+import org.joml.Matrix4f
 import net.fabricmc.api.EnvType
 import net.fabricmc.api.Environment
 import net.minecraft.client.renderer.SubmitNodeCollector
@@ -49,7 +50,7 @@ class SmartphoneRenderer : SpecialModelRenderer<UUID> {
         if (tapProgress > 0f) {
             val tap = sin(tapProgress * PI.toFloat())
             poseStack.translate(0.0f, -0.02f * tap, -0.015f * tap)
-            poseStack.mulPose(Axis.XP.rotationDegrees(-6.0f * tap))
+            poseStack.mulPose(Matrix4f().rotate(Axis.XP.rotationDegrees(-6.0f * tap)))
         }
         poseStack.translate(0.5f - ModelSmartphone.BODY_W * 0.5f, 0.5f - ModelSmartphone.BODY_H * 0.5f, 0.501f)
         model.submit(submitNodeCollector, poseStack, lightCoords, padId != null)
@@ -66,8 +67,8 @@ class SmartphoneRenderer : SpecialModelRenderer<UUID> {
     ) {
         poseStack.pushPose()
         poseStack.translate(0.0f, 0.025f, 0.0f)
-        poseStack.mulPose(Axis.YP.rotation(-spinYaw))
-        poseStack.mulPose(Axis.XP.rotationDegrees(-90.0f))
+        poseStack.mulPose(Matrix4f().rotate(Axis.YP.rotation(-spinYaw)))
+        poseStack.mulPose(Matrix4f().rotate(Axis.XP.rotationDegrees(-90.0f)))
         poseStack.scale(0.48f, 0.48f, 0.48f)
         poseStack.translate(-ModelSmartphone.BODY_W * 0.5f, -ModelSmartphone.BODY_H * 0.5f, 0.0f)
 

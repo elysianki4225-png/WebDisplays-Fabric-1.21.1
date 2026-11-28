@@ -9,6 +9,7 @@ import com.cinemamod.mcef.MCEFBrowser
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.math.Axis
 import com.mojang.serialization.MapCodec
+import org.joml.Matrix4f
 import net.fabricmc.api.EnvType
 import net.fabricmc.api.Environment
 import net.minecraft.client.renderer.SubmitNodeCollector
@@ -62,8 +63,8 @@ class MinePadRenderer : SpecialModelRenderer<UUID> {
     ) {
         poseStack.pushPose()
         poseStack.translate(0.0f, 0.025f, 0.0f)
-        poseStack.mulPose(Axis.YP.rotation(-spinYaw))
-        poseStack.mulPose(Axis.XP.rotationDegrees(-90.0f))
+        poseStack.mulPose(Matrix4f().rotate(Axis.YP.rotation(-spinYaw)))
+        poseStack.mulPose(Matrix4f().rotate(Axis.XP.rotationDegrees(-90.0f)))
         poseStack.scale(0.55f, 0.55f, 0.55f)
         poseStack.translate(-0.5f, -0.25f, 0.0f)
 
