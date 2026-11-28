@@ -5,6 +5,7 @@
 package net.montoyo.wd.client.gui.controls;
 
 import com.google.common.collect.Lists;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
@@ -59,7 +60,7 @@ public class CheckBox extends BasicControl {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int mouseButton) {
-        if(mouseButton == 0 && !disabled) {
+        if(mouseButton == InputConstants.MOUSE_BUTTON_LEFT && !disabled) {
             if(mouseX >= x && mouseX <= x + WIDTH + 4 + labelW && mouseY >= y && mouseY < y + HEIGHT) {
                 checked = !checked;
                 mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F));

@@ -49,7 +49,7 @@ public class Button extends Control {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int mouseButton) {
         MouseButtonEvent event = new MouseButtonEvent(mouseX, mouseY, new MouseButtonInfo(mouseButton, 0));
-        if(mouseButton == 0 && btn.mouseClicked(event, false)) {
+        if(mouseButton == InputConstants.MOUSE_BUTTON_LEFT && btn.mouseClicked(event, false)) {
             selected = true;
             btn.playDownSound(mc.getSoundManager());
 
@@ -63,7 +63,7 @@ public class Button extends Control {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int state) {
-        if(selected && state == 0) {
+        if(selected && state == InputConstants.MOUSE_BUTTON_LEFT) {
             btn.mouseReleased(new MouseButtonEvent(mouseX, mouseY, new MouseButtonInfo(state, 0)));
             selected = false;
 

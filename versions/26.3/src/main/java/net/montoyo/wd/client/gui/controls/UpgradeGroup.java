@@ -4,6 +4,7 @@
 
 package net.montoyo.wd.client.gui.controls;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.item.ItemStack;
 import net.montoyo.wd.client.gui.WDTheme;
@@ -109,7 +110,7 @@ public class UpgradeGroup extends BasicControl {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int mouseButton) {
-        if(mouseButton == 0) {
+        if(mouseButton == InputConstants.MOUSE_BUTTON_LEFT) {
             if (mouseX >= x && mouseX <= x + getWidth() && mouseY >= y && mouseY <= y + getHeight()) {
                 clickStack = overStack;
                 return true;
@@ -121,7 +122,7 @@ public class UpgradeGroup extends BasicControl {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int state) {
-        if(state == 0 && clickStack != null) {
+        if(state == InputConstants.MOUSE_BUTTON_LEFT && clickStack != null) {
             if(clickStack == overStack && !disabled && upgrades.contains(clickStack))
                 parent.actionPerformed(new ClickEvent(this));
 

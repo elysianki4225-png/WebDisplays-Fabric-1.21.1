@@ -201,19 +201,10 @@ public class GuiMinePad extends WDScreen {
 
 			// 1. Status bar (Clock, Dynamic Island, Signal & Battery)
 			String timeStr = LocalTime.now().format(CLOCK_FMT);
-			graphics.text(font, timeStr, screenX + 6, screenY + 3, 0xFFE2E8F0, false);
+			int clockX = screenX + 4;
+			graphics.text(font, timeStr, clockX, screenY + 3, 0xFFE2E8F0, false);
 
-			int islandW = Math.min(44, Math.max(28, screenW / 4));
-			int islandX = screenX + (screenW - islandW) / 2;
-			int islandY = screenY + 3;
-			graphics.fill(islandX, islandY, islandX + islandW, islandY + 8, 0xFF05070B);
-			graphics.fill(islandX + 1, islandY - 1, islandX + islandW - 1, islandY + 9, 0xFF05070B);
-			int camX = islandX + islandW - 8;
-			graphics.fill(camX, islandY + 2, camX + 4, islandY + 6, 0xFF0F172A);
-			graphics.fill(camX + 1, islandY + 3, camX + 3, islandY + 5, 0xFF1D4ED8);
-			graphics.fill(camX + 1, islandY + 3, camX + 2, islandY + 4, 0xFF60A5FA);
-
-			int batX = screenX + screenW - 17;
+			int batX = screenX + screenW - 16;
 			int batY = screenY + 4;
 			graphics.fill(batX, batY, batX + 11, batY + 6, 0xFF94A3B8);
 			graphics.fill(batX + 1, batY + 1, batX + 10, batY + 5, 0xFF0F172A);
@@ -224,6 +215,22 @@ public class GuiMinePad extends WDScreen {
 			graphics.fill(sigX, batY + 4, sigX + 2, batY + 6, 0xFFE2E8F0);
 			graphics.fill(sigX + 3, batY + 3, sigX + 5, batY + 6, 0xFFE2E8F0);
 			graphics.fill(sigX + 6, batY + 1, sigX + 8, batY + 6, 0xFFE2E8F0);
+
+			int leftLimit = clockX + font.width(timeStr) + 4;
+			int rightLimit = sigX - 4;
+			int availIslandW = rightLimit - leftLimit;
+			int islandW = Math.min(36, Math.min(availIslandW, Math.max(16, screenW / 5)));
+			int islandY = screenY + 3;
+			if (islandW >= 14) {
+				int idealCenterX = screenX + (screenW - islandW) / 2;
+				int islandX = Math.max(leftLimit, Math.min(rightLimit - islandW, idealCenterX));
+				graphics.fill(islandX, islandY, islandX + islandW, islandY + 8, 0xFF05070B);
+				graphics.fill(islandX + 1, islandY - 1, islandX + islandW - 1, islandY + 9, 0xFF05070B);
+				int camX = islandX + islandW - 7;
+				graphics.fill(camX, islandY + 2, camX + 4, islandY + 6, 0xFF0F172A);
+				graphics.fill(camX + 1, islandY + 3, camX + 3, islandY + 5, 0xFF1D4ED8);
+				graphics.fill(camX + 1, islandY + 3, camX + 2, islandY + 4, 0xFF60A5FA);
+			}
 
 			// 2. Top mobile browser address bar
 			boolean addrFocus = urlBox != null && urlBox.isFocused();
@@ -558,11 +565,18 @@ public class GuiMinePad extends WDScreen {
 		mouse(-1, false, (int) mouseX, (int) mouseY, 0);
 	}
 
+	private static int toCefMouseButton(int mcButton) {
+		if (mcButton == InputConstants.MOUSE_BUTTON_LEFT) return 0;
+		if (mcButton == InputConstants.MOUSE_BUTTON_RIGHT) return 1;
+		if (mcButton == InputConstants.MOUSE_BUTTON_MIDDLE) return 2;
+		return mcButton;
+	}
+
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
 		double mouseX = event.x();
 		double mouseY = event.y();
-		if (event.button() == 0 && pad != null && pad.mobile) {
+		if (event.button() == InputConstants.MOUSE_BUTTON_LEFT && pad != null && pad.mobile) {
 			if (inRect(mouseX, mouseY, addrX, addrY, addrW, addrH)) {
 				if (urlBox != null) {
 					if (urlBox.isFocused()) {
@@ -618,7 +632,7 @@ public class GuiMinePad extends WDScreen {
 			}
 		}
 
-		mouse(event.button(), true, (int) mouseX, (int) mouseY, 0);
+		mouse(toCefMouseButton(event.button()), true, (int) mouseX, (int) mouseY, 0);
 		return super.mouseClicked(event, doubleClick);
 	}
 
@@ -627,7 +641,7 @@ public class GuiMinePad extends WDScreen {
 		if (pad != null && pad.mobile && urlBox != null && urlBox.isFocused()) {
 			urlBox.mouseReleased(event);
 		}
-		mouse(event.button(), false, (int) event.x(), (int) event.y(), 0);
+		mouse(toCefMouseButton(event.button()), false, (int) event.x(), (int) event.y(), 0);
 		return super.mouseReleased(event);
 	}
 

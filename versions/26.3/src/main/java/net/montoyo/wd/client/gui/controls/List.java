@@ -4,6 +4,7 @@
 
 package net.montoyo.wd.client.gui.controls;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.montoyo.wd.client.gui.WDTheme;
 import net.montoyo.wd.client.gui.loading.JsonOWrapper;
@@ -184,7 +185,7 @@ public class List extends BasicControl {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int mouseButton) {
-        if(!disabled && mouseButton == 0) {
+        if(!disabled && mouseButton == InputConstants.MOUSE_BUTTON_LEFT) {
             if(isInScrollbar(mouseX, mouseY)) {
                 scrolling = true;
                 scrollGrab = mouseY - (y + 1 + scrollPos);

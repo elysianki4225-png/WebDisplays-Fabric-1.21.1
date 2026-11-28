@@ -200,7 +200,7 @@ public class TextField extends Control {
 
     @Override
     public boolean mouseClickMove(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        return field.mouseClicked(new MouseButtonEvent(mouseX, mouseY, new MouseButtonInfo(0, 0)), false);
+        return field.mouseClicked(new MouseButtonEvent(mouseX, mouseY, new MouseButtonInfo(button, 0)), false);
     }
 
     @Override

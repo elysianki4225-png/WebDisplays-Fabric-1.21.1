@@ -195,18 +195,6 @@ jobs:
                   post_comment("### 26.3 Mixin / AccessWidener check FAILED\nMissing:\n" + "\n".join(f"- {m}" for m in missing) + "\n\n```text\n" + report[:50000] + "\n```")
                   sys.exit(1)
               print("All Mixin and AccessWidener targets verified OK!")
-              out_parts = []
-              p1 = subprocess.run(["javap", "-p", "-c", "-cp", mc_jar, "com.mojang.blaze3d.platform.InputConstants"], capture_output=True, text=True, errors="replace")
-              lines1 = p1.stdout.splitlines()
-              idx = next((i for i, l in enumerate(lines1) if "static {};" in l), None)
-              if idx is not None:
-                  out_parts.append("=== InputConstants.<clinit> ===\n" + "\n".join(lines1[idx:idx+180]))
-              p2 = subprocess.run(["javap", "-p", "-c", "-cp", mc_jar, "net.minecraft.client.MouseHandler"], capture_output=True, text=True, errors="replace")
-              lines2 = p2.stdout.splitlines()
-              idx2 = next((i for i, l in enumerate(lines2) if "onButton(" in l), None)
-              if idx2 is not None:
-                  out_parts.append("=== MouseHandler.onButton ===\n" + "\n".join(lines2[idx2:idx2+160]))
-              post_comment("### 26.3 InputConstants & MouseHandler\n```text\n" + "\n\n".join(out_parts)[:58000] + "\n```")
           except Exception:
               post_comment("### 26.3 Mixin check crashed\n```text\n" + traceback.format_exc() + "\n```")
               sys.exit(1)
