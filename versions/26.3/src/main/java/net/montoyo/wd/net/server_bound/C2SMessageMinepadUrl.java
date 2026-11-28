@@ -43,12 +43,16 @@ public class C2SMessageMinepadUrl extends Packet {
 		} else {
 			NbtCompat.putUUID(tag, "PadID", id);
 			tag.putString("PadURL", url);
+			if (stack.getItem() instanceof ItemMinePad2 padItem && padItem.isMobileLayout())
+				tag.putBoolean("PadMobile", true);
 		}
 		stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
 	}
 	
 	@Override
 	public void handle(WDContext ctx) {
+		if (ctx.getSender() == null)
+			return;
 		// check if the player is holding a minePad with the requested id
 		// if the player is, then update that pad
 		for (InteractionHand value : InteractionHand.values()) {
@@ -57,7 +61,23 @@ public class C2SMessageMinepadUrl extends Packet {
 				CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
 				if (NbtCompat.hasUUID(tag, "PadID")) {
 					UUID padId = NbtCompat.getUUID(tag, "PadID");
-					if (padId.equals(id)) {
+					if (id.equals(padId)) {
+						merge(stack);
+						return;
+					}
+				}
+			}
+		}
+
+		// also check the full inventory for a matching PadID
+		var inv = ctx.getSender().getInventory();
+		for (int i = 0; i < inv.getContainerSize(); i++) {
+			ItemStack stack = inv.getItem(i);
+			if (stack.getItem() instanceof ItemMinePad2) {
+				CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
+				if (NbtCompat.hasUUID(tag, "PadID")) {
+					UUID padId = NbtCompat.getUUID(tag, "PadID");
+					if (id.equals(padId)) {
 						merge(stack);
 						return;
 					}

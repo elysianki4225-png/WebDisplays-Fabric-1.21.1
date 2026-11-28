@@ -424,10 +424,26 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 						UUID stackId = NbtCompat.getUUID(tag, "PadID");
 						if (padId.equals(stackId)) {
 							String url = tag.getStringOr("PadURL", CommonConfig.Browser.homepage);
-							pd = new PadData(url, padId, padItem.isMobileLayout());
-							padMap.put(padId, pd);
-							padList.add(pd);
+							pd = getOrCreatePad(padId, url, padItem.isMobileLayout());
 							break;
+						}
+					}
+				}
+			}
+			if (pd == null) {
+				Inventory inv = mc.player.getInventory();
+				for (int i = 0; i < inv.getContainerSize(); i++) {
+					ItemStack stack = inv.getItem(i);
+					if (stack.getItem() instanceof ItemMinePad2 padItem) {
+						CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+						if (data != null) {
+							CompoundTag tag = data.copyTag();
+							UUID stackId = NbtCompat.getUUID(tag, "PadID");
+							if (padId.equals(stackId)) {
+								String url = tag.getStringOr("PadURL", CommonConfig.Browser.homepage);
+								pd = getOrCreatePad(padId, url, padItem.isMobileLayout());
+								break;
+							}
 						}
 					}
 				}
@@ -436,6 +452,33 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 		
 		if (pd != null && pd.view != null)
 			mc.gui.setScreen(new GuiMinePad(pd));
+	}
+
+	public PadData getOrCreatePad(UUID id, String url, boolean mobile) {
+		if (id == null)
+			return null;
+		PadData pd = padMap.get(id);
+		if (pd != null) {
+			pd.isInHotbar = true;
+			return pd;
+		}
+		pd = new PadData(url, id, mobile);
+		padMap.put(id, pd);
+		padList.add(pd);
+		return pd;
+	}
+
+	public void closePad(UUID id) {
+		if (id == null)
+			return;
+		PadData pd = padMap.remove(id);
+		if (pd != null) {
+			padList.remove(pd);
+			if (pd.view != null) {
+				pd.view.close(true);
+				pd.view = null;
+			}
+		}
 	}
 	
 	@Override

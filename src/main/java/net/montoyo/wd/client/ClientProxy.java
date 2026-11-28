@@ -450,10 +450,25 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 						CompoundTag tag = data.copyTag();
 						if (padId.equals(tag.getUUID("PadID"))) {
 							String url = tag.contains("PadURL") ? tag.getString("PadURL") : net.montoyo.wd.config.CommonConfig.Browser.homepage;
-							pd = new PadData(url, padId, padItem.isMobileLayout());
-							padMap.put(padId, pd);
-							padList.add(pd);
+							pd = getOrCreatePad(padId, url, padItem.isMobileLayout());
 							break;
+						}
+					}
+				}
+			}
+			if (pd == null) {
+				var inv = mc.player.getInventory();
+				for (int i = 0; i < inv.getContainerSize(); i++) {
+					ItemStack stack = inv.getItem(i);
+					if (stack.getItem() instanceof ItemMinePad2 padItem) {
+						var data = stack.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
+						if (data != null && data.contains("PadID")) {
+							CompoundTag tag = data.copyTag();
+							if (padId.equals(tag.getUUID("PadID"))) {
+								String url = tag.contains("PadURL") ? tag.getString("PadURL") : net.montoyo.wd.config.CommonConfig.Browser.homepage;
+								pd = getOrCreatePad(padId, url, padItem.isMobileLayout());
+								break;
+							}
 						}
 					}
 				}
@@ -462,6 +477,33 @@ public class ClientProxy extends SharedProxy implements CefDisplayHandler/*, IJS
 		
 		if (pd != null && pd.view != null)
 			mc.setScreen(new GuiMinePad(pd));
+	}
+
+	public PadData getOrCreatePad(UUID id, String url, boolean mobile) {
+		if (id == null)
+			return null;
+		PadData pd = padMap.get(id);
+		if (pd != null) {
+			pd.isInHotbar = true;
+			return pd;
+		}
+		pd = new PadData(url, id, mobile);
+		padMap.put(id, pd);
+		padList.add(pd);
+		return pd;
+	}
+
+	public void closePad(UUID id) {
+		if (id == null)
+			return;
+		PadData pd = padMap.remove(id);
+		if (pd != null) {
+			padList.remove(pd);
+			if (pd.view != null) {
+				pd.view.close(true);
+				pd.view = null;
+			}
+		}
 	}
 	
 	@Override

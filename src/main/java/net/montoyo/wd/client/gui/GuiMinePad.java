@@ -129,11 +129,11 @@ public class GuiMinePad extends WDScreen {
 
 			navY = (int) (vy + vh);
 			navH = NAV_H;
-			int btnW = Math.max(12, (screenW - 8) / 5);
-			int startX = screenX + (screenW - btnW * 5) / 2;
 			for (int i = 0; i < 5; i++) {
-				navBtnX[i] = startX + i * btnW;
-				navBtnW[i] = btnW;
+				int x0 = screenX + (i * screenW) / 5;
+				int x1 = screenX + ((i + 1) * screenW) / 5;
+				navBtnX[i] = x0;
+				navBtnW[i] = Math.max(1, x1 - x0);
 			}
 		} else {
 			vw = ((double) width) - 32.0f;
@@ -432,6 +432,19 @@ public class GuiMinePad extends WDScreen {
 					fallback = stack;
 			}
 		}
+		var inv = minecraft.player.getInventory();
+		for (int i = 0; i < inv.getContainerSize(); i++) {
+			ItemStack stack = inv.getItem(i);
+			if (stack.getItem() instanceof ItemMinePad2 padItem && padItem.isMobileLayout()) {
+				if (pad != null && pad.id != null) {
+					CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
+					if (tag.contains("PadID") && pad.id.equals(tag.getUUID("PadID")))
+						return stack;
+				}
+				if (fallback.isEmpty())
+					fallback = stack;
+			}
+		}
 		return fallback;
 	}
 
@@ -472,9 +485,7 @@ public class GuiMinePad extends WDScreen {
 
 	private void openUrlGuiFromPhone() {
 		ItemStack target = findSmartphoneStack();
-		if (!target.isEmpty()) {
-			minecraft.setScreen(new GuiSetURL2(target, getCurrentUrl()));
-		}
+		minecraft.setScreen(new GuiSetURL2(target, getCurrentUrl(), pad));
 	}
 
 	@Override

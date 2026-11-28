@@ -70,14 +70,18 @@ public class ItemMinePad2 extends Item implements WDItem, IItemEntityTickHandler
 			
 			ok = true;
 		} else {
-			UUID uuid = UUID.randomUUID();
-			String url = getURL(is);
-			WDNetworkRegistry.INSTANCE.sendToServer(new C2SMessageMinepadUrl(uuid, url));
-			tag.putUUID("PadID", uuid);
-			tag.putString("PadURL", url);
-			if (isMobileLayout())
-				tag.putBoolean("PadMobile", true);
-			is.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+			if (world.isClientSide) {
+				UUID uuid = UUID.randomUUID();
+				String url = getURL(is);
+				WDNetworkRegistry.INSTANCE.sendToServer(new C2SMessageMinepadUrl(uuid, url));
+				tag.putUUID("PadID", uuid);
+				tag.putString("PadURL", url);
+				if (isMobileLayout())
+					tag.putBoolean("PadMobile", true);
+				is.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+				if (isMobileLayout())
+					WebDisplays.PROXY.openMinePadGui(uuid);
+			}
 			
 			ok = true;
 		}
