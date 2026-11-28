@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "terrapaver",
+  "version": "${version}",
+  "name": "TerraPaver",
+  "description": "AI-powered highway & Create-ready railway paving mod for Minecraft 1.21.1 Fabric with auto viaducts, river/mountain tunnels, unloaded chunk streaming, live progress bar, and Google Material 3 Light UI.",
+  "authors": [
+    "TerraPaver Contributors"
+  ],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      {
+        "adapter": "kotlin",
+        "value": "com.terrapaver.TerraPaverMod"
+      }
+    ],
+    "client": [
+      {
+        "adapter": "kotlin",
+        "value": "com.terrapaver.client.TerraPaverClient"
+      }
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.14",
+    "fabric-language-kotlin": ">=1.12.3+kotlin.2.0.21",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "fabric-api-base": "*",
+    "fabric-command-api-v2": "*",
+    "fabric-item-group-api-v1": "*",
+    "fabric-key-binding-api-v1": "*",
+    "fabric-lifecycle-events-v1": "*",
+    "fabric-networking-api-v1": "*",
+    "fabric-rendering-v1": "*",
+    "fabric-resource-loader-v0": "*",
+    "fabric-screen-api-v1": "*"
+  }
+}

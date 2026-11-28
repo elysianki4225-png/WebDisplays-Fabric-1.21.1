@@ -1,0 +1,79 @@
+plugins {
+    id 'java'
+    id 'org.jetbrains.kotlin.jvm' version "${kotlin_version}"
+    id 'fabric-loom' version "${loom_version}"
+}
+
+group = maven_group
+version = mod_version
+base {
+    archivesName = archives_base_name
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    withSourcesJar()
+}
+
+kotlin {
+    jvmToolchain(21)
+}
+
+repositories {
+    maven { name = 'fabricmc'; url = 'https://maven.fabricmc.net/' }
+    mavenCentral()
+    maven { name = 'minecraft-libraries'; url = 'https://libraries.minecraft.net/' }
+}
+
+def bundledFabricModules = [
+        'fabric-api-base',
+        'fabric-command-api-v2',
+        'fabric-item-group-api-v1',
+        'fabric-key-binding-api-v1',
+        'fabric-lifecycle-events-v1',
+        'fabric-networking-api-v1',
+        'fabric-rendering-v1',
+        'fabric-resource-loader-v0',
+        'fabric-screen-api-v1'
+]
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    mappings loom.officialMojangMappings()
+
+    modImplementation "net.fabricmc:fabric-loader:${loader_version}"
+    modImplementation "net.fabricmc:fabric-language-kotlin:${fabric_kotlin_version}"
+
+    bundledFabricModules.each { moduleName ->
+        def modDep = fabricApi.module(moduleName, fabric_api_version)
+        modImplementation(modDep)
+        include(modDep)
+    }
+}
+
+compileJava {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') {
+        expand version: project.version
+    }
+}
+
+jar {
+    from('LICENSE') {
+        rename { "${it}_${archives_base_name}" }
+    }
+    manifest {
+        attributes(
+                'Implementation-Title': 'TerraPaver',
+                'Implementation-Vendor': 'TerraPaver Contributors',
+                'Implementation-Version': project.version
+        )
+    }
+}
