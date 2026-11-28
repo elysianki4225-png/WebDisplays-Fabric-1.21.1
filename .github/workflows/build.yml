@@ -242,9 +242,73 @@ jobs:
             !versions/26.3/build/libs/*-sources.jar
             !versions/26.3/build/libs/*-dev.jar
 
+  build-terrapaver-1-21-1:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x terrapaver/gradlew
+
+      - name: Build TerraPaver 1.21.1 mod JAR
+        working-directory: terrapaver
+        run: |
+          set -o pipefail
+          ./gradlew build --no-daemon --info 2>&1 | tee build-terrapaver.log
+
+      - name: Post TerraPaver failure log to commit comment
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import os, subprocess
+          with open("terrapaver/build-terrapaver.log", "r", errors="replace") as f:
+              lines = f.readlines()
+          out = []
+          for i, l in enumerate(lines):
+              if "error:" in l or l.startswith("e:") or "FAILURE:" in l or "What went wrong" in l or l.startswith("> Task"):
+                  start = max(0, i - 2)
+                  end = min(len(lines), i + 8)
+                  out.extend(lines[start:end])
+          if not out:
+              out = lines[-200:]
+          body_text = "".join(out)
+          if len(body_text) > 55000:
+              body_text = body_text[-55000:]
+          body = "### Build failed (TerraPaver 1.21.1)\n```text\n" + body_text + "\n```"
+          repo = os.environ["GITHUB_REPOSITORY"]
+          sha = os.environ["GITHUB_SHA"]
+          subprocess.run(
+              ["gh", "api", f"repos/{repo}/commits/{sha}/comments", "-f", f"body={body}"],
+              check=True,
+          )
+          PY
+
+      - name: Upload TerraPaver 1.21.1 mod JAR artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terrapaver-fabric-1.21.1
+          path: |
+            terrapaver/build/libs/*.jar
+            !terrapaver/build/libs/*-sources.jar
+            !terrapaver/build/libs/*-dev.jar
+
   publish-release:
     if: github.event_name == 'push'
-    needs: [build-1-21-1, build-26-3]
+    needs: [build-1-21-1, build-26-3, build-terrapaver-1-21-1]
     runs-on: ubuntu-latest
 
     steps:
@@ -258,6 +322,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: webdisplays-fabric-26.3-all-in-one
+          path: release-artifacts
+
+      - name: Download TerraPaver 1.21.1 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: terrapaver-fabric-1.21.1
           path: release-artifacts
 
       - name: Publish JARs to GitHub Release

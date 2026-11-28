@@ -1,10 +1,26 @@
-# WebDisplays Fabric (1.21.1 & 26.3)
+# WebDisplays Fabric & TerraPaver
+
+> **[公告 / Status Notice]**  
+> - **WebDisplays Fabric（1.21.1 & 26.3）**：本仓库中的 WebDisplays 移植与优化项目现已**阶段性告一段落（先到这里）**，现有版本保持可用与持续构建。  
+> - **新项目 · TerraPaver（筑路工坊，1.21.1 Fabric）**：已在本仓库 [`terrapaver/`](./terrapaver) 目录正式启动！同样使用 **Kotlin** 编写并依赖 **`fabric-language-kotlin`** 前置（所需 Fabric API 已内置），提供 AI 智能铺路、机械动力适配铁路路基、自动隧道/高架桥支柱、未加载区块流式铺路、实时进度条与谷歌 Material 3 浅色界面。详情见 [`terrapaver/README.md`](./terrapaver/README.md)。
+>
+> **[English Notice]**  
+> - **WebDisplays Fabric (1.21.1 & 26.3)** development in this repository has reached its milestone pause here (existing builds remain intact).  
+> - **New Project — TerraPaver (1.21.1 Fabric)** is now under active development in [`terrapaver/`](./terrapaver), written in **Kotlin** with **`fabric-language-kotlin`** (and bundled Fabric API modules). See [`terrapaver/README.md`](./terrapaver/README.md).
 
 [简体中文](#简体中文) | [English](#english) | [Русский](#русский)
 
 ---
 
 ## 简体中文
+
+### 新项目：TerraPaver · 筑路工坊（1.21.1 Fabric）
+- **目录**：[`terrapaver/`](./terrapaver)（独立 Gradle 构建，依赖 `fabric-language-kotlin` >= `1.12.3+kotlin.2.0.21`）
+- **最新直链下载**：
+  https://github.com/elysianki4225-png/WebDisplays-Fabric-1.21.1/releases/latest/download/terrapaver-fabric-1.0.0-1.21.1.jar
+- **核心能力**：单道具「筑路测绘仪」三步自动施工、顶部实时进度条、机械动力（Create）铁路缓坡道砟路基（铁轨自放）、现代公路、AI 智能绕障寻路、自动跨河/浮空高架桥与桥墩支柱、自动山体/穿河隧道（隧道直径自动适配路宽或手动定制）、跨越未加载区块流式施工、谷歌 **Material Design 3 浅色界面**（中英双语）。
+
+### 原项目：WebDisplays Fabric（阶段性完结）
 
 Minecraft **1.21.1 & 26.3** Fabric 平台的 [WebDisplays](https://www.mcmod.cn/class/8643.html) 移植与性能优化版本：内置 **MCEF**、**Cloth Config** 及所需 **Fabric API 子模块**（单个独立 `.jar` 文件即可使用），支持 **x86_64 与 ARM64（`aarch64`）** 架构，并支持游戏内 **简体中文 / English / Русский** 多语言界面。
 
