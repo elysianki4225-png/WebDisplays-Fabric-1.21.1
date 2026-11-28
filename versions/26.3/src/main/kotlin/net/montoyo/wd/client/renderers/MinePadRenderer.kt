@@ -7,7 +7,9 @@ package net.montoyo.wd.client.renderers
 import com.cinemamod.mcef.MCEF
 import com.cinemamod.mcef.MCEFBrowser
 import com.mojang.blaze3d.vertex.PoseStack
+import com.mojang.math.Axis
 import com.mojang.serialization.MapCodec
+import org.joml.Matrix4f
 import net.fabricmc.api.EnvType
 import net.fabricmc.api.Environment
 import net.minecraft.client.renderer.SubmitNodeCollector
@@ -47,8 +49,32 @@ class MinePadRenderer : SpecialModelRenderer<UUID> {
     ) {
         poseStack.pushPose()
         poseStack.translate(0.063f, 0.28f, 0.501f)
-        model.submit(submitNodeCollector, poseStack, lightCoords)
+        model.submit(submitNodeCollector, poseStack, lightCoords, padId != null)
+        renderScreenQuad(padId, poseStack, submitNodeCollector)
+        poseStack.popPose()
+    }
 
+    fun renderDropped(
+        padId: UUID?,
+        poseStack: PoseStack,
+        submitNodeCollector: SubmitNodeCollector,
+        lightCoords: Int,
+        spinYaw: Float
+    ) {
+        poseStack.pushPose()
+        poseStack.translate(0.0f, 0.025f, 0.0f)
+        poseStack.mulPose(Matrix4f().rotate(Axis.YP.rotation(-spinYaw)))
+        poseStack.mulPose(Matrix4f().rotate(Axis.XP.rotationDegrees(-90.0f)))
+        poseStack.scale(0.55f, 0.55f, 0.55f)
+        poseStack.translate(-0.5f, -0.25f, 0.0f)
+
+        model.submit(submitNodeCollector, poseStack, lightCoords, padId != null)
+        renderScreenQuad(padId, poseStack, submitNodeCollector)
+
+        poseStack.popPose()
+    }
+
+    private fun renderScreenQuad(padId: UUID?, poseStack: PoseStack, submitNodeCollector: SubmitNodeCollector) {
         if (padId != null && MCEF.isInitialized()) {
             val clientProxy = WebDisplays.PROXY
             if (clientProxy is ClientProxy) {
@@ -72,8 +98,6 @@ class MinePadRenderer : SpecialModelRenderer<UUID> {
                 }
             }
         }
-
-        poseStack.popPose()
     }
 
     override fun getExtents(output: Consumer<Vector3fc>) {

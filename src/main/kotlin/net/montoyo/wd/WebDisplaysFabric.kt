@@ -2,6 +2,7 @@ package net.montoyo.wd
 
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
@@ -14,6 +15,7 @@ import net.minecraft.server.level.ServerPlayer
 import net.minecraft.sounds.SoundSource
 import net.minecraft.world.entity.player.Player
 import net.minecraft.world.level.Level
+import net.montoyo.wd.core.DroppedPadLightManager
 import net.montoyo.wd.core.WDServerData
 import net.montoyo.wd.miniserv.server.Server
 import net.montoyo.wd.net.WDDistributor
@@ -36,13 +38,17 @@ object WebDisplaysFabric : ModInitializer {
         WebDisplays.initialize()
 
         ServerLifecycleEvents.SERVER_STARTED.register { server -> currentServer = server }
-        ServerLifecycleEvents.SERVER_STOPPING.register {
+        ServerLifecycleEvents.SERVER_STOPPING.register { server ->
+            DroppedPadLightManager.clearAll(server)
             currentServer = null
             try {
                 Server.getInstance().stopServer()
             } catch (e: IOException) {
                 Log.warningEx("Could not stop the miniserv.", e)
             }
+        }
+        ServerTickEvents.END_SERVER_TICK.register { server ->
+            DroppedPadLightManager.tickServer(server)
         }
 
         ServerWorldEvents.LOAD.register(::onWorldLoad)

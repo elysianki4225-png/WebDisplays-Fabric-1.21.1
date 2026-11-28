@@ -21,6 +21,7 @@ import net.minecraft.world.level.Level
 import net.montoyo.wd.WebDisplays
 import net.montoyo.wd.config.CommonConfig
 import net.montoyo.wd.core.CraftComponent
+import net.montoyo.wd.core.DroppedPadLightManager
 import net.montoyo.wd.net.WDNetworkRegistry
 import net.montoyo.wd.net.server_bound.C2SMessageMinepadUrl
 import java.util.UUID
@@ -57,42 +58,57 @@ open class ItemMinePad2(properties: Properties) :
             ok = true
         }
 
+        if (isMobileLayout()) {
+            ply.swing(hand)
+            if (world.isClientSide) {
+                WebDisplays.PROXY.onSmartphoneUsed(ply, hand)
+            }
+        }
+
         return InteractionResultHolder(if (ok) InteractionResult.SUCCESS else InteractionResult.PASS, isStack)
     }
 
     override fun onEntityItemUpdate(stack: ItemStack, entity: ItemEntity): Boolean {
-        if (entity.onGround() && !entity.level().isClientSide) {
-            val data = entity.item.get(DataComponents.CUSTOM_DATA)
-            val tag = data?.copyTag()
+        if (!entity.level().isClientSide) {
+            if (entity.onGround()) {
+                val data = entity.item.get(DataComponents.CUSTOM_DATA)
+                val tag = data?.copyTag()
 
-            if (tag != null && tag.contains("ThrowHeight")) {
-                val height = tag.getDouble("ThrowHeight")
-                var thrower: UUID? = null
+                if (tag != null && tag.contains("ThrowHeight")) {
+                    val height = tag.getDouble("ThrowHeight")
+                    var thrower: UUID? = null
 
-                if (tag.contains("ThrowerMSB") && tag.contains("ThrowerLSB")) {
-                    thrower = UUID(tag.getLong("ThrowerMSB"), tag.getLong("ThrowerLSB"))
-                }
+                    if (tag.contains("ThrowerMSB") && tag.contains("ThrowerLSB")) {
+                        thrower = UUID(tag.getLong("ThrowerMSB"), tag.getLong("ThrowerLSB"))
+                    }
 
-                if (tag.contains("PadID") || tag.contains("PadURL")) {
-                    tag.remove("ThrowerMSB")
-                    tag.remove("ThrowerLSB")
-                    tag.remove("ThrowHeight")
-                    entity.item.set(DataComponents.CUSTOM_DATA, CustomData.of(tag))
-                } else {
-                    entity.item.remove(DataComponents.CUSTOM_DATA)
-                }
+                    if (tag.contains("PadID") || tag.contains("PadURL")) {
+                        tag.remove("ThrowerMSB")
+                        tag.remove("ThrowerLSB")
+                        tag.remove("ThrowHeight")
+                        entity.item.set(DataComponents.CUSTOM_DATA, CustomData.of(tag))
+                    } else {
+                        entity.item.remove(DataComponents.CUSTOM_DATA)
+                    }
 
-                if (thrower != null && height - entity.blockY >= 20.0) {
-                    entity.level().playSound(null, entity.blockX.toDouble(), entity.blockY.toDouble(), entity.blockZ.toDouble(), SoundEvents.GLASS_BREAK, SoundSource.BLOCKS, 4.0f, 1.0f)
-                    entity.level().addFreshEntity(ItemEntity(entity.level(), entity.blockX.toDouble(), entity.blockY.toDouble(), entity.blockZ.toDouble(), CraftComponent.EXTCARD.makeItemStack()))
-                    entity.setRemoved(Entity.RemovalReason.CHANGED_DIMENSION)
+                    if (thrower != null && height - entity.blockY >= 20.0) {
+                        entity.level().playSound(null, entity.blockX.toDouble(), entity.blockY.toDouble(), entity.blockZ.toDouble(), SoundEvents.GLASS_BREAK, SoundSource.BLOCKS, 4.0f, 1.0f)
+                        entity.level().addFreshEntity(ItemEntity(entity.level(), entity.blockX.toDouble(), entity.blockY.toDouble(), entity.blockZ.toDouble(), CraftComponent.EXTCARD.makeItemStack()))
+                        entity.setRemoved(Entity.RemovalReason.CHANGED_DIMENSION)
+                        DroppedPadLightManager.updateDroppedPad(entity, false)
 
-                    val ply = entity.level().getPlayerByUUID(thrower)
-                    if (ply is ServerPlayer) {
-                        WebDisplays.INSTANCE.criterionPadBreak?.trigger(ply.advancements)
+                        val ply = entity.level().getPlayerByUUID(thrower)
+                        if (ply is ServerPlayer) {
+                            WebDisplays.INSTANCE.criterionPadBreak?.trigger(ply.advancements)
+                        }
+                        return false
                     }
                 }
             }
+
+            val curData = entity.item.get(DataComponents.CUSTOM_DATA)
+            val isLit = curData != null && curData.copyTag().contains("PadID")
+            DroppedPadLightManager.updateDroppedPad(entity, isLit)
         }
 
         return false

@@ -11,15 +11,17 @@ import net.minecraft.util.LightCoordsUtil
 
 @Environment(EnvType.CLIENT)
 class ModelSmartphone {
-    fun submit(collector: SubmitNodeCollector, stack: PoseStack, lightCoords: Int) {
+    @JvmOverloads
+    fun submit(collector: SubmitNodeCollector, stack: PoseStack, lightCoords: Int, screenLit: Boolean = true) {
         val zFront = 0.0f
         val zBack = -0.032f
+        val frontLight = if (screenLit) LightCoordsUtil.FULL_BRIGHT else lightCoords
 
         collector.order(0).submitCustomGeometry(stack, RenderTypes.armorCutoutNoCull(SMARTPHONE_TEX)) { pose, vc ->
-            vc.addVertex(pose, 0f, 0f, zFront).setColor(255, 255, 255, 255).setUv(0f, 28f / 32f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightCoordsUtil.FULL_BRIGHT).setNormal(pose, 0f, 0f, 1f)
-            vc.addVertex(pose, BODY_W, 0f, zFront).setColor(255, 255, 255, 255).setUv(16f / 32f, 28f / 32f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightCoordsUtil.FULL_BRIGHT).setNormal(pose, 0f, 0f, 1f)
-            vc.addVertex(pose, BODY_W, BODY_H, zFront).setColor(255, 255, 255, 255).setUv(16f / 32f, 0f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightCoordsUtil.FULL_BRIGHT).setNormal(pose, 0f, 0f, 1f)
-            vc.addVertex(pose, 0f, BODY_H, zFront).setColor(255, 255, 255, 255).setUv(0f, 0f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(LightCoordsUtil.FULL_BRIGHT).setNormal(pose, 0f, 0f, 1f)
+            vc.addVertex(pose, 0f, 0f, zFront).setColor(255, 255, 255, 255).setUv(0f, 28f / 32f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(frontLight).setNormal(pose, 0f, 0f, 1f)
+            vc.addVertex(pose, BODY_W, 0f, zFront).setColor(255, 255, 255, 255).setUv(16f / 32f, 28f / 32f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(frontLight).setNormal(pose, 0f, 0f, 1f)
+            vc.addVertex(pose, BODY_W, BODY_H, zFront).setColor(255, 255, 255, 255).setUv(16f / 32f, 0f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(frontLight).setNormal(pose, 0f, 0f, 1f)
+            vc.addVertex(pose, 0f, BODY_H, zFront).setColor(255, 255, 255, 255).setUv(0f, 0f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(frontLight).setNormal(pose, 0f, 0f, 1f)
 
             vc.addVertex(pose, BODY_W, 0f, zBack).setColor(255, 255, 255, 255).setUv(16f / 32f, 28f / 32f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(lightCoords).setNormal(pose, 0f, 0f, -1f)
             vc.addVertex(pose, 0f, 0f, zBack).setColor(255, 255, 255, 255).setUv(1f, 28f / 32f).setOverlay(OverlayTexture.NO_OVERLAY).setLight(lightCoords).setNormal(pose, 0f, 0f, -1f)

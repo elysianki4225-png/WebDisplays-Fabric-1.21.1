@@ -181,6 +181,54 @@ class MinePadRenderer : IItemRenderer {
         }
     }
 
+    fun renderDropped(
+        isItem: ItemStack,
+        multiBufferSource: MultiBufferSource,
+        stack: PoseStack,
+        packedLight: Int
+    ) {
+        val data = isItem.get(DataComponents.CUSTOM_DATA)
+        val isLit = data != null && data.contains("PadID")
+        val x1 = 0.0f
+        val y1 = 0.0f
+        val x2 = 27.65f / 32.0f + 0.01f
+        val y2 = 14.0f / 32.0f + 0.002f
+
+        stack.pushPose()
+        stack.translate(-x2 * 0.5f, -y2 * 0.5f, 0.0f)
+        model.render(multiBufferSource, stack, packedLight, isLit)
+
+        if (multiBufferSource is MultiBufferSource.BufferSource) {
+            multiBufferSource.endBatch()
+        }
+
+        if (isLit && MCEF.isInitialized() && data != null) {
+            val padId = extractPadId(data)
+            val pd = if (padId == null) null else clientProxy.getPadByID(padId)
+            val view = pd?.view
+
+            if (view is MCEFBrowser) {
+                val texId = view.renderer.textureID
+                if (texId != 0) {
+                    RenderSystem.enableDepthTest()
+                    RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f)
+                    RenderSystem.setShader(GameRenderer::getPositionTexColorShader)
+                    RenderSystem.setShaderTexture(0, texId)
+                    val buffer = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR)
+                    val mat = stack.last().pose()
+                    buffer.addVertex(mat, x1, y1, 0.002f).setUv(0.0f, 1.0f).setColor(255, 255, 255, 255)
+                    buffer.addVertex(mat, x2, y1, 0.002f).setUv(1.0f, 1.0f).setColor(255, 255, 255, 255)
+                    buffer.addVertex(mat, x2, y2, 0.002f).setUv(1.0f, 0.0f).setColor(255, 255, 255, 255)
+                    buffer.addVertex(mat, x1, y2, 0.002f).setUv(0.0f, 0.0f).setColor(255, 255, 255, 255)
+                    BufferUploader.drawWithShader(buffer.buildOrThrow())
+                }
+            }
+        }
+
+        stack.popPose()
+        RenderSystem.enableCull()
+    }
+
     companion object {
         @JvmStatic
         fun renderAtSide(handSideSign: Float): Boolean {

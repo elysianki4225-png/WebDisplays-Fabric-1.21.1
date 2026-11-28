@@ -168,6 +168,9 @@ jobs:
                   "net.minecraft.client.Minecraft": ["renderFrame(", "close()"],
                   "net.minecraft.client.resources.ClientPackSource": ["static {};"],
                   "net.minecraft.world.phys.AABB": ["minX", "minY", "minZ", "maxX", "maxY", "maxZ"],
+                  "net.minecraft.client.renderer.entity.ItemEntityRenderer": ["extractRenderState(", "submit("],
+                  "net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer": ["submitArmWithItem(", "renderPlayerArm("],
+                  "net.minecraft.client.model.HumanoidModel": ["setupAnim("],
               }
 
               missing = []
@@ -184,7 +187,7 @@ jobs:
                   lines = out.splitlines()
                   interesting = []
                   for i, line in enumerate(lines):
-                      if any(k in line for k in ("drop", "Drop", "tick(", "onButton", "mouseGrabbed", "setScreen", "renderFrame", "runTick", "close(", "exitWorld", "static {", "minX")):
+                      if any(k in line for k in ("drop", "Drop", "tick(", "onButton", "mouseGrabbed", "setScreen", "renderFrame", "runTick", "close(", "exitWorld", "static {", "minX", "extractRenderState", "submit(", "submitArmWithItem", "renderPlayerArm", "setupAnim")):
                           interesting.append(line.strip())
                           if i + 1 < len(lines) and "descriptor:" in lines[i + 1]:
                               interesting.append("  " + lines[i + 1].strip())

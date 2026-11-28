@@ -8,6 +8,8 @@
     "PlayerDropMixin"
   ],
   "client": [
+    "HumanoidModelMixin",
+    "ItemEntityRendererMixin",
     "ItemInHandRendererMixin",
     "ModelBlockRendererMixin",
     "MouseHandlerMixin",

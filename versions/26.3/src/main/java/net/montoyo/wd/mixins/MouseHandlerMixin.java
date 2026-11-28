@@ -21,7 +21,11 @@ public class MouseHandlerMixin {
 
 	@Inject(at = @At("HEAD"), method = "onButton", cancellable = true)
 	public void preButton(long window, MouseButtonInfo buttonInfo, int action, CallbackInfo ci) {
+		if (window != 0L && window != minecraft.getWindow().handle())
+			return;
 		if (action != InputConstants.PRESS && action != InputConstants.RELEASE)
+			return;
+		if (action == InputConstants.PRESS && !((MouseHandler) (Object) this).isMouseGrabbed())
 			return;
 
 		if (minecraft.gui.screen() == null && minecraft.player != null && minecraft.level != null) {
