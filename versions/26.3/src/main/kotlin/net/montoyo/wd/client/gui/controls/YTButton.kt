@@ -51,7 +51,7 @@ class YTButton : Button(), TextField.TextChangeListener {
         super.load(json)
         val tfName = json.getString("urlField", null)
         if (tfName != null) {
-            val ctrl = parent!!.getControlByName(tfName)
+            val ctrl = parent!!.getControlByName<Control>(tfName)
             if (ctrl is TextField) {
                 urlField = ctrl
                 ctrl.addTextChangeListener(this)

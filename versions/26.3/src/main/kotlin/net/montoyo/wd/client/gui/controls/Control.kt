@@ -23,8 +23,7 @@ abstract class Control {
     @JvmField
     protected val font: Font = mc.font
 
-    @JvmField
-    var name: String = ""
+    private var controlName: String = ""
 
     @JvmField
     var userdata: Any? = null
@@ -70,9 +69,6 @@ abstract class Control {
 
     open fun destroy() {}
 
-    @JvmName("getParentScreen")
-    open fun getParent(): WDScreen? = sharedParent
-
     abstract fun getX(): Int
     abstract fun getY(): Int
     abstract fun getWidth(): Int
@@ -93,16 +89,14 @@ abstract class Control {
         graphics.fill(x2 - sz, y, x2, y2, color)
     }
 
-    @JvmName("setControlName")
     open fun setName(name: String) {
-        this.name = name
+        this.controlName = name
     }
 
-    @JvmName("getControlName")
-    open fun getName(): String = name
+    open fun getName(): String = controlName
 
     open fun load(json: JsonOWrapper) {
-        name = json.getString("name", "") ?: ""
+        controlName = json.getString("name", "") ?: ""
     }
 
     companion object {
@@ -133,7 +127,7 @@ abstract class Control {
         }
 
         @JvmStatic
-        fun findBounds(controlList: List<Control>): Bounds {
+        fun findBounds(controlList: kotlin.collections.List<Control>): Bounds {
             var minX = Integer.MAX_VALUE
             var minY = Integer.MAX_VALUE
             var maxX = Integer.MIN_VALUE

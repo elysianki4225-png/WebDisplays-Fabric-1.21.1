@@ -18,7 +18,7 @@ class WDEditBox(
     height: Int,
     message: Component
 ) : EditBox(font, x, y, width, height, message) {
-    fun setHeight(height: Int) {
+    override fun setHeight(height: Int) {
         this.height = height
     }
 }

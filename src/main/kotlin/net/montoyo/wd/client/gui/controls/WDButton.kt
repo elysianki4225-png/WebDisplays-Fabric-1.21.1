@@ -21,7 +21,7 @@ class WDButton(
 ) : Button(x, y, width, height, message, onPress, DEFAULT_NARRATION) {
     private var foregroundColor = 0xFFFFFF
 
-    fun setHeight(height: Int) {
+    override fun setHeight(height: Int) {
         this.height = height
     }
 

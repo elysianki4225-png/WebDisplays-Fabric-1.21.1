@@ -172,7 +172,7 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
     }
 
     override fun displayGui(data: GuiData) {
-        val gui = data.createGui(mc.gui.screen(), mc.level)
+        val gui = data.createGui(mc.gui.screen(), mc.level!!)
         if (gui != null) mc.gui.setScreen(gui)
     }
 
@@ -574,7 +574,7 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
         return false
     }
 
-    override fun getWorld(context: WDContext?): BlockGetter? {
+    override fun getWorld(context: WDContext): BlockGetter? {
         val senderLevel = super.getWorld(context)
         return senderLevel ?: Minecraft.getInstance().level
     }
@@ -588,11 +588,13 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
             if (state.block is BlockScreen) {
                 val vec = Vector3i(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z)
                 val side = BlockSide.fromInt(hit.direction.ordinal)
-                Multiblock.findOrigin(level, vec, side, null)
+                if (side != null) {
+                    Multiblock.findOrigin(level, vec, side, null)
 
-                val be = level.getBlockEntity(vec.toBlock())
-                if (be is TileEntityScreen && be.getScreen(side) != null) {
-                    shouldHide = true
+                    val be = level.getBlockEntity(vec.toBlock())
+                    if (be is TileEntityScreen && be.getScreen(side) != null) {
+                        shouldHide = true
+                    }
                 }
             }
         }

@@ -87,8 +87,8 @@ class ControlGroup : Container {
         for (ctrl in childs) {
             ctrl.setPos(ctrl.getX() - bounds.minX, ctrl.getY() - bounds.minY)
         }
-        width = bounds.width + paddingX * 2
-        height = bounds.height + paddingY + 8
+        width = bounds.getWidth() + paddingX * 2
+        height = bounds.getHeight() + paddingY + 8
     }
 
     override fun unfocus() {

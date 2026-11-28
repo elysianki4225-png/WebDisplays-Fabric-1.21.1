@@ -32,7 +32,7 @@ class WDButton(
     private var variant = Variant.DEFAULT
     private var hoverProgress = 0.0f
 
-    fun setHeight(height: Int) {
+    override fun setHeight(height: Int) {
         this.height = height
     }
 

@@ -152,7 +152,7 @@ abstract class Container : BasicControl() {
 
     fun getByName(name: String): Control? {
         for (ctrl in childs) {
-            if (name == ctrl.name) return ctrl
+            if (name == ctrl.getName()) return ctrl
             if (ctrl is Container) {
                 val ret = ctrl.getByName(name)
                 if (ret != null) return ret
