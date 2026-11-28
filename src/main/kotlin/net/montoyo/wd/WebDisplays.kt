@@ -49,6 +49,8 @@ class WebDisplays {
     @JvmField var enableBackfaceCulling: Boolean = true
     @JvmField var pauseCulledScreens: Boolean = true
     @JvmField var maxBrowsersPerFrame: Int = 1
+    @JvmField var enableAdaptiveLod: Boolean = true
+    @JvmField var lodCooldownMs: Int = 750
 
     private fun onRegisterSounds() {
         soundTyping = registerSound("keyboard_type")

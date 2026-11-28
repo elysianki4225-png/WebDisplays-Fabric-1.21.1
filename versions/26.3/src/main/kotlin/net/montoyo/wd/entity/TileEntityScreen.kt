@@ -606,7 +606,7 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
         getScreen(side)?.laserUser = null
     }
 
-    fun click(side: BlockSide, vec: Vector2i) {
+    fun click(side: BlockSide, vec: Vector2i, actor: Player? = null) {
         val scr = getScreen(side)
         if (scr == null) {
             Log.error("Attempt click non-existing screen of side %s", side.toString())
@@ -617,9 +617,14 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
         if (lvl.isClientSide()) {
             Log.warning("TileEntityScreen.click() from client side is useless...")
         } else if (getLaserUser(scr) == null) {
+            val target = if (actor != null) {
+                WDDistributor.NEAR.with { point(actor, lvl, blockPos) }
+            } else {
+                WDDistributor.NEAR.with { point(lvl, blockPos) }
+            }
             WDNetworkRegistry.INSTANCE.send(
-                WDDistributor.NEAR.with { point(lvl, blockPos) },
-                S2CMessageScreenUpdate.click(this, side, ClickControl.ControlType.CLICK, vec)
+                target,
+                S2CMessageScreenUpdate.click(this, side, ClickControl.ControlType.CLICK, vec, 0)
             )
         }
     }
@@ -630,13 +635,13 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
             val vec = if (action == ClickControl.ControlType.UP) null else Vector2i(x, y)
             WDNetworkRegistry.INSTANCE.send(
                 WDDistributor.NEAR.with { point(lvl, blockPos) },
-                S2CMessageScreenUpdate.click(this, side, action, vec)
+                S2CMessageScreenUpdate.click(this, side, action, vec, 0)
             )
         }
     }
 
     fun handleMouseEvent(side: BlockSide, event: ClickControl.ControlType, vec: Vector2i?, buttonArg: Int) {
-        if (buttonArg > 1) return // buttons above 1 crash the game
+        if (buttonArg !in -1..2) return
 
         val scr = getScreen(side)
         if (scr == null) {
@@ -646,8 +651,7 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
 
         val browser = scr.browser
         if (browser is MCEFBrowser) {
-            var button = buttonArg
-            if (button == 1) button = 0 else if (button == 0) button = 1
+            val button = if (buttonArg in 0..2) buttonArg else 0
 
             var mx = scr.lastMousePos.x
             var my = scr.lastMousePos.y
@@ -662,19 +666,19 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
 
             when (event) {
                 ClickControl.ControlType.CLICK -> {
-                    browser.sendMouseMove(mx, my) //Move to target
-                    browser.sendMousePress(mx, my, button) //Press
-                    browser.sendMouseRelease(mx, my, button) //Release
+                    browser.sendMouseMove(mx, my)
+                    browser.sendMousePress(mx, my, button)
+                    browser.sendMouseRelease(mx, my, button)
                 }
                 ClickControl.ControlType.DOWN -> {
-                    browser.sendMouseMove(mx, my) //Move to target
-                    browser.sendMousePress(mx, my, button) //Press
+                    browser.sendMouseMove(mx, my)
+                    browser.sendMousePress(mx, my, button)
                 }
                 ClickControl.ControlType.MOVE -> {
-                    browser.sendMouseMove(mx, my) //Move
+                    browser.sendMouseMove(mx, my)
                 }
                 ClickControl.ControlType.UP -> {
-                    browser.sendMouseRelease(scr.lastMousePos.x, scr.lastMousePos.y, button) //Release
+                    browser.sendMouseRelease(mx, my, button)
                 }
             }
 

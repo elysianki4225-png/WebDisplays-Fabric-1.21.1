@@ -81,6 +81,22 @@ object CommonConfig {
         @Default(valueI = 16)
         @JvmField
         var maxScreenSizeY: Int = 16
+
+        @Name("default_pixels_per_block")
+        @Comment("Default pixel density per block when creating a screen with adaptive resolution")
+        @Translation("config.webdisplays.default_ppb")
+        @IntRange(minV = 64, maxV = 512)
+        @Default(valueI = 240)
+        @JvmField
+        var defaultPixelsPerBlock: Int = 240
+
+        @Name("min_adaptive_edge")
+        @Comment("Minimum target pixel count on the longest edge for small screens (e.g. 2x2)")
+        @Translation("config.webdisplays.min_adaptive_edge")
+        @IntRange(minV = 128, maxV = 1080)
+        @Default(valueI = 512)
+        @JvmField
+        var minAdaptiveEdge: Int = 512
     }
 
     @Comment("Options for the miniserver")

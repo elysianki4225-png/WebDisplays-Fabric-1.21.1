@@ -191,6 +191,7 @@
   "config.webdisplays.pad_res": "掌上电脑分辨率",
   "config.webdisplays.side_pad": "掌上电脑侧持",
   "config.webdisplays.switch_buttons": "交换左右键",
+  "config.webdisplays.swap_laser_buttons": "交换激光笔左右键",
   "config.webdisplays.auto_vol": "启用自动音量",
   "config.webdisplays.yt_vol": "YouTube 音量",
   "config.webdisplays.d0": "无声距离",

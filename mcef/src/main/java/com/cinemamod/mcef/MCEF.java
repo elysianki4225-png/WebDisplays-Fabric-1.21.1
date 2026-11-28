@@ -46,6 +46,8 @@ public final class MCEF {
 
     private static final ArrayList<MCEFInitListener> awaitingInit = new ArrayList<>();
     private static final AtomicInteger activeBrowsers = new AtomicInteger(0);
+    private static final AtomicInteger visibleBrowsers = new AtomicInteger(0);
+    private static volatile long lastActivityNs = 0L;
 
     public static void scheduleForInit(MCEFInitListener task) {
         if (isInitialized()) {
@@ -57,14 +59,36 @@ public final class MCEF {
 
     static void incrementActiveBrowsers() {
         activeBrowsers.incrementAndGet();
+        markBrowserActivity();
     }
 
     static void decrementActiveBrowsers() {
         activeBrowsers.updateAndGet(v -> Math.max(0, v - 1));
     }
 
+    static void incrementVisibleBrowsers() {
+        visibleBrowsers.incrementAndGet();
+    }
+
+    static void decrementVisibleBrowsers() {
+        visibleBrowsers.updateAndGet(v -> Math.max(0, v - 1));
+    }
+
+    public static void markBrowserActivity() {
+        lastActivityNs = System.nanoTime();
+    }
+
     public static boolean hasActiveBrowsers() {
         return activeBrowsers.get() > 0;
+    }
+
+    public static boolean hasVisibleBrowsers() {
+        return visibleBrowsers.get() > 0;
+    }
+
+    public static boolean hasRecentActivity(long windowNs) {
+        long last = lastActivityNs;
+        return last != 0L && (System.nanoTime() - last) <= windowNs;
     }
 
     public static Logger getLogger() {

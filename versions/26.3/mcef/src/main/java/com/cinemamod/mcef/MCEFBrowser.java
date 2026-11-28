@@ -62,6 +62,7 @@ public class MCEFBrowser extends CefBrowserOsr {
         renderer = new MCEFRenderer(transparent);
         cursorChangeListener = (cefCursorID) -> setCursor(CefCursorType.fromId(cefCursorID));
         MCEF.incrementActiveBrowsers();
+        MCEF.incrementVisibleBrowsers();
 
         if (RenderSystem.isOnRenderThread()) {
             renderer.initialize();
@@ -106,6 +107,11 @@ public class MCEFBrowser extends CefBrowserOsr {
     public void setVisible(boolean visible) {
         if (this.visible != visible && !closed) {
             this.visible = visible;
+            if (visible) {
+                MCEF.incrementVisibleBrowsers();
+            } else {
+                MCEF.decrementVisibleBrowsers();
+            }
             setWindowVisibility(visible);
         }
     }
@@ -265,6 +271,7 @@ public class MCEFBrowser extends CefBrowserOsr {
     }
 
     public void sendMouseMove(int mouseX, int mouseY) {
+        MCEF.markBrowserActivity();
         CefMouseEvent e = new CefMouseEvent(CefMouseEvent.MOUSE_MOVED, mouseX, mouseY, 0, 0, dragContext.getVirtualModifiers(btnMask));
         sendMouseEvent(e);
 
@@ -274,6 +281,7 @@ public class MCEFBrowser extends CefBrowserOsr {
     }
 
     public void sendMousePress(int mouseX, int mouseY, int button) {
+        MCEF.markBrowserActivity();
         if (button == 1) button = 2;
         else if (button == 2) button = 1;
 
@@ -286,6 +294,7 @@ public class MCEFBrowser extends CefBrowserOsr {
     }
 
     public void sendMouseRelease(int mouseX, int mouseY, int button) {
+        MCEF.markBrowserActivity();
         if (button == 1) button = 2;
         else if (button == 2) button = 1;
 
@@ -302,6 +311,7 @@ public class MCEFBrowser extends CefBrowserOsr {
     }
 
     public void sendMouseWheel(int mouseX, int mouseY, double amount, int modifiers) {
+        MCEF.markBrowserActivity();
         if (browserControls) {
             if ((modifiers & InputConstants.MOD_CONTROL) != 0) {
                 if (amount > 0) {
@@ -362,6 +372,10 @@ public class MCEFBrowser extends CefBrowserOsr {
     public void close(boolean force) {
         if (!closed) {
             closed = true;
+            if (visible) {
+                visible = false;
+                MCEF.decrementVisibleBrowsers();
+            }
             MCEF.decrementActiveBrowsers();
             if (RenderSystem.isOnRenderThread()) {
                 renderer.cleanup();
@@ -383,6 +397,10 @@ public class MCEFBrowser extends CefBrowserOsr {
     protected void finalize() throws Throwable {
         if (!closed) {
             closed = true;
+            if (visible) {
+                visible = false;
+                MCEF.decrementVisibleBrowsers();
+            }
             MCEF.decrementActiveBrowsers();
             Minecraft.getInstance().execute(renderer::cleanup);
         }

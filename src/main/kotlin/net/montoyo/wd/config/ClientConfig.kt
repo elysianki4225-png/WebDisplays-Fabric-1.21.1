@@ -83,6 +83,21 @@ object ClientConfig {
         @Default(valueI = 1)
         @JvmField
         var maxBrowsersPerFrame: Int = 1
+
+        @Name("adaptive_lod")
+        @Comment("Dynamically adjust browser render resolution based on viewing distance to save CPU/GPU")
+        @Translation("config.webdisplays.adaptive_lod")
+        @Default(valueBoolean = true)
+        @JvmField
+        var adaptiveLod: Boolean = true
+
+        @Name("lod_cooldown_ms")
+        @Comment("Minimum time in milliseconds between adaptive LOD browser resizes")
+        @Translation("config.webdisplays.lod_cooldown_ms")
+        @IntRange(minV = 200, maxV = 5000)
+        @Default(valueI = 750)
+        @JvmField
+        var lodCooldownMs: Int = 750
     }
 
     @Comment("AutoVolume makes audio fade off based on distance")
@@ -149,6 +164,8 @@ object ClientConfig {
         WebDisplays.INSTANCE.enableBackfaceCulling = Performance.backfaceCulling
         WebDisplays.INSTANCE.pauseCulledScreens = Performance.pauseCulledScreens
         WebDisplays.INSTANCE.maxBrowsersPerFrame = Performance.maxBrowsersPerFrame
+        WebDisplays.INSTANCE.enableAdaptiveLod = Performance.adaptiveLod
+        WebDisplays.INSTANCE.lodCooldownMs = Performance.lodCooldownMs
 
         WebDisplays.INSTANCE.ytVolume = AutoVolumeControl.ytVolume.toFloat()
         WebDisplays.INSTANCE.avDist100 = AutoVolumeControl.dist100.toFloat()

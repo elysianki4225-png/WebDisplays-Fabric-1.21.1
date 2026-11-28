@@ -64,6 +64,7 @@ public class MCEFBrowser extends CefBrowserOsr {
         renderer = new MCEFRenderer(transparent);
         cursorChangeListener = (cefCursorID) -> setCursor(CefCursorType.fromId(cefCursorID));
         MCEF.incrementActiveBrowsers();
+        MCEF.incrementVisibleBrowsers();
 
         if (RenderSystem.isOnRenderThread()) {
             renderer.initialize();
@@ -108,6 +109,11 @@ public class MCEFBrowser extends CefBrowserOsr {
     public void setVisible(boolean visible) {
         if (this.visible != visible && !closed) {
             this.visible = visible;
+            if (visible) {
+                MCEF.incrementVisibleBrowsers();
+            } else {
+                MCEF.decrementVisibleBrowsers();
+            }
             setWindowVisibility(visible);
         }
     }
@@ -157,45 +163,34 @@ public class MCEFBrowser extends CefBrowserOsr {
             } else {
                 RenderSystem.bindTexture(renderer.getTextureID());
                 RenderSystem.pixelStore(GL_UNPACK_ALIGNMENT, 4);
-                RenderSystem.pixelStore(GL_UNPACK_ROW_LENGTH, width);
                 for (Rectangle dirtyRect : dirtyRects) {
                     if (dirtyRect.width <= 0 || dirtyRect.height <= 0) {
                         continue;
                     }
-                    GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, dirtyRect.x);
-                    GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, dirtyRect.y);
-                    renderer.onPaint(buffer, dirtyRect.x, dirtyRect.y, dirtyRect.width, dirtyRect.height);
+                    renderer.onPaintRectViaPbo(buffer, width, dirtyRect.x, dirtyRect.y, dirtyRect.x, dirtyRect.y, dirtyRect.width, dirtyRect.height);
                 }
                 if ((popupDrawn || showPopup) && popupSize != null) {
                     if (!showPopup) {
-                        RenderSystem.pixelStore(GL_UNPACK_ROW_LENGTH, width);
-                        GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, popupSize.x);
-                        GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, popupSize.y);
-                        renderer.onPaint(buffer, popupSize.x, popupSize.y, popupSize.width, popupSize.height);
+                        renderer.onPaintRectViaPbo(buffer, width, popupSize.x, popupSize.y, popupSize.x, popupSize.y, popupSize.width, popupSize.height);
                         popupGraphics = null;
                         popupSize = null;
                     } else if (popupDrawn && popupGraphics != null) {
-                        RenderSystem.pixelStore(GL_UNPACK_ROW_LENGTH, popupSize.width);
-                        GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, 0);
-                        GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, 0);
-                        renderer.onPaint(popupGraphics, popupSize.x, popupSize.y, popupSize.width, popupSize.height);
+                        renderer.onPaintRectViaPbo(popupGraphics, popupSize.width, 0, 0, popupSize.x, popupSize.y, popupSize.width, popupSize.height);
                     }
                 }
                 MCEFRenderer.resetUnpackState();
+                renderer.finishPaintBatch(false);
             }
         } else if (popupSize != null && popupSize.width > 0 && popupSize.height > 0) {
             RenderSystem.bindTexture(renderer.getTextureID());
             RenderSystem.pixelStore(GL_UNPACK_ALIGNMENT, 4);
-            RenderSystem.pixelStore(GL_UNPACK_ROW_LENGTH, popupSize.width);
             int start = buffer.capacity();
             int end = 0;
             for (Rectangle dirtyRect : dirtyRects) {
                 if (dirtyRect.width <= 0 || dirtyRect.height <= 0) {
                     continue;
                 }
-                GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, dirtyRect.x);
-                GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, dirtyRect.y);
-                renderer.onPaint(buffer, popupSize.x + dirtyRect.x, popupSize.y + dirtyRect.y, dirtyRect.width, dirtyRect.height);
+                renderer.onPaintRectViaPbo(buffer, popupSize.width, dirtyRect.x, dirtyRect.y, popupSize.x + dirtyRect.x, popupSize.y + dirtyRect.y, dirtyRect.width, dirtyRect.height);
 
                 int rectStart = (dirtyRect.x + (dirtyRect.y * popupSize.width)) << 2;
                 if (rectStart < start) start = rectStart;
@@ -204,6 +199,7 @@ public class MCEFBrowser extends CefBrowserOsr {
                 if (rectEnd > end) end = rectEnd;
             }
             MCEFRenderer.resetUnpackState();
+            renderer.finishPaintBatch(false);
 
             if (start < 0) start = 0;
             if (end > buffer.capacity()) end = buffer.capacity();
@@ -294,6 +290,7 @@ public class MCEFBrowser extends CefBrowserOsr {
     }
 
     public void sendMouseMove(int mouseX, int mouseY) {
+        MCEF.markBrowserActivity();
         CefMouseEvent e = new CefMouseEvent(CefMouseEvent.MOUSE_MOVED, mouseX, mouseY, 0, 0, dragContext.getVirtualModifiers(btnMask));
         sendMouseEvent(e);
 
@@ -303,6 +300,7 @@ public class MCEFBrowser extends CefBrowserOsr {
     }
 
     public void sendMousePress(int mouseX, int mouseY, int button) {
+        MCEF.markBrowserActivity();
         if (button == 1) button = 2;
         else if (button == 2) button = 1;
 
@@ -315,6 +313,7 @@ public class MCEFBrowser extends CefBrowserOsr {
     }
 
     public void sendMouseRelease(int mouseX, int mouseY, int button) {
+        MCEF.markBrowserActivity();
         if (button == 1) button = 2;
         else if (button == 2) button = 1;
 
@@ -331,6 +330,7 @@ public class MCEFBrowser extends CefBrowserOsr {
     }
 
     public void sendMouseWheel(int mouseX, int mouseY, double amount, int modifiers) {
+        MCEF.markBrowserActivity();
         if (browserControls) {
             if ((modifiers & GLFW_MOD_CONTROL) != 0) {
                 if (amount > 0) {
@@ -391,6 +391,10 @@ public class MCEFBrowser extends CefBrowserOsr {
     public void close(boolean force) {
         if (!closed) {
             closed = true;
+            if (visible) {
+                visible = false;
+                MCEF.decrementVisibleBrowsers();
+            }
             MCEF.decrementActiveBrowsers();
             if (RenderSystem.isOnRenderThread()) {
                 renderer.cleanup();
@@ -412,6 +416,10 @@ public class MCEFBrowser extends CefBrowserOsr {
     protected void finalize() throws Throwable {
         if (!closed) {
             closed = true;
+            if (visible) {
+                visible = false;
+                MCEF.decrementVisibleBrowsers();
+            }
             MCEF.decrementActiveBrowsers();
             Minecraft.getInstance().submit(renderer::cleanup);
         }

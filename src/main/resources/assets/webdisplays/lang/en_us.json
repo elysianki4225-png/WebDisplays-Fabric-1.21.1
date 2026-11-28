@@ -195,5 +195,9 @@
   "config.webdisplays.d100": "Full volume distance",
   "config.webdisplays.backface_culling": "Enable screen backface culling",
   "config.webdisplays.pause_culled_screens": "Pause culled screens",
-  "config.webdisplays.max_browsers_per_frame": "Max browsers created per frame"
+  "config.webdisplays.max_browsers_per_frame": "Max browsers created per frame",
+  "config.webdisplays.default_ppb": "Default pixels per block",
+  "config.webdisplays.min_adaptive_edge": "Minimum adaptive edge (px)",
+  "config.webdisplays.adaptive_lod": "Adaptive distance LOD resolution",
+  "config.webdisplays.lod_cooldown_ms": "LOD resize cooldown (ms)"
 }

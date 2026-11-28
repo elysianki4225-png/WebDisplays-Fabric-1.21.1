@@ -31,6 +31,7 @@ import java.util.function.Consumer
 @Environment(EnvType.CLIENT)
 class MinePadRenderer : SpecialModelRenderer<UUID> {
     private val model = ModelMinePad()
+    private val scratchYaw = Matrix4f()
 
     override fun extractArgument(stack: ItemStack): UUID? {
         val data = stack.get(DataComponents.CUSTOM_DATA) ?: return null
@@ -63,8 +64,9 @@ class MinePadRenderer : SpecialModelRenderer<UUID> {
     ) {
         poseStack.pushPose()
         poseStack.translate(0.0f, 0.025f, 0.0f)
-        poseStack.mulPose(Matrix4f().rotate(Axis.YP.rotation(-spinYaw)))
-        poseStack.mulPose(Matrix4f().rotate(Axis.XP.rotationDegrees(-90.0f)))
+        scratchYaw.rotationY(-spinYaw)
+        poseStack.mulPose(scratchYaw)
+        poseStack.mulPose(DROPPED_ROT_X)
         poseStack.scale(0.55f, 0.55f, 0.55f)
         poseStack.translate(-0.5f, -0.25f, 0.0f)
 
@@ -123,6 +125,8 @@ class MinePadRenderer : SpecialModelRenderer<UUID> {
     companion object {
         @JvmField
         val RENDERER_ID: Identifier = Identifier.fromNamespaceAndPath("webdisplays", "minepad")
+
+        private val DROPPED_ROT_X = Matrix4f().rotate(Axis.XP.rotationDegrees(-90.0f))
 
         @JvmStatic
         fun register() {

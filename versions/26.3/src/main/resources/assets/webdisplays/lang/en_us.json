@@ -191,6 +191,7 @@
   "config.webdisplays.pad_res": "MinePad resolution",
   "config.webdisplays.side_pad": "Hold MinePad at side",
   "config.webdisplays.switch_buttons": "Swap left/right mouse buttons",
+  "config.webdisplays.swap_laser_buttons": "Swap laser left/right buttons",
   "config.webdisplays.auto_vol": "Enable auto volume",
   "config.webdisplays.yt_vol": "YouTube volume",
   "config.webdisplays.d0": "Mute distance",

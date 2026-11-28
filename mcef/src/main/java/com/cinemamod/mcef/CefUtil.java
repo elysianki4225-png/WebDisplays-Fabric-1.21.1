@@ -114,6 +114,12 @@ final class CefUtil {
         // Reduce idle background CPU & memory usage in OSR mode
         switches.add("--disable-background-timer-throttling");
         switches.add("--disable-renderer-backgrounding");
+        switches.add("--disable-background-networking");
+        switches.add("--disable-component-update");
+        switches.add("--disable-domain-reliability");
+        switches.add("--disable-breakpad");
+        switches.add("--renderer-process-limit=4");
+        switches.add("--disable-features=Translate,BackForwardCache,OptimizationHints,MediaRouter,DialMediaRouteProvider");
 
         // On Linux ARM64 or restricted sandboxes, --no-sandbox prevents zygote crashes
         if (settings.isNoSandbox() || (platform.isLinux() && (platform.isArm64() || !canUseLinuxUserNamespaces()))) {
@@ -126,8 +132,12 @@ final class CefUtil {
         if (settings.isDisableGpu() || platform == MCEFPlatform.LINUX_ARM64 || platform == MCEFPlatform.WINDOWS_ARM64) {
             switches.add("--disable-gpu");
             switches.add("--disable-gpu-compositing");
-        } else if (platform.isArm64()) {
-            switches.add("--disable-gpu-sandbox");
+        } else {
+            switches.add("--enable-gpu-rasterization");
+            switches.add("--enable-zero-copy");
+            if (platform.isArm64()) {
+                switches.add("--disable-gpu-sandbox");
+            }
         }
 
         String[] cefSwitches = switches.toArray(new String[0]);

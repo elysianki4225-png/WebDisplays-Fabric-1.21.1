@@ -32,6 +32,7 @@ import net.montoyo.wd.config.CommonConfig
 import net.montoyo.wd.controls.builtin.ClickControl
 import net.montoyo.wd.core.DefaultUpgrade
 import net.montoyo.wd.core.IUpgrade
+import net.montoyo.wd.core.ScreenResolution
 import net.montoyo.wd.core.ScreenRights
 import net.montoyo.wd.data.ScreenConfigData
 import net.montoyo.wd.init.BlockInit
@@ -62,6 +63,8 @@ import java.util.UUID
 import java.util.function.Consumer
 import kotlin.math.floor
 import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
     BlockEntity(TileInit.SCREEN_BLOCK_ENTITY.get(), arg2, arg3) {
@@ -110,6 +113,18 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
 
         @JvmField
         var lastVisibleMs: Long = System.currentTimeMillis()
+
+        @JvmField
+        var renderWidth: Int = 0
+
+        @JvmField
+        var renderHeight: Int = 0
+
+        @JvmField
+        var currentLodScale: Float = 1.0f
+
+        @JvmField
+        var lastLodResizeMs: Long = 0
 
         @JvmField
         var laserUser: Player? = null
@@ -218,16 +233,47 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
             }
         }
 
+        fun computeTargetBrowserSize(lodScale: Float): Vector2i {
+            val canonW = max(1, if (rotation.isVertical) resolution.y else resolution.x)
+            val canonH = max(1, if (rotation.isVertical) resolution.x else resolution.y)
+            val scale = max(0.1f, min(1.0f, lodScale))
+
+            if (scale >= 0.999f) {
+                return Vector2i(canonW, canonH)
+            }
+
+            val w = ScreenResolution.alignEven((canonW * scale).roundToInt(), min(64, canonW), canonW)
+            val h = ScreenResolution.alignEven((canonH * scale).roundToInt(), min(64, canonH), canonH)
+            return Vector2i(w, h)
+        }
+
+        fun syncBrowserSize(lodScale: Float) {
+            currentLodScale = lodScale
+            val target = computeTargetBrowserSize(lodScale)
+            val b = browser
+            if (b is MCEFBrowser && (renderWidth != target.x || renderHeight != target.y)) {
+                renderWidth = target.x
+                renderHeight = target.y
+                b.resize(target.x, target.y)
+            }
+        }
+
         fun createBrowser(doAnim: Boolean) {
+            createBrowser(doAnim, 1.0f)
+        }
+
+        fun createBrowser(doAnim: Boolean, initialLodScale: Float) {
             if (WebDisplays.PROXY is ClientProxy && MCEF.isInitialized()) {
                 ClientProxy.ensureSchemeHandlers()
-                val targetW = if (rotation.isVertical) resolution.y else resolution.x
-                val targetH = if (rotation.isVertical) resolution.x else resolution.y
+                currentLodScale = max(0.1f, min(1.0f, initialLodScale))
+                val target = computeTargetBrowserSize(currentLodScale)
+                renderWidth = target.x
+                renderHeight = target.y
                 val created = MCEF.createBrowser(
                     WebDisplays.applyBlacklist(url),
                     false,
-                    max(1, targetW),
-                    max(1, targetH)
+                    target.x,
+                    target.y
                 )
                 browser = created
 
@@ -236,6 +282,7 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
                 }
 
                 lastVisibleMs = System.currentTimeMillis()
+                lastLodResizeMs = lastVisibleMs
                 doTurnOnAnim = doAnim
                 turnOnTime = lastVisibleMs
             }
@@ -253,13 +300,13 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
                 ret.videoType = VideoType.getTypeFromURL(ret.url)
 
                 if (ret.resolution.x <= 0 || ret.resolution.y <= 0) {
-                    var psx = ret.size.x.toFloat() * 16.0f - 4.0f
-                    var psy = ret.size.y.toFloat() * 16.0f - 4.0f
-                    psx *= 8.0f //TODO: Use ratio in config file
-                    psy *= 8.0f
-
-                    ret.resolution.x = psx.toInt()
-                    ret.resolution.y = psy.toInt()
+                    ret.resolution = ScreenResolution.computeAdaptiveResolution(
+                        ret.size,
+                        CommonConfig.Screen.defaultPixelsPerBlock,
+                        CommonConfig.Screen.minAdaptiveEdge,
+                        CommonConfig.Screen.maxResolutionX,
+                        CommonConfig.Screen.maxResolutionY
+                    )
                 }
 
                 if (tag.contains("OwnerName")) {
@@ -403,12 +450,13 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
         }
 
         if (resolution == null || resolution.x < 1 || resolution.y < 1) {
-            var psx = size.x.toFloat() * 16.0f - 4.0f
-            var psy = size.y.toFloat() * 16.0f - 4.0f
-            psx *= 8.0f //TODO: Use ratio in config file
-            psy *= 8.0f
-
-            ret.resolution = Vector2i(psx.toInt(), psy.toInt())
+            ret.resolution = ScreenResolution.computeAdaptiveResolution(
+                size,
+                CommonConfig.Screen.defaultPixelsPerBlock,
+                CommonConfig.Screen.minAdaptiveEdge,
+                CommonConfig.Screen.maxResolutionX,
+                CommonConfig.Screen.maxResolutionY
+            )
         } else {
             ret.resolution = resolution
         }
@@ -559,16 +607,16 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
 
         val lvl = level ?: return
         if (lvl.isClientSide) {
-            WebDisplays.PROXY.screenUpdateResolutionInGui(Vector3i(blockPos), side, res)
+            WebDisplays.PROXY.screenUpdateResolutionInGui(Vector3i(blockPos), side, scr.resolution)
 
-            scr.browser?.let {
-                it.close(true)
-                scr.browser = null //Will be re-created by renderer
+            if (scr.browser != null) {
+                scr.syncBrowserSize(scr.currentLodScale)
+                scr.lastLodResizeMs = System.currentTimeMillis()
             }
         } else {
             WDNetworkRegistry.INSTANCE.send(
                 WDDistributor.NEAR.with { point(lvl, blockPos) },
-                S2CMessageScreenUpdate.setResolution(this, side, res)
+                S2CMessageScreenUpdate.setResolution(this, side, scr.resolution)
             )
             setChanged()
         }
@@ -621,21 +669,29 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
             var button = buttonArg
             if (button == 1) button = 0 else if (button == 0) button = 1
 
+            var mx = scr.lastMousePos.x
+            var my = scr.lastMousePos.y
+            if (vec != null) {
+                val canonW = max(1, if (scr.rotation.isVertical) scr.resolution.y else scr.resolution.x)
+                val canonH = max(1, if (scr.rotation.isVertical) scr.resolution.x else scr.resolution.y)
+                val targetW = if (scr.renderWidth > 0) scr.renderWidth else canonW
+                val targetH = if (scr.renderHeight > 0) scr.renderHeight else canonH
+                mx = max(0, min(targetW - 1, (vec.x * targetW.toFloat() / canonW.toFloat()).roundToInt()))
+                my = max(0, min(targetH - 1, (vec.y * targetH.toFloat() / canonH.toFloat()).roundToInt()))
+            }
+
             when (event) {
                 ClickControl.ControlType.CLICK -> {
-                    val v = vec!!
-                    browser.sendMouseMove(v.x, v.y) //Move to target
-                    browser.sendMousePress(v.x, v.y, button) //Press
-                    browser.sendMouseRelease(v.x, v.y, button) //Release
+                    browser.sendMouseMove(mx, my) //Move to target
+                    browser.sendMousePress(mx, my, button) //Press
+                    browser.sendMouseRelease(mx, my, button) //Release
                 }
                 ClickControl.ControlType.DOWN -> {
-                    val v = vec!!
-                    browser.sendMouseMove(v.x, v.y) //Move to target
-                    browser.sendMousePress(v.x, v.y, button) //Press
+                    browser.sendMouseMove(mx, my) //Move to target
+                    browser.sendMousePress(mx, my, button) //Press
                 }
                 ClickControl.ControlType.MOVE -> {
-                    val v = vec!!
-                    browser.sendMouseMove(v.x, v.y) //Move
+                    browser.sendMouseMove(mx, my) //Move
                 }
                 ClickControl.ControlType.UP -> {
                     browser.sendMouseRelease(scr.lastMousePos.x, scr.lastMousePos.y, button) //Release
@@ -645,8 +701,8 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
             browser.setFocus(true)
 
             if (vec != null) {
-                scr.lastMousePos.x = vec.x
-                scr.lastMousePos.y = vec.y
+                scr.lastMousePos.x = mx
+                scr.lastMousePos.y = my
             }
         }
     }

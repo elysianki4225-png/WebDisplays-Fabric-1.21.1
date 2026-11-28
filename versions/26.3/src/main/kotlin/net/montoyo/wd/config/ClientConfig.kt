@@ -52,12 +52,12 @@ object ClientConfig {
     @JvmField
     var sidePad: Boolean = true
 
-    @Name("switch_buttons")
-    @Comment("If the left and right buttons should be swapped when using a laser")
-    @Translation("config.webdisplays.switch_buttons")
-    @Default(valueBoolean = true)
+    @Name("swap_laser_buttons")
+    @Comment("If left and right mouse buttons should be swapped when using a laser pointer")
+    @Translation("config.webdisplays.swap_laser_buttons")
+    @Default(valueBoolean = false)
     @JvmField
-    var switchButtons: Boolean = true
+    var swapLaserButtons: Boolean = false
 
     @Comment("Rendering & Chromium performance optimizations")
     @CFGSegment("performance")

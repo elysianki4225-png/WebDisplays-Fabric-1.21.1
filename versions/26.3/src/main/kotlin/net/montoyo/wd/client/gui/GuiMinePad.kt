@@ -72,6 +72,7 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
     private var urlBox: WDEditBox? = null
     private var lastSyncedUrl = ""
 
+    private var desktopDragging = false
     private var touchDown = false
     private var touchSwiped = false
     private var touchStartX = 0.0
@@ -642,6 +643,10 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
             }
         }
 
+        if (p != null && !p.mobile && inViewport(mouseX, mouseY)) {
+            desktopDragging = true
+        }
+
         mouse(toCefMouseButton(event.button()), true, mouseX.toInt(), mouseY.toInt(), 0.0)
         if (inViewport(mouseX, mouseY)) return true
         return super.mouseClicked(event, doubleClick)
@@ -688,7 +693,7 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
             return true
         }
 
-        if (p != null && !p.mobile && inViewport(mouseX, mouseY)) {
+        if (p != null && !p.mobile && (desktopDragging || inViewport(mouseX, mouseY))) {
             (p.view as? MCEFBrowser)?.sendMouseMove(toClampedBrowserX(mouseX, p.resX), toClampedBrowserY(mouseY, p.resY))
             return true
         }
@@ -725,8 +730,10 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
             return true
         }
 
+        val wasDragging = desktopDragging
+        desktopDragging = false
         mouse(toCefMouseButton(event.button()), false, mouseX.toInt(), mouseY.toInt(), 0.0)
-        if (inViewport(mouseX, mouseY)) return true
+        if (wasDragging || inViewport(mouseX, mouseY)) return true
         return super.mouseReleased(event)
     }
 

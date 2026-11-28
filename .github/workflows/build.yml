@@ -163,7 +163,7 @@ jobs:
                   "net.minecraft.world.entity.LivingEntity": ["createItemStackToDrop(net.minecraft.world.item.ItemStack, boolean, boolean)", "(Lnet/minecraft/world/item/ItemStack;ZZ)Lnet/minecraft/world/entity/item/ItemEntity;"],
                   "net.minecraft.world.entity.player.Player": [],
                   "net.minecraft.world.entity.item.ItemEntity": ["tick()"],
-                  "net.minecraft.client.MouseHandler": ["onButton(", "mouseGrabbed"],
+                  "net.minecraft.client.MouseHandler": ["onButton(", "onScroll(", "mouseGrabbed"],
                   "net.minecraft.client.gui.Gui": ["setScreen("],
                   "net.minecraft.client.Minecraft": ["renderFrame(", "close()"],
                   "net.minecraft.client.resources.ClientPackSource": ["static {};"],
