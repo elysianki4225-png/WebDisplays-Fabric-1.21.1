@@ -1,6 +1,8 @@
 package com.terrapaver.network
 
+import com.terrapaver.config.BiomeConfig
 import com.terrapaver.config.PavingConfig
+import com.terrapaver.engine.ServerBiomeManager
 import com.terrapaver.engine.ServerPavingManager
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
@@ -19,6 +21,9 @@ object TerraPaverNet {
     const val ACTION_POP_WAYPOINT = 3
     const val ACTION_CLEAR_SELECTION = 4
     const val ACTION_START_SELECTED = 5
+
+    const val BIOME_ACTION_UNDO = 0
+    const val BIOME_ACTION_CLEAR = 1
 
     data class C2SStartPave(
         val waypoints: List<BlockPos>,
@@ -96,6 +101,82 @@ object TerraPaverNet {
             val CODEC: StreamCodec<RegistryFriendlyByteBuf, C2SAddWaypoint> = StreamCodec.of(
                 { buf, p -> buf.writeBlockPos(p.pos) },
                 { buf -> C2SAddWaypoint(buf.readBlockPos()) }
+            )
+        }
+    }
+
+    data class C2SApplyBiomeBrush(
+        val pos: BlockPos,
+        val configJson: String
+    ) : CustomPacketPayload {
+        override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = TYPE
+
+        companion object {
+            val TYPE = CustomPacketPayload.Type<C2SApplyBiomeBrush>(
+                ResourceLocation.fromNamespaceAndPath("terrapaver", "apply_biome_brush")
+            )
+            val CODEC: StreamCodec<RegistryFriendlyByteBuf, C2SApplyBiomeBrush> = StreamCodec.of(
+                { buf, p ->
+                    buf.writeBlockPos(p.pos)
+                    buf.writeUtf(p.configJson, 32767)
+                },
+                { buf -> C2SApplyBiomeBrush(buf.readBlockPos(), buf.readUtf(32767)) }
+            )
+        }
+    }
+
+    data class C2SSelectBiomePoint(
+        val pos: BlockPos,
+        val configJson: String
+    ) : CustomPacketPayload {
+        override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = TYPE
+
+        companion object {
+            val TYPE = CustomPacketPayload.Type<C2SSelectBiomePoint>(
+                ResourceLocation.fromNamespaceAndPath("terrapaver", "select_biome_point")
+            )
+            val CODEC: StreamCodec<RegistryFriendlyByteBuf, C2SSelectBiomePoint> = StreamCodec.of(
+                { buf, p ->
+                    buf.writeBlockPos(p.pos)
+                    buf.writeUtf(p.configJson, 32767)
+                },
+                { buf -> C2SSelectBiomePoint(buf.readBlockPos(), buf.readUtf(32767)) }
+            )
+        }
+    }
+
+    data class C2SBiomeControl(val action: Int) : CustomPacketPayload {
+        override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = TYPE
+
+        companion object {
+            val TYPE = CustomPacketPayload.Type<C2SBiomeControl>(
+                ResourceLocation.fromNamespaceAndPath("terrapaver", "biome_control")
+            )
+            val CODEC: StreamCodec<RegistryFriendlyByteBuf, C2SBiomeControl> = StreamCodec.of(
+                { buf, p -> buf.writeVarInt(p.action) },
+                { buf -> C2SBiomeControl(buf.readVarInt()) }
+            )
+        }
+    }
+
+    data class S2CBiomeState(
+        val hasCorner1: Boolean,
+        val corner1: BlockPos,
+        val canUndo: Boolean
+    ) : CustomPacketPayload {
+        override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = TYPE
+
+        companion object {
+            val TYPE = CustomPacketPayload.Type<S2CBiomeState>(
+                ResourceLocation.fromNamespaceAndPath("terrapaver", "biome_state")
+            )
+            val CODEC: StreamCodec<RegistryFriendlyByteBuf, S2CBiomeState> = StreamCodec.of(
+                { buf, p ->
+                    buf.writeBoolean(p.hasCorner1)
+                    buf.writeBlockPos(p.corner1)
+                    buf.writeBoolean(p.canUndo)
+                },
+                { buf -> S2CBiomeState(buf.readBoolean(), buf.readBlockPos(), buf.readBoolean()) }
             )
         }
     }
@@ -253,10 +334,14 @@ object TerraPaverNet {
             PayloadTypeRegistry.playC2S().register(C2SPreviewRoute.TYPE, C2SPreviewRoute.CODEC)
             PayloadTypeRegistry.playC2S().register(C2SControlPave.TYPE, C2SControlPave.CODEC)
             PayloadTypeRegistry.playC2S().register(C2SAddWaypoint.TYPE, C2SAddWaypoint.CODEC)
+            PayloadTypeRegistry.playC2S().register(C2SApplyBiomeBrush.TYPE, C2SApplyBiomeBrush.CODEC)
+            PayloadTypeRegistry.playC2S().register(C2SSelectBiomePoint.TYPE, C2SSelectBiomePoint.CODEC)
+            PayloadTypeRegistry.playC2S().register(C2SBiomeControl.TYPE, C2SBiomeControl.CODEC)
 
             PayloadTypeRegistry.playS2C().register(S2CPavingStatus.TYPE, S2CPavingStatus.CODEC)
             PayloadTypeRegistry.playS2C().register(S2CSyncSelection.TYPE, S2CSyncSelection.CODEC)
             PayloadTypeRegistry.playS2C().register(S2CRoutePreview.TYPE, S2CRoutePreview.CODEC)
+            PayloadTypeRegistry.playS2C().register(S2CBiomeState.TYPE, S2CBiomeState.CODEC)
         }
 
         ServerPlayNetworking.registerGlobalReceiver(C2SStartPave.TYPE) { payload, ctx ->
@@ -294,12 +379,39 @@ object TerraPaverNet {
                 ServerPavingManager.addWaypoint(player, payload.pos)
             }
         }
+
+        ServerPlayNetworking.registerGlobalReceiver(C2SApplyBiomeBrush.TYPE) { payload, ctx ->
+            val player = ctx.player()
+            ctx.server().execute {
+                val cfg = BiomeConfig.fromJson(payload.configJson)
+                ServerBiomeManager.applyBrush(player, payload.pos, cfg)
+            }
+        }
+
+        ServerPlayNetworking.registerGlobalReceiver(C2SSelectBiomePoint.TYPE) { payload, ctx ->
+            val player = ctx.player()
+            ctx.server().execute {
+                val cfg = BiomeConfig.fromJson(payload.configJson)
+                ServerBiomeManager.selectBoxPoint(player, payload.pos, cfg)
+            }
+        }
+
+        ServerPlayNetworking.registerGlobalReceiver(C2SBiomeControl.TYPE) { payload, ctx ->
+            val player = ctx.player()
+            ctx.server().execute {
+                when (payload.action) {
+                    BIOME_ACTION_UNDO -> ServerBiomeManager.undoLast(player)
+                    BIOME_ACTION_CLEAR -> ServerBiomeManager.clearSelection(player)
+                }
+            }
+        }
     }
 
     fun registerClientReceivers(
         onStatus: (S2CPavingStatus) -> Unit,
         onSelection: (S2CSyncSelection) -> Unit,
-        onPreview: (S2CRoutePreview) -> Unit
+        onPreview: (S2CRoutePreview) -> Unit,
+        onBiomeState: (S2CBiomeState) -> Unit
     ) {
         ClientPlayNetworking.registerGlobalReceiver(S2CPavingStatus.TYPE) { payload, ctx ->
             ctx.client().execute { onStatus(payload) }
@@ -309,6 +421,9 @@ object TerraPaverNet {
         }
         ClientPlayNetworking.registerGlobalReceiver(S2CRoutePreview.TYPE) { payload, ctx ->
             ctx.client().execute { onPreview(payload) }
+        }
+        ClientPlayNetworking.registerGlobalReceiver(S2CBiomeState.TYPE) { payload, ctx ->
+            ctx.client().execute { onBiomeState(payload) }
         }
     }
 

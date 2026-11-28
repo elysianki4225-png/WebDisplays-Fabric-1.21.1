@@ -2,7 +2,9 @@ package com.terrapaver
 
 import com.mojang.brigadier.arguments.IntegerArgumentType
 import com.terrapaver.client.TerraPaverClientHooks
+import com.terrapaver.engine.ServerBiomeManager
 import com.terrapaver.engine.ServerPavingManager
+import com.terrapaver.item.ItemBiomeEditor
 import com.terrapaver.item.ItemPavingSurveyor
 import com.terrapaver.network.TerraPaverNet
 import net.fabricmc.api.ModInitializer
@@ -27,6 +29,9 @@ object TerraPaverMod : ModInitializer {
     lateinit var PAVING_SURVEYOR: Item
         private set
 
+    lateinit var BIOME_EDITOR: Item
+        private set
+
     lateinit var CREATIVE_TAB: CreativeModeTab
         private set
 
@@ -37,6 +42,12 @@ object TerraPaverMod : ModInitializer {
             ItemPavingSurveyor(Item.Properties())
         )
 
+        BIOME_EDITOR = Registry.register(
+            BuiltInRegistries.ITEM,
+            ResourceLocation.fromNamespaceAndPath(MOD_ID, "biome_editor"),
+            ItemBiomeEditor(Item.Properties())
+        )
+
         CREATIVE_TAB = Registry.register(
             BuiltInRegistries.CREATIVE_MODE_TAB,
             ResourceLocation.fromNamespaceAndPath(MOD_ID, "main"),
@@ -45,6 +56,7 @@ object TerraPaverMod : ModInitializer {
                 .icon { ItemStack(PAVING_SURVEYOR) }
                 .displayItems { _, output ->
                     output.accept(PAVING_SURVEYOR)
+                    output.accept(BIOME_EDITOR)
                 }
                 .build()
         )
@@ -57,10 +69,12 @@ object TerraPaverMod : ModInitializer {
 
         ServerLifecycleEvents.SERVER_STOPPING.register { server ->
             ServerPavingManager.shutdown(server)
+            ServerBiomeManager.shutdown(server)
         }
 
         ServerPlayConnectionEvents.DISCONNECT.register { handler, _ ->
             ServerPavingManager.onDisconnect(handler.player)
+            ServerBiomeManager.onDisconnect(handler.player)
         }
 
         CommandRegistrationCallback.EVENT.register { dispatcher, _, _ ->

@@ -779,7 +779,7 @@ class IncrementalRoutePlanner(
             types[i] = when {
                 s.hasLiquid && cfg.riverStrategy == RiverStrategy.SHIELD_TUNNEL && ry <= s.waterTopY + 1 ->
                     StationType.TUNNEL
-                clearance >= 2 ->
+                (s.hasLiquid && cfg.riverStrategy == RiverStrategy.AUTO_VIADUCT) || clearance >= 5 ->
                     StationType.VIADUCT
                 allowMountainTunnel && overburden >= cfg.tunnelCutThreshold ->
                     StationType.TUNNEL
@@ -808,6 +808,22 @@ class IncrementalRoutePlanner(
             }
         }
 
+        // Reject tiny dry viaducts (< 6m) so shallow forest hollows use smooth grass embankments instead of sawtooth girders
+        var vStart = -1
+        for (i in 0..n) {
+            val isDryViaduct = i < n && types[i] == StationType.VIADUCT && !samples[i].hasLiquid
+            if (isDryViaduct) {
+                if (vStart < 0) vStart = i
+            } else if (vStart >= 0) {
+                if (i - vStart < 6) {
+                    for (j in vStart until i) {
+                        types[j] = StationType.SURFACE
+                    }
+                }
+                vStart = -1
+            }
+        }
+
         // Smooth out 1-2 block station type flickers
         for (i in 1 until n - 1) {
             if (types[i - 1] == types[i + 1] && types[i] != types[i - 1]) {
@@ -818,6 +834,22 @@ class IncrementalRoutePlanner(
             if (types[i - 1] == types[i + 2] && types[i] == types[i + 1] && types[i] != types[i - 1]) {
                 types[i] = types[i - 1]
                 types[i + 1] = types[i - 1]
+            }
+        }
+
+        // Quantize elevation to half-blocks and suppress any 1-2 block vertical speed-bump flickers
+        val halfSteps = IntArray(n) { (grade[it] * 2.0).roundToInt() }
+        for (pass in 0 until 2) {
+            for (i in 1 until n - 1) {
+                if (halfSteps[i - 1] == halfSteps[i + 1] && halfSteps[i] != halfSteps[i - 1]) {
+                    halfSteps[i] = halfSteps[i - 1]
+                }
+            }
+            for (i in 1 until n - 2) {
+                if (halfSteps[i - 1] == halfSteps[i + 2] && halfSteps[i] == halfSteps[i + 1] && halfSteps[i] != halfSteps[i - 1]) {
+                    halfSteps[i] = halfSteps[i - 1]
+                    halfSteps[i + 1] = halfSteps[i - 1]
+                }
             }
         }
 
@@ -849,7 +881,7 @@ class IncrementalRoutePlanner(
             if (cfg.smoothSlabs && cfg.pavingMode == PavingMode.ROAD &&
                 (types[i] == StationType.SURFACE || types[i] == StationType.CUT)
             ) {
-                val halfStep = (grade[i] * 2.0).roundToInt()
+                val halfStep = halfSteps[i]
                 if (halfStep % 2 != 0) {
                     roadY = (halfStep + 1) / 2
                     isHalfSlab = true

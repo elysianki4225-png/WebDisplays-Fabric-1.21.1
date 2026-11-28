@@ -57,6 +57,7 @@ class BlockBuilder(
     private val mPos = BlockPos.MutableBlockPos()
     private val blendedColumns = LinkedHashMap<Long, BlendColMeta>(1024)
     private val deckOwnerDist = HashMap<Long, Double>(4096)
+    private val tunnelProtectedCols = HashSet<Long>(1024)
     private var indexedStations: List<RouteStation>? = null
     private val stationBuckets = HashMap<Long, ArrayList<Int>>(512)
     private var healList: List<BlendColMeta>? = null
@@ -267,11 +268,11 @@ class BlockBuilder(
         val prev = stations.getOrNull(index - 1)
         val next = stations.getOrNull(index + 1)
         val roadHalfW = cfg.roadWidth / 2.0
-        val outerHalfW = roadHalfW + if (cfg.addGuardrails && (st.type == StationType.VIADUCT || st.type == StationType.CUT)) 1.0 else 0.5
+        val outerHalfW = roadHalfW + if (cfg.addGuardrails && st.type == StationType.VIADUCT) 0.95 else 0.5
 
         when (st.type) {
-            StationType.TUNNEL -> buildTunnelSlice(st, prev, next, index)
-            StationType.VIADUCT -> buildViaductSlice(st, prev, next, index, outerHalfW)
+            StationType.TUNNEL -> buildTunnelSlice(stations, st, prev, next, index)
+            StationType.VIADUCT -> buildViaductSlice(stations, st, prev, next, index, outerHalfW)
             StationType.SURFACE, StationType.CUT -> buildSurfaceSlice(stations, index)
         }
     }
@@ -387,7 +388,7 @@ class BlockBuilder(
             }
         }
 
-        forEachOffsetPoint(st, clearHalfW, 0.5) { bx, bz, _ ->
+        forEachOffsetPoint(st, clearHalfW, 0.35) { bx, bz, _ ->
             if (isOwnedByAnotherLeg(stations, index, bx, bz, roadHalfW + 1.25)) return@forEachOffsetPoint
 
             val perpDist = abs(((bx + 0.5) - st.x) * st.px + ((bz + 0.5) - st.z) * st.pz)
@@ -416,7 +417,8 @@ class BlockBuilder(
 
             if (isOnRoad) {
                 if (st.isHalfSlab) {
-                    setBlockSafe(bx, st.roadY, bz, palette.slopeSlab)
+                    val slabBlock = if (perpDist >= roadHalfW - 0.45) palette.curb else palette.slopeSlab
+                    setBlockSafe(bx, st.roadY, bz, slabBlock)
                     setBlockSafe(bx, st.roadY - 1, bz, palette.subBase)
                 } else {
                     val deckBlock = pickDeckBlock(perpDist, roadHalfW, st.arcLength)
@@ -430,8 +432,14 @@ class BlockBuilder(
                     setBlockSafe(bx, st.roadY - d, bz, palette.subBase)
                 }
             } else if (st.type == StationType.CUT && ownsCol) {
-                setBlockSafe(bx, st.roadY, bz, palette.shoulder)
-                for (d in 1..4) {
+                if (st.isHalfSlab) {
+                    setBlockSafe(bx, st.roadY, bz, palette.curb)
+                    setBlockSafe(bx, st.roadY - 1, bz, palette.subBase)
+                } else {
+                    setBlockSafe(bx, st.roadY, bz, palette.shoulder)
+                }
+                val startDepth = if (st.isHalfSlab) 2 else 1
+                for (d in startDepth..4) {
                     mPos.set(bx, st.roadY - d, bz)
                     if (ChunkStreamer.isTerrainSolid(level.getBlockState(mPos))) break
                     setBlockSafe(bx, st.roadY - d, bz, palette.subBase)
@@ -504,6 +512,30 @@ class BlockBuilder(
             state == palette.tunnelLight
     }
 
+    private fun isInsideAnyTunnelFootprint(stations: List<RouteStation>, bx: Int, bz: Int): Boolean {
+        ensureSpatialIndex(stations)
+        val cx = bx shr 3
+        val cz = bz shr 3
+        val px = bx + 0.5
+        val pz = bz + 0.5
+        val r = (cfg.effectiveTunnelWidth() / 2.0) + 1.8
+        val rSq = r * r
+        for (ox in -1..1) {
+            for (oz in -1..1) {
+                val key = ((cx + ox).toLong() shl 32) or ((cz + oz).toLong() and 0xFFFFFFFFL)
+                val list = stationBuckets[key] ?: continue
+                for (k in list) {
+                    val s = stations[k]
+                    if (s.type != StationType.TUNNEL) continue
+                    val dx = px - s.x
+                    val dz = pz - s.z
+                    if (dx * dx + dz * dz <= rSq) return true
+                }
+            }
+        }
+        return false
+    }
+
     private fun applyTerrainBlending(stations: List<RouteStation>, index: Int, st: RouteStation, edgeHalfW: Double) {
         val blendW = cfg.blendRadius
         val roadHalfW = cfg.roadWidth / 2.0
@@ -525,7 +557,10 @@ class BlockBuilder(
                     val tNorm = (stepD / (blendW + 1.0)).coerceIn(0.0, 1.0)
                     // Smooth Hermite/Cosine S-curve transition from road edge to outer terrain!
                     val alpha = 0.5 * (1.0 - cos(PI * tNorm))
-                    val targetY = (roadEdgeY * (1.0 - alpha) + outerY * alpha).roundToInt()
+                    var targetY = (roadEdgeY * (1.0 - alpha) + outerY * alpha).roundToInt()
+                    if (stepD <= 1.1) {
+                        targetY = minOf(targetY, roadEdgeY)
+                    }
 
                     val t = (edgeHalfW + stepD) * side
                     val bx = (sx + st.px * t).roundToInt()
@@ -535,7 +570,13 @@ class BlockBuilder(
                     stepD += 0.5
                     if (!seen.add(key)) continue
 
-                    if (isInsideAnyRoadDeck(stations, index, bx, bz, roadHalfW + 1.15)) continue
+                    if (tunnelProtectedCols.contains(key) ||
+                        deckOwnerDist.containsKey(key) ||
+                        isInsideAnyRoadDeck(stations, index, bx, bz, roadHalfW + 1.65) ||
+                        isInsideAnyTunnelFootprint(stations, bx, bz)
+                    ) {
+                        continue
+                    }
 
                     mPos.set(bx, st.roadY, bz)
                     if (isProtectedRoadBlock(level.getBlockState(mPos))) continue
@@ -604,6 +645,8 @@ class BlockBuilder(
             done++
 
             streamer.ensureAreaLoaded(meta.x, meta.z, 4)
+            val key = (meta.x.toLong() shl 32) or (meta.z.toLong() and 0xFFFFFFFFL)
+            if (tunnelProtectedCols.contains(key) || deckOwnerDist.containsKey(key)) continue
             val col = streamer.sampleColumn(meta.x, meta.z)
             if (col.hasLiquid) continue
 
@@ -669,6 +712,7 @@ class BlockBuilder(
     }
 
     private fun buildViaductSlice(
+        stations: List<RouteStation>,
         st: RouteStation,
         prev: RouteStation?,
         next: RouteStation?,
@@ -677,11 +721,21 @@ class BlockBuilder(
     ) {
         val roadHalfW = cfg.roadWidth / 2.0
 
-        forEachOffsetPoint(st, outerHalfW + 0.5, 0.5) { bx, bz, t ->
+        forEachOffsetPoint(st, outerHalfW + 0.15, 0.35) { bx, bz, t ->
+            if (isOwnedByAnotherLeg(stations, index, bx, bz, roadHalfW + 1.1)) return@forEachOffsetPoint
             val absT = abs(t)
-            val isEdge = absT > roadHalfW + 0.05
+            val perpDist = abs(((bx + 0.5) - st.x) * st.px + ((bz + 0.5) - st.z) * st.pz)
+            val isEdge = perpDist > roadHalfW + 0.05
+            val colKey = (bx.toLong() shl 32) or (bz.toLong() and 0xFFFFFFFFL)
+            val distSqToSt = ((bx + 0.5) - st.x).let { it * it } + ((bz + 0.5) - st.z).let { it * it }
+            val prevOwnerDist = deckOwnerDist[colKey]
+            val ownsCol = prevOwnerDist == null || distSqToSt <= prevOwnerDist + 0.02
+            if (prevOwnerDist != null && (isEdge || !ownsCol)) return@forEachOffsetPoint
+            if (!isEdge) {
+                deckOwnerDist[colKey] = distSqToSt
+            }
 
-            val clearH = if (cfg.pavingMode == PavingMode.CREATE_RAIL) 6 else 6
+            val clearH = 6
             for (dy in 1..clearH) {
                 setBlockSafe(bx, st.roadY + dy, bz, Blocks.AIR.defaultBlockState())
             }
@@ -690,7 +744,6 @@ class BlockBuilder(
                 setBlockSafe(bx, st.roadY, bz, palette.viaductGirder)
                 setBlockSafe(bx, st.roadY - 1, bz, palette.viaductGirder)
             } else {
-                val perpDist = abs(((bx + 0.5) - st.x) * st.px + ((bz + 0.5) - st.z) * st.pz)
                 setBlockSafe(bx, st.roadY, bz, pickDeckBlock(perpDist, roadHalfW, st.arcLength))
                 setBlockSafe(bx, st.roadY - 1, bz, palette.viaductGirder)
                 if (absT <= max(1.0, roadHalfW - 1.5)) {
@@ -750,6 +803,7 @@ class BlockBuilder(
     }
 
     private fun buildTunnelSlice(
+        stations: List<RouteStation>,
         st: RouteStation,
         prev: RouteStation?,
         next: RouteStation?,
@@ -776,7 +830,14 @@ class BlockBuilder(
             while (t <= shellHalfW + 0.01) {
                 val bx = (sx + st.px * t).roundToInt()
                 val bz = (sz + st.pz * t).roundToInt()
-                val absT = abs(t)
+                val absT = abs(((bx + 0.5) - sx) * st.px + ((bz + 0.5) - sz) * st.pz)
+                val colKey = (bx.toLong() shl 32) or (bz.toLong() and 0xFFFFFFFFL)
+                tunnelProtectedCols.add(colKey)
+                val distSqToSt = ((bx + 0.5) - st.x).let { it * it } + ((bz + 0.5) - st.z).let { it * it }
+                val prevDist = deckOwnerDist[colKey]
+                if (prevDist == null || distSqToSt < prevDist) {
+                    deckOwnerDist[colKey] = distSqToSt
+                }
 
                 for (dy in -1..(innerH + 1)) {
                     val wy = st.roadY + dy
@@ -830,7 +891,7 @@ class BlockBuilder(
                         }
                     }
                 }
-                t += 0.5
+                t += 0.35
             }
         }
 
@@ -940,6 +1001,7 @@ class BlockBuilder(
         val lx = (st.x + st.px * postOff).roundToInt()
         val lz = (st.z + st.pz * postOff).roundToInt()
         if (isInsideAnyRoadDeck(stations, index, lx, lz, cfg.roadWidth / 2.0 + 0.35)) return
+        if (isInsideAnyTunnelFootprint(stations, lx, lz)) return
 
         // Always pick a strictly 4-connected cardinal neighbor inward toward road center so arm NEVER overlaps or floats!
         val dirX = -st.px * sideSign

@@ -1,6 +1,8 @@
 package com.terrapaver.client
 
+import com.terrapaver.client.gui.M3BiomeScreen
 import com.terrapaver.client.gui.M3PavingScreen
+import com.terrapaver.config.BiomeConfig
 import com.terrapaver.config.PavingConfig
 import com.terrapaver.network.TerraPaverNet
 import net.fabricmc.api.ClientModInitializer
@@ -14,12 +16,17 @@ import org.lwjgl.glfw.GLFW
 
 object TerraPaverClient : ClientModInitializer {
     private lateinit var openGuiKey: KeyMapping
+    private lateinit var openBiomeGuiKey: KeyMapping
 
     override fun onInitializeClient() {
         PavingConfig.loadClient()
+        BiomeConfig.loadClient()
 
         openGuiKey = KeyBindingHelper.registerKeyBinding(
             KeyMapping("key.terrapaver.open_gui", GLFW.GLFW_KEY_P, "key.categories.terrapaver")
+        )
+        openBiomeGuiKey = KeyBindingHelper.registerKeyBinding(
+            KeyMapping("key.terrapaver.open_biome_gui", GLFW.GLFW_KEY_B, "key.categories.terrapaver")
         )
 
         TerraPaverClientHooks.openSettingsCallback = {
@@ -28,17 +35,29 @@ object TerraPaverClient : ClientModInitializer {
                 mc.setScreen(M3PavingScreen())
             }
         }
+        TerraPaverClientHooks.openBiomeCallback = {
+            val mc = Minecraft.getInstance()
+            mc.execute {
+                mc.setScreen(M3BiomeScreen())
+            }
+        }
 
         TerraPaverNet.registerClientReceivers(
             onStatus = { ClientPavingState.updateStatus(it) },
             onSelection = { ClientPavingState.updateSelection(it) },
-            onPreview = { ClientPavingState.updatePreview(it) }
+            onPreview = { ClientPavingState.updatePreview(it) },
+            onBiomeState = { ClientBiomeState.updateState(it) }
         )
 
         ClientTickEvents.END_CLIENT_TICK.register { mc ->
             while (openGuiKey.consumeClick()) {
                 if (mc.screen == null && mc.player != null) {
                     mc.setScreen(M3PavingScreen())
+                }
+            }
+            while (openBiomeGuiKey.consumeClick()) {
+                if (mc.screen == null && mc.player != null) {
+                    mc.setScreen(M3BiomeScreen())
                 }
             }
         }
@@ -49,6 +68,7 @@ object TerraPaverClient : ClientModInitializer {
 
         WorldRenderEvents.AFTER_TRANSLUCENT.register { context ->
             RoutePreviewRenderer.render(context)
+            BiomePreviewRenderer.render(context)
         }
     }
 }
