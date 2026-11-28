@@ -81,7 +81,7 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
         @JvmField
         var url: String = ""
 
-        private var videoType: VideoType? = null
+        internal var videoType: VideoType? = null
 
         @JvmField
         var owner: NameUUIDPair? = null
@@ -479,7 +479,7 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
         }
 
         var weburl = url(url)
-        weburl = WebDisplays.applyBlacklist(weburl)
+        weburl = WebDisplays.applyBlacklist(weburl) ?: weburl
         scr.url = weburl
         scr.videoType = VideoType.getTypeFromURL(weburl)
 
@@ -834,26 +834,26 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
                         val data = WebDisplays.GSON.fromJson(text, Array<TypeData>::class.java)
 
                         for (ev in data) {
-                            val actualEv = if (ev.keyCode == 257) {
-                                TypeData(ev.action, 10, ev.modifier, ev.scanCode)
+                            val actualEv = if (ev.getKeyCode() == 257) {
+                                TypeData(ev.getAction(), 10, ev.getModifier(), ev.getScanCode())
                             } else {
                                 ev
                             }
 
-                            when (actualEv.action) {
+                            when (actualEv.getAction()) {
                                 TypeData.Action.PRESS -> {
-                                    browser.sendKeyPress(actualEv.keyCode, actualEv.scanCode, actualEv.modifier)
-                                    if (actualEv.keyCode == 10) {
-                                        browser.sendKeyTyped('\r', actualEv.modifier)
+                                    browser.sendKeyPress(actualEv.getKeyCode(), actualEv.getScanCode(), actualEv.getModifier())
+                                    if (actualEv.getKeyCode() == 10) {
+                                        browser.sendKeyTyped('\r', actualEv.getModifier())
                                     }
                                 }
                                 TypeData.Action.RELEASE -> {
-                                    browser.sendKeyRelease(actualEv.keyCode, actualEv.scanCode, actualEv.modifier)
+                                    browser.sendKeyRelease(actualEv.getKeyCode(), actualEv.getScanCode(), actualEv.getModifier())
                                 }
                                 TypeData.Action.TYPE -> {
-                                    browser.sendKeyTyped(actualEv.keyCode.toChar(), actualEv.modifier)
+                                    browser.sendKeyTyped(actualEv.getKeyCode().toChar(), actualEv.getModifier())
                                 }
-                                else -> throw RuntimeException("Invalid type action '${actualEv.action}'")
+                                else -> throw RuntimeException("Invalid type action '${actualEv.getAction()}'")
                             }
                         }
                     }

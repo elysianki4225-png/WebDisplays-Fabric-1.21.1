@@ -138,7 +138,7 @@ abstract class TileEntityInterfaceBase(
             return null
         }
         val scr = tes.getScreen(side) ?: return null
-        return arrayOf(scr.rotation.angleAsInt)
+        return arrayOf(scr.rotation.getAngleAsInt())
     }
 
     @ComputerFunc

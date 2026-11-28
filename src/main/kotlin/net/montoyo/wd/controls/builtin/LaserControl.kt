@@ -56,7 +56,7 @@ class LaserControl : ScreenControl {
         ctx: WDContext,
         permissionChecker: Function<Int, Boolean>
     ) {
-        val sender = ctx.sender
+        val sender = ctx.sender!!
         when (type) {
             ControlType.UP -> tes.laserUp(side!!, sender, button)
             ControlType.DOWN -> tes.laserDownMove(side!!, sender, coord!!, true, button)

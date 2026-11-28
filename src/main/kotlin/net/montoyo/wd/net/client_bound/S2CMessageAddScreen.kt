@@ -120,9 +120,7 @@ class S2CMessageAddScreen : Packet {
                     scr.owner = entry.owner
                     scr.upgrades = entry.upgrades
 
-                    if (scr.browser != null) {
-                        scr.browser.loadURL(webUrl)
-                    }
+                    scr.browser?.loadURL(webUrl)
                 }
             }
 

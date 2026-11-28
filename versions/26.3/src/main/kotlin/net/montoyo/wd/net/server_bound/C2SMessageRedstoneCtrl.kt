@@ -46,13 +46,13 @@ class C2SMessageRedstoneCtrl : Packet, Runnable {
         val te = world.getBlockEntity(blockPos)
         if (te !is TileEntityRedCtrl) return
 
-        if (!te.isScreenChunkLoaded) {
+        if (!te.isScreenChunkLoaded()) {
             Util.toast(ply, "chunkUnloaded")
             return
         }
 
         val tes = te.getConnectedScreen() ?: return
-        val side = te.getScreenSide() ?: return
+        val side = te.screenSide ?: return
         val scr = tes.getScreen(side) ?: return
         if ((scr.rightsFor(ply) and ScreenRights.CHANGE_URL) == 0) return
 
