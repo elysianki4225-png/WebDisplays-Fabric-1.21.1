@@ -91,4 +91,6 @@ open class SharedProxy {
     open fun isShiftDown(): Boolean = false
 
     open fun onSmartphoneUsed(player: Player, hand: InteractionHand) {}
+
+    open fun onScreenHandClick(te: TileEntityScreen, side: BlockSide, pixel: Vector2i) {}
 }

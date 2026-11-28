@@ -418,6 +418,10 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
         }
     }
 
+    override fun onScreenHandClick(te: TileEntityScreen, side: BlockSide, pixel: Vector2i) {
+        ScreenInputController.handleDirectHandClick(te, side, pixel)
+    }
+
     override fun onAddressChange(browser: CefBrowser?, cefFrame: CefFrame?, url: String) {
         if (browser != null) {
             val t = System.currentTimeMillis()
@@ -510,7 +514,7 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
         }
 
         val curPlayer = Minecraft.getInstance().player
-        if (curPlayer == null || curPlayer.getItemInHand(InteractionHand.MAIN_HAND).item !is ItemLaserPointer) {
+        if (curPlayer == null || !ScreenInputController.isLaserHeld(curPlayer)) {
             mouseOn = false
         }
 
@@ -558,9 +562,9 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
         }
 
         if (LaserPointerRenderer.isOn()) {
-            ItemLaserPointer.tick(mc)
+            ScreenInputController.tick(mc)
         } else {
-            ItemLaserPointer.deselect(mc)
+            ScreenInputController.releaseAll(mc)
         }
 
         if (msClientStarted && mc.player == null) {

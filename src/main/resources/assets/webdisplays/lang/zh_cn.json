@@ -195,5 +195,9 @@
   "config.webdisplays.d100": "开始衰减距离",
   "config.webdisplays.backface_culling": "启用屏幕背面剔除",
   "config.webdisplays.pause_culled_screens": "暂停被剔除的屏幕",
-  "config.webdisplays.max_browsers_per_frame": "每帧最多新建浏览器数"
+  "config.webdisplays.max_browsers_per_frame": "每帧最多新建浏览器数",
+  "config.webdisplays.default_ppb": "默认每格像素密度",
+  "config.webdisplays.min_adaptive_edge": "最小自适应长边像素",
+  "config.webdisplays.adaptive_lod": "启用视距自适应分辨率 (LOD)",
+  "config.webdisplays.lod_cooldown_ms": "LOD 分辨率调整冷却 (ms)"
 }

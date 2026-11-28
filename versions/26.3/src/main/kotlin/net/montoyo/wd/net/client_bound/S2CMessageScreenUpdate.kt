@@ -114,7 +114,7 @@ class S2CMessageScreenUpdate : Packet {
             side: BlockSide?,
             mouseMove: ClickControl.ControlType,
             pos: Vector2i?,
-            button: Int = 1
+            button: Int = 0
         ): S2CMessageScreenUpdate {
             val screenUpdate = S2CMessageScreenUpdate(screen.blockPos, side)
             screenUpdate.control = ClickControl(mouseMove, pos, button)

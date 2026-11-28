@@ -22,7 +22,7 @@ class ClickControl : ScreenControl {
     internal var coord: Vector2i?
     internal var button: Int = 1
 
-    constructor(type: ControlType, coord: Vector2i?) : this(type, coord, 1)
+    constructor(type: ControlType, coord: Vector2i?) : this(type, coord, 0)
 
     constructor(type: ControlType, coord: Vector2i?, button: Int) : super(id) {
         this.type = type

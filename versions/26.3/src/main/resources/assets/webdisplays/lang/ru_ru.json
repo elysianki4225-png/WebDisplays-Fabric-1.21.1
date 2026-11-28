@@ -190,6 +190,7 @@
   "config.webdisplays.pad_res": "Разрешение MinePad",
   "config.webdisplays.side_pad": "Держать MinePad сбоку",
   "config.webdisplays.switch_buttons": "Поменять ЛКМ и ПКМ местами",
+  "config.webdisplays.swap_laser_buttons": "Поменять ЛКМ и ПКМ лазера местами",
   "config.webdisplays.auto_vol": "Включить автогромкость",
   "config.webdisplays.yt_vol": "Громкость YouTube",
   "config.webdisplays.d0": "Дистанция полного затухания",

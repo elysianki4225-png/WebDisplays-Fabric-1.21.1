@@ -115,28 +115,38 @@ class BlockScreen(properties: Properties) :
         heldItemArg: ItemStack,
         hit: BlockHitResult
     ): InteractionResult {
-        var heldItem: ItemStack? = heldItemArg
-        var isUpgrade = false
-        if (heldItem!!.isEmpty) {
-            heldItem = null
-        } else if (heldItem.item is IUpgrade) {
-            isUpgrade = true
-        } else {
-            return InteractionResult.FAIL
+        val heldItem: ItemStack? = if (heldItemArg.isEmpty) null else heldItemArg
+        if (heldItem != null) {
+            val item = heldItem.item
+            if (item is ItemLaserPointer) return InteractionResult.FAIL
+            if (item !is IUpgrade) return InteractionResult.PASS
         }
+        val isUpgrade = heldItem != null
 
-        if (heldItem != null && heldItem.item is ItemLaserPointer) return InteractionResult.FAIL
-
-        if (!isUpgrade && hand == InteractionHand.OFF_HAND) return InteractionResult.FAIL
-        if (world.isClientSide()) return InteractionResult.FAIL
+        if (!isUpgrade && hand == InteractionHand.OFF_HAND) return InteractionResult.PASS
 
         val sneaking = player.isShiftKeyDown
         val pos = Vector3i(position)
-        val side = BlockSide.values()[hit.direction.ordinal]
+        val side = BlockSide.entries[hit.direction.ordinal]
 
         Multiblock.findOrigin(world, pos, side, null)
         var te = world.getBlockEntity(pos.toBlock()) as? TileEntityScreen
         val scr = te?.getScreen(side)
+
+        if (world.isClientSide()) {
+            if (te != null && scr != null && !sneaking && !isUpgrade) {
+                if ((scr.rightsFor(player) and ScreenRights.INTERACT) != 0) {
+                    val hitX = (hit.location.x - pos.x).toFloat()
+                    val hitY = (hit.location.y - pos.y).toFloat()
+                    val hitZ = (hit.location.z - pos.z).toFloat()
+                    val tmp = Vector2i()
+                    if (hit2pixels(side, hit.blockPos, Vector3i(hit.blockPos), scr, hitX, hitY, hitZ, tmp)) {
+                        WebDisplays.PROXY.onScreenHandClick(te, side, tmp)
+                    }
+                }
+            }
+            return InteractionResult.SUCCESS
+        }
 
         if (te != null && scr != null) {
 
@@ -177,7 +187,7 @@ class BlockScreen(properties: Properties) :
                 val tmp = Vector2i()
 
                 if (hit2pixels(side, hit.blockPos, Vector3i(hit.blockPos), scr, hitX, hitY, hitZ, tmp)) {
-                    te.click(side, tmp)
+                    te.click(side, tmp, player)
                 }
                 return InteractionResult.CONSUME
             }

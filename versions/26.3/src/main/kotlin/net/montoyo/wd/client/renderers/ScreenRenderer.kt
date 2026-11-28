@@ -95,6 +95,8 @@ class ScreenRenderer(ctx: BlockEntityRendererProvider.Context) : BlockEntityRend
         }
 
         val mcefReady = MCEF.isInitialized()
+        val mc = net.minecraft.client.Minecraft.getInstance()
+        val camLook = if (mc.options.cameraType.isFirstPerson) mc.player?.getViewVector(partialTick) else null
 
         for (i in 0 until screenCount) {
             val scr = te.getScreen(i)
@@ -110,10 +112,14 @@ class ScreenRenderer(ctx: BlockEntityRendererProvider.Context) : BlockEntityRend
             tmpf.set(scr.side.down)
             mid.addMul(tmpf, 0.5f)
 
+            val centerX = bp.x + mid.x
+            val centerY = bp.y + mid.y
+            val centerZ = bp.z + mid.z
+
             if (WebDisplays.INSTANCE.enableBackfaceCulling) {
-                val planeX = bp.x + mid.x + scr.side.forward.x * 0.505
-                val planeY = bp.y + mid.y + scr.side.forward.y * 0.505
-                val planeZ = bp.z + mid.z + scr.side.forward.z * 0.505
+                val planeX = centerX + scr.side.forward.x * 0.505
+                val planeY = centerY + scr.side.forward.y * 0.505
+                val planeZ = centerZ + scr.side.forward.z * 0.505
                 val dot = (camPos.x - planeX) * scr.side.forward.x +
                     (camPos.y - planeY) * scr.side.forward.y +
                     (camPos.z - planeZ) * scr.side.forward.z
@@ -129,11 +135,28 @@ class ScreenRenderer(ctx: BlockEntityRendererProvider.Context) : BlockEntityRend
                 }
             }
 
+            if (camLook != null) {
+                val toX = centerX - camPos.x
+                val toY = centerY - camPos.y
+                val toZ = centerZ - camPos.z
+                val boundRadius = kotlin.math.sqrt((scr.size.x * scr.size.x + scr.size.y * scr.size.y).toDouble()) * 0.5 + 1.5
+                val forwardDist = toX * camLook.x + toY * camLook.y + toZ * camLook.z
+                if (forwardDist < -boundRadius) {
+                    if (WebDisplays.INSTANCE.pauseCulledScreens) {
+                        val mb = scr.browser
+                        if (mb is MCEFBrowser && nowMs - scr.lastVisibleMs > 500L) {
+                            mb.setVisible(false)
+                        }
+                    }
+                    continue
+                }
+            }
+
             scr.lastVisibleMs = nowMs
 
-            val dx = camPos.x - (bp.x + mid.x)
-            val dy = camPos.y - (bp.y + mid.y)
-            val dz = camPos.z - (bp.z + mid.z)
+            val dx = camPos.x - centerX
+            val dy = camPos.y - centerY
+            val dz = camPos.z - centerZ
             val distSqr = dx * dx + dy * dy + dz * dz
             val targetLod = if (WebDisplays.INSTANCE.enableAdaptiveLod) {
                 ScreenResolution.computeLodScale(distSqr, scr.size, scr.resolution.x, scr.resolution.y)
@@ -196,6 +219,8 @@ class ScreenRenderer(ctx: BlockEntityRendererProvider.Context) : BlockEntityRend
         }
     }
 
+    private val scratchRot = Matrix4f()
+
     override fun submit(
         state: ScreenRenderState,
         poseStack: PoseStack,
@@ -207,12 +232,12 @@ class ScreenRenderer(ctx: BlockEntityRendererProvider.Context) : BlockEntityRend
             poseStack.translate(q.midX, q.midY, q.midZ)
 
             when (q.side) {
-                BlockSide.BOTTOM -> poseStack.mulPose(Matrix4f().rotate(XP.rotation(90.0f + 49.8f)))
-                BlockSide.TOP -> poseStack.mulPose(Matrix4f().rotate(XN.rotation(90.0f + 49.8f)))
-                BlockSide.NORTH -> poseStack.mulPose(Matrix4f().rotate(YN.rotationDegrees(180.0f)))
+                BlockSide.BOTTOM -> poseStack.mulPose(ROT_BOTTOM)
+                BlockSide.TOP -> poseStack.mulPose(ROT_TOP)
+                BlockSide.NORTH -> poseStack.mulPose(ROT_NORTH)
                 BlockSide.SOUTH -> {}
-                BlockSide.WEST -> poseStack.mulPose(Matrix4f().rotate(YN.rotationDegrees(90.0f)))
-                BlockSide.EAST -> poseStack.mulPose(Matrix4f().rotate(YP.rotationDegrees(90.0f)))
+                BlockSide.WEST -> poseStack.mulPose(ROT_WEST)
+                BlockSide.EAST -> poseStack.mulPose(ROT_EAST)
             }
 
             if (q.turnOnScale < 1.0f) {
@@ -220,7 +245,8 @@ class ScreenRenderer(ctx: BlockEntityRendererProvider.Context) : BlockEntityRend
             }
 
             if (q.hasRotation) {
-                poseStack.mulPose(Matrix4f().rotate(ZP.rotationDegrees(q.rotationAngle)))
+                scratchRot.rotationZ(Math.toRadians(q.rotationAngle.toDouble()).toFloat())
+                poseStack.mulPose(scratchRot)
             }
 
             val sw = q.sw
@@ -239,5 +265,10 @@ class ScreenRenderer(ctx: BlockEntityRendererProvider.Context) : BlockEntityRend
     companion object {
         private var windowStartNs = 0L
         private var createdInWindow = 0
+        private val ROT_BOTTOM = Matrix4f().rotate(XP.rotation(90.0f + 49.8f))
+        private val ROT_TOP = Matrix4f().rotate(XN.rotation(90.0f + 49.8f))
+        private val ROT_NORTH = Matrix4f().rotate(YN.rotationDegrees(180.0f))
+        private val ROT_WEST = Matrix4f().rotate(YN.rotationDegrees(90.0f))
+        private val ROT_EAST = Matrix4f().rotate(YP.rotationDegrees(90.0f))
     }
 }

@@ -194,5 +194,9 @@
   "config.webdisplays.d100": "Дистанция начала затухания",
   "config.webdisplays.backface_culling": "Отсечение задней стороны экрана",
   "config.webdisplays.pause_culled_screens": "Приостанавливать скрытые экраны",
-  "config.webdisplays.max_browsers_per_frame": "Макс. создаваемых браузеров за кадр"
+  "config.webdisplays.max_browsers_per_frame": "Макс. создаваемых браузеров за кадр",
+  "config.webdisplays.default_ppb": "Плотность пикселей на блок",
+  "config.webdisplays.min_adaptive_edge": "Мин. адаптивное разрешение (px)",
+  "config.webdisplays.adaptive_lod": "Адаптивное LOD-разрешение по дистанции",
+  "config.webdisplays.lod_cooldown_ms": "Задержка смены LOD-разрешения (мс)"
 }

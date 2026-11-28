@@ -163,7 +163,7 @@ jobs:
                   "net.minecraft.world.entity.LivingEntity": ["createItemStackToDrop(net.minecraft.world.item.ItemStack, boolean, boolean)", "(Lnet/minecraft/world/item/ItemStack;ZZ)Lnet/minecraft/world/entity/item/ItemEntity;"],
                   "net.minecraft.world.entity.player.Player": [],
                   "net.minecraft.world.entity.item.ItemEntity": ["tick()"],
-                  "net.minecraft.client.MouseHandler": ["onButton(", "mouseGrabbed"],
+                  "net.minecraft.client.MouseHandler": ["onButton(", "onScroll(", "mouseGrabbed"],
                   "net.minecraft.client.gui.Gui": ["setScreen("],
                   "net.minecraft.client.Minecraft": ["renderFrame(", "close()"],
                   "net.minecraft.client.resources.ClientPackSource": ["static {};"],
@@ -194,27 +194,6 @@ jobs:
                   details.append(f"=== {cls} ===\n" + "\n".join(interesting[:60]))
 
               report = "\n\n".join(details)
-              inspect_classes = [
-                  "com.mojang.renderpearl.api.textures.GpuTexture",
-                  "net.minecraft.client.renderer.rendertype.RenderTypes",
-                  "net.minecraft.client.MouseHandler",
-              ]
-              dump = []
-              with zipfile.ZipFile(mc_jar) as zf:
-                  rp_classes = [n[:-6].replace("/", ".") for n in zf.namelist() if n.startswith("com/mojang/renderpearl/") and "CommandEncoder" in n]
-                  dump.append("RenderPearl CommandEncoder impls: " + str(rp_classes))
-                  inspect_classes.extend(rp_classes)
-              for c in inspect_classes:
-                  p = subprocess.run(["javap", "-p", "-cp", mc_jar, c], capture_output=True, text=True, errors="replace")
-                  dump.append(f"=== {c} ===\n" + p.stdout[:8000])
-              for c in rp_classes:
-                  if c != "com.mojang.renderpearl.api.commands.CommandEncoder":
-                      p2 = subprocess.run(["javap", "-c", "-p", "-cp", mc_jar, c], capture_output=True, text=True, errors="replace")
-                      txt = p2.stdout
-                      idx = txt.find("writeToTexture")
-                      if idx >= 0:
-                          dump.append(f"=== {c} writeToTexture & copyBufferToTexture ===\n" + txt[idx:idx+8000])
-              post_comment("### 26.3 RenderPearl & MouseHandler inspection\n```text\n" + "\n\n".join(dump)[:58000] + "\n```")
               if missing:
                   post_comment("### 26.3 Mixin / AccessWidener check FAILED\nMissing:\n" + "\n".join(f"- {m}" for m in missing) + "\n\n```text\n" + report[:50000] + "\n```")
                   sys.exit(1)
