@@ -1,5 +1,6 @@
 plugins {
     id 'net.fabricmc.fabric-loom' version "${loom_version}"
+    id 'org.jetbrains.kotlin.jvm' version "${kotlin_version}"
     id 'maven-publish'
 }
 
@@ -42,6 +43,7 @@ def bundledFabricModules = [
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
 
     // Compile against full Fabric API, bundle only required modules in the output jar
     compileOnly "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
@@ -81,6 +83,10 @@ tasks.withType(JavaCompile).configureEach {
 java {
     sourceCompatibility = JavaVersion.VERSION_25
     targetCompatibility = JavaVersion.VERSION_25
+}
+
+kotlin {
+    jvmToolchain(25)
 }
 
 jar {

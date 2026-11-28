@@ -18,10 +18,16 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "net.montoyo.wd.WebDisplaysFabric"
+      {
+        "adapter": "kotlin",
+        "value": "net.montoyo.wd.WebDisplaysFabric"
+      }
     ],
     "client": [
-      "net.montoyo.wd.client.WebDisplaysFabricClient"
+      {
+        "adapter": "kotlin",
+        "value": "net.montoyo.wd.client.WebDisplaysFabricClient"
+      }
     ]
   },
   "mixins": [
@@ -30,6 +36,7 @@
   "accessWidener": "webdisplays.accesswidener",
   "depends": {
     "fabricloader": ">=0.20.1",
+    "fabric-language-kotlin": ">=1.14.2+kotlin.2.4.21",
     "minecraft": "~26.3",
     "java": ">=25",
     "mcef": "*",
