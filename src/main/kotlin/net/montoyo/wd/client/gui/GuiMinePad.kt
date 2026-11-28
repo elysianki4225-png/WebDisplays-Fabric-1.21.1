@@ -74,6 +74,7 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
 
     private var touchDown = false
     private var touchSwiped = false
+    private var desktopDragging = false
     private var touchStartX = 0.0
     private var touchStartY = 0.0
     private var touchLastX = 0.0
@@ -553,7 +554,7 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
     override fun mouseMoved(mouseX: Double, mouseY: Double) {
         super.mouseMoved(mouseX, mouseY)
         if (!touchDown) {
-            mouse(-1, false, mouseX.toInt(), mouseY.toInt(), 0.0)
+            mouse(-1, false, mouseX, mouseY, 0.0)
         }
     }
 
@@ -621,6 +622,7 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
             if (inViewport(mouseX, mouseY)) {
                 touchDown = true
                 touchSwiped = false
+                desktopDragging = false
                 touchStartX = mouseX
                 touchStartY = mouseY
                 touchLastX = mouseX
@@ -629,6 +631,11 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
                 touchDownRy = toClampedBrowserY(mouseY, p.resY)
                 (p.view as? MCEFBrowser)?.let { browser ->
                     browser.setFocus(true)
+                    browser.executeJavaScript(
+                        "window.__wdTouchStart && window.__wdTouchStart($touchDownRx, $touchDownRy, true);",
+                        browser.url ?: "",
+                        0
+                    )
                     browser.sendMouseMove(touchDownRx, touchDownRy)
                     browser.sendMousePress(touchDownRx, touchDownRy, 0)
                 }
@@ -636,7 +643,11 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
             }
         }
 
-        mouse(button, true, mouseX.toInt(), mouseY.toInt(), 0.0)
+        if (p != null && !p.mobile && inViewport(mouseX, mouseY)) {
+            desktopDragging = true
+        }
+
+        mouse(button, true, mouseX, mouseY, 0.0)
         if (inViewport(mouseX, mouseY)) return true
         return super.mouseClicked(mouseX, mouseY, button)
     }
@@ -654,12 +665,12 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
             val browser = p.view as? MCEFBrowser
             val rx = toClampedBrowserX(mouseX, p.resX)
             val ry = toClampedBrowserY(mouseY, p.resY)
-            if (!touchSwiped && hypot(mouseX - touchStartX, mouseY - touchStartY) > 8.0) {
+            if (!touchSwiped && hypot(mouseX - touchStartX, mouseY - touchStartY) > 10.0) {
                 touchSwiped = true
                 browser?.sendMouseMove(-1, -1)
                 browser?.sendMouseRelease(-1, -1, 0)
                 browser?.executeJavaScript(
-                    "window.__wdTouchStart && window.__wdTouchStart($touchDownRx, $touchDownRy);",
+                    "window.__wdTouchStart && window.__wdTouchStart($touchDownRx, $touchDownRy, false);",
                     browser.url ?: "",
                     0
                 )
@@ -680,7 +691,7 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
             return true
         }
 
-        if (p != null && !p.mobile && inViewport(mouseX, mouseY)) {
+        if (p != null && !p.mobile && (desktopDragging || inViewport(mouseX, mouseY))) {
             (p.view as? MCEFBrowser)?.sendMouseMove(toClampedBrowserX(mouseX, p.resX), toClampedBrowserY(mouseY, p.resY))
             return true
         }
@@ -710,13 +721,20 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
             } else {
                 browser?.sendMouseMove(rx, ry)
                 browser?.sendMouseRelease(rx, ry, 0)
+                browser?.executeJavaScript(
+                    "window.__wdTouchEndTap && window.__wdTouchEndTap($rx, $ry);",
+                    browser.url ?: "",
+                    0
+                )
                 browser?.setFocus(true)
             }
             return true
         }
 
-        mouse(button, false, mouseX.toInt(), mouseY.toInt(), 0.0)
-        if (inViewport(mouseX, mouseY)) return true
+        val wasDragging = desktopDragging
+        desktopDragging = false
+        mouse(button, false, mouseX, mouseY, 0.0)
+        if (wasDragging || inViewport(mouseX, mouseY)) return true
         return super.mouseReleased(mouseX, mouseY, button)
     }
 
@@ -743,6 +761,10 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
     }
 
     fun mouse(btn: Int, pressed: Boolean, sx: Int, sy: Int, scrollAmount: Double) {
+        mouse(btn, pressed, sx.toDouble(), sy.toDouble(), scrollAmount)
+    }
+
+    fun mouse(btn: Int, pressed: Boolean, sx: Double, sy: Double, scrollAmount: Double) {
         val p = pad ?: return
         val view = p.view ?: return
         if (vw <= 0.0 || vh <= 0.0) return
@@ -788,6 +810,7 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
         val hadPress = touchDown && !touchSwiped
         touchDown = false
         touchSwiped = false
+        desktopDragging = false
         super.removed()
         val p = pad
         val view = p?.view

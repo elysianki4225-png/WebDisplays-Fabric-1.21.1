@@ -108,6 +108,7 @@
   "webdisplays.message.missingOC": "OpenComputers 不可用。",
   "webdisplays.message.newOwner": "你现在是这个屏幕的拥有者！",
   "webdisplays.message.noLaserMouse": "请先在屏幕上安装激光笔模块升级！",
+  "webdisplays.message.noMCEF": "浏览器内核（MCEF）仍在初始化中，或当前平台暂不支持。",
   "webdisplays.message.noMiniserv": "本服务器已禁用服务器方块",
   "webdisplays.message.notAScreen": "请先右键点击屏幕……",
   "webdisplays.message.notLinked": "这个外部设备还没有被连接。",
