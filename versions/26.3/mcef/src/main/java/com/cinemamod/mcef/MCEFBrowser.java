@@ -398,6 +398,10 @@ public class MCEFBrowser extends CefBrowserOsr {
     }
 
     public void setCursor(CefCursorType cursorType) {
+        if (!RenderSystem.isOnRenderThread()) {
+            Minecraft.getInstance().execute(() -> setCursor(cursorType));
+            return;
+        }
         if (cursorType == CefCursorType.NONE) {
             SDLMouse.SDL_HideCursor();
         } else {

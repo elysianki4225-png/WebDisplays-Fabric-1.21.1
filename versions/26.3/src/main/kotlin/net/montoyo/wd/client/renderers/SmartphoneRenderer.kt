@@ -3,6 +3,7 @@ package net.montoyo.wd.client.renderers
 import com.cinemamod.mcef.MCEF
 import com.cinemamod.mcef.MCEFBrowser
 import com.mojang.blaze3d.vertex.PoseStack
+import com.mojang.math.Axis
 import com.mojang.serialization.MapCodec
 import net.fabricmc.api.EnvType
 import net.fabricmc.api.Environment
@@ -21,6 +22,8 @@ import net.montoyo.wd.utilities.NbtCompat
 import org.joml.Vector3fc
 import java.util.UUID
 import java.util.function.Consumer
+import kotlin.math.PI
+import kotlin.math.sin
 
 @Environment(EnvType.CLIENT)
 class SmartphoneRenderer : SpecialModelRenderer<UUID> {
@@ -42,9 +45,39 @@ class SmartphoneRenderer : SpecialModelRenderer<UUID> {
         outlineColor: Int
     ) {
         poseStack.pushPose()
+        val tapProgress = if (padId != null) ClientProxy.getSmartphoneTapProgress() else 0f
+        if (tapProgress > 0f) {
+            val tap = sin(tapProgress * PI.toFloat())
+            poseStack.translate(0.0f, -0.02f * tap, -0.015f * tap)
+            poseStack.mulPose(Axis.XP.rotationDegrees(-6.0f * tap))
+        }
         poseStack.translate(0.5f - ModelSmartphone.BODY_W * 0.5f, 0.5f - ModelSmartphone.BODY_H * 0.5f, 0.501f)
-        model.submit(submitNodeCollector, poseStack, lightCoords)
+        model.submit(submitNodeCollector, poseStack, lightCoords, padId != null)
+        renderScreenQuad(padId, poseStack, submitNodeCollector)
+        poseStack.popPose()
+    }
 
+    fun renderDropped(
+        padId: UUID?,
+        poseStack: PoseStack,
+        submitNodeCollector: SubmitNodeCollector,
+        lightCoords: Int,
+        spinYaw: Float
+    ) {
+        poseStack.pushPose()
+        poseStack.translate(0.0f, 0.025f, 0.0f)
+        poseStack.mulPose(Axis.YP.rotation(-spinYaw))
+        poseStack.mulPose(Axis.XP.rotationDegrees(-90.0f))
+        poseStack.scale(0.48f, 0.48f, 0.48f)
+        poseStack.translate(-ModelSmartphone.BODY_W * 0.5f, -ModelSmartphone.BODY_H * 0.5f, 0.0f)
+
+        model.submit(submitNodeCollector, poseStack, lightCoords, padId != null)
+        renderScreenQuad(padId, poseStack, submitNodeCollector)
+
+        poseStack.popPose()
+    }
+
+    private fun renderScreenQuad(padId: UUID?, poseStack: PoseStack, submitNodeCollector: SubmitNodeCollector) {
         if (padId != null && MCEF.isInitialized()) {
             val clientProxy = WebDisplays.PROXY
             if (clientProxy is ClientProxy) {
@@ -63,8 +96,6 @@ class SmartphoneRenderer : SpecialModelRenderer<UUID> {
                 }
             }
         }
-
-        poseStack.popPose()
     }
 
     override fun getExtents(output: Consumer<Vector3fc>) {

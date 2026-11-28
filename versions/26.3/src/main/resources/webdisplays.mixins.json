@@ -8,6 +8,10 @@
     "PlayerDropMixin"
   ],
   "client": [
+    "FirstPersonHandsAndItemsRendererMixin",
+    "HumanoidModelMixin",
+    "ItemEntityRendererMixin",
+    "ItemEntityRenderStateMixin",
     "MouseHandlerMixin"
   ],
   "injectors": {

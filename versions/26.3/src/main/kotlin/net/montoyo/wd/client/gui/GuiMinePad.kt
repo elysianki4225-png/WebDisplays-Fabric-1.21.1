@@ -163,7 +163,7 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
             view.setCursor(CefCursorType.fromId(p.activeCursor))
             view.setCursorChangeListener { id ->
                 p.activeCursor = id
-                view.setCursor(CefCursorType.fromId(id))
+                minecraft.execute { view.setCursor(CefCursorType.fromId(id)) }
             }
         }
     }

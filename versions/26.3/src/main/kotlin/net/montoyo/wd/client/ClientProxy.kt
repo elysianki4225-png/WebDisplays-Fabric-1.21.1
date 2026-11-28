@@ -8,6 +8,7 @@ import com.cinemamod.mcef.MCEF
 import com.cinemamod.mcef.MCEFBrowser
 import com.mojang.authlib.GameProfile
 import com.mojang.blaze3d.platform.InputConstants
+import com.mojang.blaze3d.vertex.PoseStack
 import net.fabricmc.api.EnvType
 import net.fabricmc.api.Environment
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
@@ -26,6 +27,7 @@ import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.multiplayer.ClientAdvancements
 import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.client.renderer.RenderPipelines
+import net.minecraft.client.renderer.SubmitNodeCollector
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderers
 import net.minecraft.client.renderer.special.SpecialModelRenderers
 import net.minecraft.core.BlockPos
@@ -779,6 +781,28 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
                 256
             )
             return true
+        }
+
+        @JvmStatic
+        private val droppedMinePadRenderer by lazy { MinePadRenderer() }
+
+        @JvmStatic
+        private val droppedSmartphoneRenderer by lazy { SmartphoneRenderer() }
+
+        @JvmStatic
+        fun renderDroppedPad(
+            padId: UUID?,
+            mobile: Boolean,
+            lightCoords: Int,
+            spinYaw: Float,
+            poseStack: PoseStack,
+            submitNodeCollector: SubmitNodeCollector
+        ) {
+            if (mobile) {
+                droppedSmartphoneRenderer.renderDropped(padId, poseStack, submitNodeCollector, lightCoords, spinYaw)
+            } else {
+                droppedMinePadRenderer.renderDropped(padId, poseStack, submitNodeCollector, lightCoords, spinYaw)
+            }
         }
 
         @JvmStatic
