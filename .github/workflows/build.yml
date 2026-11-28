@@ -194,37 +194,37 @@ jobs:
               inspect_classes = [
                   "net.minecraft.client.MouseHandler",
                   "com.mojang.blaze3d.platform.InputConstants",
-                  "net.minecraft.client.input.MouseButtonInfo",
-                  "net.minecraft.client.input.MouseButtonEvent",
                   "net.minecraft.client.gui.screens.Screen",
-                  "net.minecraft.client.renderer.entity.ItemEntityRenderer",
-                  "net.minecraft.client.renderer.entity.state.ItemEntityRenderState",
-                  "net.minecraft.client.renderer.ItemInHandRenderer",
-                  "net.minecraft.client.model.HumanoidModel",
-                  "net.minecraft.client.renderer.entity.player.AvatarRenderer",
-                  "net.minecraft.client.renderer.entity.state.AvatarRenderState",
-                  "net.minecraft.client.renderer.entity.player.PlayerRenderer",
-                  "net.minecraft.client.renderer.entity.state.PlayerRenderState",
-                  "net.minecraft.world.entity.LivingEntity",
+                  "net.minecraft.client.renderer.entity.state.EntityRenderState",
+                  "net.minecraft.client.renderer.entity.state.ItemClusterRenderState",
+                  "net.minecraft.client.renderer.entity.state.HumanoidRenderState",
+                  "net.minecraft.client.model.player.PlayerModel",
+                  "net.minecraft.world.InteractionResult",
               ]
               inspect_out = []
+              with zipfile.ZipFile(mc_jar) as zf:
+                  hand_classes = [n for n in zf.namelist() if "InHand" in n or "PlayerModel" in n]
+                  inspect_out.append("=== Matching classes ===\n" + "\n".join(hand_classes[:40]))
               for ic in inspect_classes:
-                  p = subprocess.run(["javap", "-s", "-p", "-cp", mc_jar, ic], capture_output=True, text=True, errors="replace")
+                  args = ["javap", "-c" if ic == "net.minecraft.client.MouseHandler" else "-s", "-p", "-cp", mc_jar, ic]
+                  p = subprocess.run(args, capture_output=True, text=True, errors="replace")
                   if p.returncode == 0:
-                      if ic == "net.minecraft.world.entity.LivingEntity":
-                          lines = p.stdout.splitlines()
-                          filtered = []
-                          for idx, ln in enumerate(lines):
-                              if "swing" in ln.lower() or "arm" in ln.lower():
-                                  filtered.append(ln)
-                                  if idx + 1 < len(lines) and "descriptor:" in lines[idx + 1]:
-                                      filtered.append(lines[idx + 1])
-                          inspect_out.append(f"=== {ic} (swing/arm) ===\n" + "\n".join(filtered[:60]))
+                      txt = p.stdout
+                      if ic == "net.minecraft.client.MouseHandler":
+                          idx = txt.find("onButton(")
+                          txt = txt[max(0, idx - 80):idx + 3500] if idx >= 0 else txt[:2500]
+                      elif ic == "com.mojang.blaze3d.platform.InputConstants":
+                          lines = [l for l in txt.splitlines() if any(k in l for k in ("MOUSE", "PRESS", "RELEASE", "descriptor:", "class "))]
+                          txt = "\n".join(lines[:100])
+                      elif ic == "net.minecraft.client.gui.screens.Screen":
+                          lines = [l for l in txt.splitlines() if any(k in l for k in ("mouse", "Mouse", "descriptor:", "class "))]
+                          txt = "\n".join(lines[:80])
                       else:
-                          inspect_out.append(f"=== {ic} ===\n" + "\n".join(p.stdout.splitlines()[:90]))
+                          txt = "\n".join(txt.splitlines()[:90])
+                      inspect_out.append(f"=== {ic} ===\n" + txt)
                   else:
                       inspect_out.append(f"=== {ic} === NOT FOUND")
-              post_comment("### 26.3 API inspection\n```text\n" + "\n\n".join(inspect_out)[:58000] + "\n```")
+              post_comment("### 26.3 API inspection 2\n```text\n" + "\n\n".join(inspect_out)[:58000] + "\n```")
               if missing:
                   post_comment("### 26.3 Mixin / AccessWidener check FAILED\nMissing:\n" + "\n".join(f"- {m}" for m in missing) + "\n\n```text\n" + report[:50000] + "\n```")
                   sys.exit(1)
