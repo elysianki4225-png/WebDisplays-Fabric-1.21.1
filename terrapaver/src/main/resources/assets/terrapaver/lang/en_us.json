@@ -113,7 +113,8 @@
   "terrapaver.cfg.drop_blocks": "Drop Excavated Terrain Blocks",
 
   "terrapaver.status.ready": "Ready to pave",
-  "terrapaver.status.surveying": "AI Evaluating Terrain & Optimizing Route...",
+  "terrapaver.status.surveying": "AI Analyzing 3D Terrain & Optimizing Spline...",
+  "terrapaver.status.healing": "AI Smoothing & Restoring Surrounding Landscape...",
   "terrapaver.status.paving": "Laying Surface Roadbed & Blending Slopes...",
   "terrapaver.status.cut": "Excavating Open Cut & Grading Banks...",
   "terrapaver.status.tunnel": "Boring & Lining Tunnel...",

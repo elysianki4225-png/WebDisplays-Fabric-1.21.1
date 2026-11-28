@@ -27,11 +27,22 @@ object ServerPavingManager {
 
         var paused = false
         var surveying = true
+        var healing = false
         var stations: List<RouteStation> = emptyList()
         var cursor = 0
         var tunnelSegments = 0
         var viaductSegments = 0
         var syncTicker = 0
+    }
+
+    private class PreviewJob(
+        val playerId: UUID,
+        val level: ServerLevel,
+        waypoints: List<BlockPos>,
+        cfg: PavingConfig
+    ) {
+        val streamer = ChunkStreamer(level, cfg.enableUnloadedChunks)
+        val planner = IncrementalRoutePlanner(streamer, waypoints, cfg)
     }
 
     private data class UndoEntry(
@@ -41,6 +52,7 @@ object ServerPavingManager {
 
     private val waypointLists = HashMap<UUID, ArrayList<BlockPos>>()
     private val activeJobs = HashMap<UUID, ActiveJob>()
+    private val previewJobs = HashMap<UUID, PreviewJob>()
     private val undoStacks = HashMap<UUID, ArrayDeque<UndoEntry>>()
 
     fun handleSurveyorClick(player: ServerPlayer, clickedPos: BlockPos) {
@@ -136,6 +148,7 @@ object ServerPavingManager {
 
     fun clearSelection(player: ServerPlayer) {
         waypointLists.remove(player.uuid)
+        previewJobs.remove(player.uuid)?.streamer?.releaseAll()
         syncSelection(player)
         TerraPaverNet.sendToPlayer(
             player,
@@ -158,6 +171,7 @@ object ServerPavingManager {
             return
         }
         val sanitized = cfg.copySanitized()
+        previewJobs.remove(player.uuid)?.streamer?.releaseAll()
         activeJobs.remove(player.uuid)?.streamer?.releaseAll()
 
         val list = waypointLists.getOrPut(player.uuid) { ArrayList() }
@@ -267,9 +281,32 @@ object ServerPavingManager {
                 kindsList.toByteArray()
             )
         )
+
+        // Launch live background AI route solver so player sees true AI curves, tunnels, & viaducts in 3D!
+        previewJobs.remove(player.uuid)?.streamer?.releaseAll()
+        if (!activeJobs.containsKey(player.uuid)) {
+            previewJobs[player.uuid] = PreviewJob(player.uuid, player.serverLevel(), waypoints.toList(), cfg.copySanitized())
+        }
     }
 
     fun tick(server: MinecraftServer) {
+        // Step background AI route previews
+        if (previewJobs.isNotEmpty()) {
+            val donePreviews = ArrayList<UUID>()
+            for ((uuid, pJob) in previewJobs) {
+                pJob.planner.stepBudget(256)
+                if (pJob.planner.isDone()) {
+                    val player = server.playerList.getPlayer(uuid)
+                    if (player != null) {
+                        sendPlannedPreview(player, pJob.planner.getStations())
+                    }
+                    pJob.streamer.releaseAll()
+                    donePreviews.add(uuid)
+                }
+            }
+            for (uuid in donePreviews) previewJobs.remove(uuid)
+        }
+
         if (activeJobs.isEmpty()) return
         val finished = ArrayList<UUID>()
 
@@ -281,7 +318,7 @@ object ServerPavingManager {
             }
 
             if (job.surveying) {
-                job.planner.stepBudget(48)
+                job.planner.stepBudget(256)
                 if (job.planner.isDone()) {
                     job.surveying = false
                     job.stations = job.planner.getStations()
@@ -291,7 +328,7 @@ object ServerPavingManager {
                         sendPlannedPreview(player, job.stations)
                     }
                 }
-            } else {
+            } else if (!job.healing) {
                 val budget = job.cfg.blocksPerTick
                 val startBlocks = job.builder.placedCount
                 while (job.cursor < job.stations.size && (job.builder.placedCount - startBlocks) < budget) {
@@ -310,42 +347,46 @@ object ServerPavingManager {
                         job.streamer.ensureAreaLoaded(st.x.roundToInt(), st.z.roundToInt(), 24)
                         job.builder.buildStationDecorations(job.stations, k)
                     }
+                    job.healing = true
+                }
+            } else {
+                val healDone = job.builder.healLandscapeStep(128)
+                if (healDone) {
+                    finished.add(uuid)
+                    job.streamer.releaseAll()
+                    if (job.snapshot.size() > 0) {
+                        pushUndo(uuid, job.level, job.snapshot)
+                    }
+                    if (player != null) {
+                        syncSelection(player)
+                        val end = job.waypoints.last()
+                        TerraPaverNet.sendToPlayer(
+                            player,
+                            TerraPaverNet.S2CPavingStatus(
+                                active = false,
+                                paused = false,
+                                phase = TerraPaverNet.S2CPavingStatus.PHASE_DONE,
+                                progress = 1f,
+                                currentStep = job.stations.size,
+                                totalSteps = job.stations.size,
+                                placedBlocks = job.builder.placedCount,
+                                tunnelSegments = job.tunnelSegments,
+                                viaductSegments = job.viaductSegments,
+                                statusKey = "terrapaver.status.done",
+                                headX = end.x,
+                                headY = end.y,
+                                headZ = end.z
+                            )
+                        )
+                        player.displayClientMessage(
+                            Component.translatable("terrapaver.msg.completed", job.builder.placedCount),
+                            true
+                        )
+                    }
                 }
             }
 
-            if (!job.surveying && job.cursor >= job.stations.size) {
-                finished.add(uuid)
-                job.streamer.releaseAll()
-                if (job.snapshot.size() > 0) {
-                    pushUndo(uuid, job.level, job.snapshot)
-                }
-                if (player != null) {
-                    syncSelection(player)
-                    val end = job.waypoints.last()
-                    TerraPaverNet.sendToPlayer(
-                        player,
-                        TerraPaverNet.S2CPavingStatus(
-                            active = false,
-                            paused = false,
-                            phase = TerraPaverNet.S2CPavingStatus.PHASE_DONE,
-                            progress = 1f,
-                            currentStep = job.stations.size,
-                            totalSteps = job.stations.size,
-                            placedBlocks = job.builder.placedCount,
-                            tunnelSegments = job.tunnelSegments,
-                            viaductSegments = job.viaductSegments,
-                            statusKey = "terrapaver.status.done",
-                            headX = end.x,
-                            headY = end.y,
-                            headZ = end.z
-                        )
-                    )
-                    player.displayClientMessage(
-                        Component.translatable("terrapaver.msg.completed", job.builder.placedCount),
-                        true
-                    )
-                }
-            } else if (player != null && job.syncTicker++ % 3 == 0) {
+            if (!finished.contains(uuid) && player != null && job.syncTicker++ % 3 == 0) {
                 sendStatus(player, job)
             }
         }
@@ -356,10 +397,13 @@ object ServerPavingManager {
     }
 
     fun onDisconnect(player: ServerPlayer) {
+        previewJobs.remove(player.uuid)?.streamer?.releaseAll()
         activeJobs.remove(player.uuid)?.streamer?.releaseAll()
     }
 
     fun shutdown(server: MinecraftServer) {
+        for (job in previewJobs.values) job.streamer.releaseAll()
+        previewJobs.clear()
         for (job in activeJobs.values) {
             job.streamer.releaseAll()
         }
@@ -420,6 +464,7 @@ object ServerPavingManager {
         val statusKey = when {
             job.paused -> "terrapaver.status.paused"
             job.surveying -> "terrapaver.status.surveying"
+            job.healing -> "terrapaver.status.healing"
             curStation?.type == StationType.TUNNEL -> "terrapaver.status.tunnel"
             curStation?.type == StationType.VIADUCT -> "terrapaver.status.viaduct"
             curStation?.type == StationType.CUT -> "terrapaver.status.cut"

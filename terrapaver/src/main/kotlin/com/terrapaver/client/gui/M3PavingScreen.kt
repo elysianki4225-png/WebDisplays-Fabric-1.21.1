@@ -80,6 +80,11 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
 
     private fun save() {
         PavingConfig.saveClient(cfg)
+        if (ClientPavingState.hasEnoughWaypoints() && ClientPavingState.status?.active != true) {
+            TerraPaverNet.sendToServer(
+                TerraPaverNet.C2SPreviewRoute(ClientPavingState.waypoints.toList(), cfg.toJson())
+            )
+        }
     }
 
     private fun theme(): M3Palette = M3Theme.get(cfg.m3SeedTheme)

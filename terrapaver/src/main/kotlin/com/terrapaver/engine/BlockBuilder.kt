@@ -46,7 +46,20 @@ class BlockBuilder(
     private val snapshot: UndoSnapshot,
     private val streamer: ChunkStreamer
 ) {
+    private data class BlendColMeta(
+        val x: Int,
+        val z: Int,
+        val naturalTop: BlockState,
+        val naturalSub: BlockState,
+        val hasSnowCover: Boolean
+    )
+
     private val mPos = BlockPos.MutableBlockPos()
+    private val blendedColumns = LinkedHashMap<Long, BlendColMeta>(1024)
+    private var healList: List<BlendColMeta>? = null
+    private var healPass = 0
+    private var healCursor = 0
+
     var placedCount: Int = 0
         private set
 
@@ -446,6 +459,7 @@ class BlockBuilder(
 
                     val naturalTop = col.surfaceBlock
                     val naturalSub = if (naturalTop.`is`(Blocks.GRASS_BLOCK)) Blocks.DIRT.defaultBlockState() else naturalTop
+                    blendedColumns.putIfAbsent(key, BlendColMeta(bx, bz, naturalTop, naturalSub, col.hasSnowCover))
 
                     if (col.groundY < targetY) {
                         for (y in (col.groundY + 1)..targetY) {
@@ -472,6 +486,88 @@ class BlockBuilder(
                 }
             }
         }
+    }
+
+    /**
+     * Global 2D Laplacian Landscape Healing Pass:
+     * Relaxes any residual 1-block spires, trenches, or jagged step artifacts across the entire
+     * disturbed corridor so the finished highway/railbed sits inside naturally flowing earth terrain.
+     * Returns true once all healing passes are complete.
+     */
+    fun healLandscapeStep(budgetCols: Int = 96): Boolean {
+        if (!cfg.terrainBlending || blendedColumns.isEmpty()) return true
+        val list = healList ?: blendedColumns.values.toList().also { healList = it }
+        if (healPass >= 2) return true
+
+        var done = 0
+        while (healCursor < list.size && done < budgetCols) {
+            val meta = list[healCursor]
+            healCursor++
+            done++
+
+            streamer.ensureAreaLoaded(meta.x, meta.z, 4)
+            val col = streamer.sampleColumn(meta.x, meta.z)
+            if (col.hasLiquid) continue
+
+            // Protect roadbed/lamps/guardrails nearby
+            var nearProtected = false
+            for (dy in -1..2) {
+                mPos.set(meta.x, col.groundY + dy, meta.z)
+                if (isProtectedRoadBlock(level.getBlockState(mPos))) {
+                    nearProtected = true
+                    break
+                }
+            }
+            if (nearProtected) continue
+
+            val dirs = arrayOf(intArrayOf(1, 0), intArrayOf(-1, 0), intArrayOf(0, 1), intArrayOf(0, -1))
+            var sumY = 0
+            var count = 0
+            for (d in dirs) {
+                val nx = meta.x + d[0]
+                val nz = meta.z + d[1]
+                val nc = streamer.sampleColumn(nx, nz)
+                if (!nc.hasLiquid) {
+                    sumY += nc.groundY
+                    count++
+                }
+            }
+            if (count < 2) continue
+
+            val avgY = (sumY.toDouble() / count.toDouble()).roundToInt()
+            val diff = avgY - col.groundY
+            if (abs(diff) >= 2) {
+                val relaxedY = col.groundY + (diff / 2)
+                if (relaxedY > col.groundY) {
+                    for (y in (col.groundY + 1)..relaxedY) {
+                        mPos.set(meta.x, y, meta.z)
+                        if (isProtectedRoadBlock(level.getBlockState(mPos))) break
+                        setBlockSafe(meta.x, y, meta.z, if (y == relaxedY) meta.naturalTop else meta.naturalSub)
+                    }
+                    if (meta.hasSnowCover && meta.naturalTop.`is`(Blocks.GRASS_BLOCK)) {
+                        setBlockSafe(meta.x, relaxedY + 1, meta.z, Blocks.SNOW.defaultBlockState())
+                    }
+                } else if (relaxedY < col.groundY) {
+                    val worldTopY = level.getHeight(Heightmap.Types.WORLD_SURFACE, meta.x, meta.z)
+                    val topClear = max(col.topSolidY + 2, worldTopY + 2)
+                    for (y in (relaxedY + 1)..topClear) {
+                        mPos.set(meta.x, y, meta.z)
+                        if (isProtectedRoadBlock(level.getBlockState(mPos))) continue
+                        setBlockSafe(meta.x, y, meta.z, Blocks.AIR.defaultBlockState())
+                    }
+                    setBlockSafe(meta.x, relaxedY, meta.z, meta.naturalTop)
+                    if (meta.hasSnowCover && meta.naturalTop.`is`(Blocks.GRASS_BLOCK)) {
+                        setBlockSafe(meta.x, relaxedY + 1, meta.z, Blocks.SNOW.defaultBlockState())
+                    }
+                }
+            }
+        }
+
+        if (healCursor >= list.size) {
+            healPass++
+            healCursor = 0
+        }
+        return healPass >= 2
     }
 
     private fun buildViaductSlice(

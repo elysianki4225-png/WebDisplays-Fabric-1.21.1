@@ -113,7 +113,8 @@
   "terrapaver.cfg.drop_blocks": "掉落被挖掘的方块",
 
   "terrapaver.status.ready": "准备就绪",
-  "terrapaver.status.surveying": "AI 正在分析地形并规划路线...",
+  "terrapaver.status.surveying": "AI 正在进行 3D 地形场与样条路线优化...",
+  "terrapaver.status.healing": "AI 正在进行全走廊地形自然平滑修复...",
   "terrapaver.status.paving": "正在铺设路面路基与自然护坡...",
   "terrapaver.status.cut": "正在开挖路堑并修整边坡...",
   "terrapaver.status.tunnel": "正在自动开凿并衬砌隧道...",
