@@ -100,8 +100,9 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
 
         init {
             if (MCEF.isInitialized()) {
+                val resolved = if (url.isBlank()) CommonConfig.Browser.homepage else Util.resolveUrlOrSearch(url)
                 val webUrl = try {
-                    TileEntityScreen.url(url)
+                    TileEntityScreen.url(resolved)
                 } catch (e: IOException) {
                     throw RuntimeException(e)
                 }

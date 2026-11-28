@@ -295,6 +295,115 @@ object MobileEmulation {
       });
     }
   } catch (_) {}
+
+  var wdTouchState = { active: false, target: null, startX: 0, startY: 0, curX: 0, curY: 0 };
+
+  function dispatchSyntheticTouch(type, target, x, y, includeTouches) {
+    try {
+      if (!target || typeof TouchEvent === 'undefined' || typeof Touch === 'undefined') return false;
+      var t = new Touch({
+        identifier: 1,
+        target: target,
+        clientX: x,
+        clientY: y,
+        pageX: x + (window.scrollX || 0),
+        pageY: y + (window.scrollY || 0),
+        screenX: x,
+        screenY: y,
+        radiusX: 12,
+        radiusY: 12,
+        rotationAngle: 0,
+        force: type === 'touchend' ? 0 : 1
+      });
+      var touches = includeTouches ? [t] : [];
+      var ev = new TouchEvent(type, {
+        cancelable: true,
+        bubbles: true,
+        composed: true,
+        touches: touches,
+        targetTouches: touches,
+        changedTouches: [t]
+      });
+      target.dispatchEvent(ev);
+      return ev.defaultPrevented;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function scrollChain(el, deltaX, deltaY) {
+    var cur = el || document.documentElement || document.body;
+    var remX = deltaX;
+    var remY = deltaY;
+    while (cur) {
+      var isRoot = (cur === document.documentElement || cur === document.body);
+      var st = null;
+      try { st = isRoot ? null : window.getComputedStyle(cur); } catch (_) {}
+      if (Math.abs(remY) > 0.01) {
+        var canY = isRoot || (st && (st.overflowY === 'auto' || st.overflowY === 'scroll' || st.overflowY === 'overlay'));
+        if (canY && cur.scrollHeight > cur.clientHeight + 1) {
+          var targetY = isRoot ? (document.scrollingElement || document.documentElement || document.body) : cur;
+          var beforeY = targetY.scrollTop;
+          targetY.scrollTop = beforeY + remY;
+          remY -= (targetY.scrollTop - beforeY);
+        }
+      }
+      if (Math.abs(remX) > 0.01) {
+        var canX = isRoot || (st && (st.overflowX === 'auto' || st.overflowX === 'scroll' || st.overflowX === 'overlay'));
+        if (canX && cur.scrollWidth > cur.clientWidth + 1) {
+          var targetX = isRoot ? (document.scrollingElement || document.documentElement || document.body) : cur;
+          var beforeX = targetX.scrollLeft;
+          targetX.scrollLeft = beforeX + remX;
+          remX -= (targetX.scrollLeft - beforeX);
+        }
+      }
+      if (isRoot || (Math.abs(remX) <= 0.01 && Math.abs(remY) <= 0.01)) break;
+      cur = cur.parentElement || document.documentElement;
+    }
+    if (Math.abs(remY) > 0.01 || Math.abs(remX) > 0.01) {
+      try { window.scrollBy(remX, remY); } catch (_) {}
+    }
+  }
+
+  window.__wdTouchStart = function(x, y) {
+    var el = null;
+    try { el = document.elementFromPoint(x, y); } catch (_) {}
+    el = el || document.body || document.documentElement;
+    wdTouchState.active = true;
+    wdTouchState.target = el;
+    wdTouchState.startX = x;
+    wdTouchState.startY = y;
+    wdTouchState.curX = x;
+    wdTouchState.curY = y;
+    dispatchSyntheticTouch('touchstart', el, x, y, true);
+  };
+
+  window.__wdTouchMove = function(x, y, dx, dy) {
+    if (!wdTouchState.active) {
+      window.__wdTouchStart(x, y);
+    }
+    wdTouchState.curX = x;
+    wdTouchState.curY = y;
+    var el = wdTouchState.target || document.body || document.documentElement;
+    var canceled = dispatchSyntheticTouch('touchmove', el, x, y, true);
+    if (!canceled) {
+      scrollChain(el, -dx, -dy);
+    }
+  };
+
+  window.__wdTouchEnd = function(x, y) {
+    if (!wdTouchState.active) return;
+    wdTouchState.active = false;
+    var el = wdTouchState.target || document.body || document.documentElement;
+    wdTouchState.target = null;
+    dispatchSyntheticTouch('touchend', el, x, y, false);
+  };
+
+  window.__wdWheelScroll = function(x, y, deltaX, deltaY) {
+    var el = null;
+    try { el = document.elementFromPoint(x, y); } catch (_) {}
+    scrollChain(el || document.body || document.documentElement, deltaX, deltaY);
+  };
 })();
 """
 }

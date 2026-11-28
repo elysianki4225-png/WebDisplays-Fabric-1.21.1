@@ -50,6 +50,7 @@ import net.montoyo.wd.utilities.NibbleArray
 import net.montoyo.wd.utilities.Rotation
 import net.montoyo.wd.utilities.ScreenIterator
 import net.montoyo.wd.utilities.TypeData
+import net.montoyo.wd.utilities.Util
 import net.montoyo.wd.utilities.Vector2i
 import net.montoyo.wd.utilities.Vector3f
 import net.montoyo.wd.utilities.Vector3i
@@ -478,7 +479,7 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
             return
         }
 
-        var weburl = url(url)
+        var weburl = url(Util.resolveUrlOrSearch(url))
         weburl = WebDisplays.applyBlacklist(weburl) ?: weburl
         scr.url = weburl
         scr.videoType = VideoType.getTypeFromURL(weburl)

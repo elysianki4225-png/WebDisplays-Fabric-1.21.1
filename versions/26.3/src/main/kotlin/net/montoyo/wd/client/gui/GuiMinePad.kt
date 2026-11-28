@@ -40,6 +40,7 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Optional
 import java.util.UUID
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 
@@ -70,6 +71,15 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
 
     private var urlBox: WDEditBox? = null
     private var lastSyncedUrl = ""
+
+    private var touchDown = false
+    private var touchSwiped = false
+    private var touchStartX = 0.0
+    private var touchStartY = 0.0
+    private var touchLastX = 0.0
+    private var touchLastY = 0.0
+    private var touchDownRx = 0
+    private var touchDownRy = 0
 
     private var trueWidth = 0
     private var trueHeight = 0
@@ -431,7 +441,7 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
             return
         }
 
-        val url = Util.addProtocol(trimmed)
+        val url = Util.resolveUrlOrSearch(trimmed)
         val target = findSmartphoneStack()
         if (!target.isEmpty) {
             val tag = target.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag()
@@ -535,7 +545,23 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
 
     override fun mouseMoved(mouseX: Double, mouseY: Double) {
         super.mouseMoved(mouseX, mouseY)
-        mouse(-1, false, mouseX.toInt(), mouseY.toInt(), 0.0)
+        if (!touchDown) {
+            mouse(-1, false, mouseX.toInt(), mouseY.toInt(), 0.0)
+        }
+    }
+
+    private fun inViewport(sx: Double, sy: Double): Boolean {
+        return vw > 0.0 && vh > 0.0 && sx >= vx && sx <= vx + vw && sy >= vy && sy <= vy + vh
+    }
+
+    private fun toClampedBrowserX(sx: Double, resX: Int): Int {
+        val mx = ((sx - vx) / vw).coerceIn(0.0, 1.0)
+        return (mx * resX).toInt().coerceIn(0, max(0, resX - 1))
+    }
+
+    private fun toClampedBrowserY(sy: Double, resY: Int): Int {
+        val my = ((sy - vy) / vh).coerceIn(0.0, 1.0)
+        return (my * resY).toInt().coerceIn(0, max(0, resY - 1))
     }
 
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
@@ -587,35 +613,124 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
                     }
                 }
             }
+
+            if (inViewport(mouseX, mouseY)) {
+                touchDown = true
+                touchSwiped = false
+                touchStartX = mouseX
+                touchStartY = mouseY
+                touchLastX = mouseX
+                touchLastY = mouseY
+                touchDownRx = toClampedBrowserX(mouseX, p.resX)
+                touchDownRy = toClampedBrowserY(mouseY, p.resY)
+                p.view?.setFocus(true)
+                return true
+            }
         }
 
         mouse(toCefMouseButton(event.button()), true, mouseX.toInt(), mouseY.toInt(), 0.0)
         return super.mouseClicked(event, doubleClick)
     }
 
+    override fun mouseDragged(event: MouseButtonEvent, dragX: Double, dragY: Double): Boolean {
+        val mouseX = event.x()
+        val mouseY = event.y()
+        val p = pad
+        val box = urlBox
+        if (p != null && p.mobile && box != null && box.isFocused) {
+            if (box.mouseDragged(event, dragX, dragY)) {
+                return true
+            }
+        }
+
+        if (p != null && p.mobile && touchDown && event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
+            val browser = p.view as? MCEFBrowser
+            val rx = toClampedBrowserX(mouseX, p.resX)
+            val ry = toClampedBrowserY(mouseY, p.resY)
+            if (!touchSwiped && hypot(mouseX - touchStartX, mouseY - touchStartY) > 4.0) {
+                touchSwiped = true
+                browser?.executeJavaScript(
+                    "window.__wdTouchStart && window.__wdTouchStart($touchDownRx, $touchDownRy);",
+                    browser.url ?: "",
+                    0
+                )
+            }
+            if (touchSwiped) {
+                val dx = (mouseX - touchLastX) / vw * p.resX
+                val dy = (mouseY - touchLastY) / vh * p.resY
+                touchLastX = mouseX
+                touchLastY = mouseY
+                if (dx != 0.0 || dy != 0.0) {
+                    browser?.executeJavaScript(
+                        "window.__wdTouchMove && window.__wdTouchMove($rx, $ry, $dx, $dy);",
+                        browser.url ?: "",
+                        0
+                    )
+                }
+            }
+            return true
+        }
+
+        if (p != null && !p.mobile && inViewport(mouseX, mouseY)) {
+            (p.view as? MCEFBrowser)?.sendMouseMove(toClampedBrowserX(mouseX, p.resX), toClampedBrowserY(mouseY, p.resY))
+        }
+
+        return super.mouseDragged(event, dragX, dragY)
+    }
+
     override fun mouseReleased(event: MouseButtonEvent): Boolean {
+        val mouseX = event.x()
+        val mouseY = event.y()
         val p = pad
         val box = urlBox
         if (p != null && p.mobile && box != null && box.isFocused) {
             box.mouseReleased(event)
         }
-        mouse(toCefMouseButton(event.button()), false, event.x().toInt(), event.y().toInt(), 0.0)
+
+        if (p != null && p.mobile && touchDown && event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
+            touchDown = false
+            val browser = p.view as? MCEFBrowser
+            val rx = toClampedBrowserX(mouseX, p.resX)
+            val ry = toClampedBrowserY(mouseY, p.resY)
+            if (touchSwiped) {
+                touchSwiped = false
+                browser?.executeJavaScript(
+                    "window.__wdTouchEnd && window.__wdTouchEnd($rx, $ry);",
+                    browser.url ?: "",
+                    0
+                )
+            } else {
+                browser?.sendMouseMove(touchDownRx, touchDownRy)
+                browser?.sendMousePress(touchDownRx, touchDownRy, 0)
+                browser?.sendMouseRelease(touchDownRx, touchDownRy, 0)
+                browser?.setFocus(true)
+            }
+            return true
+        }
+
+        mouse(toCefMouseButton(event.button()), false, mouseX.toInt(), mouseY.toInt(), 0.0)
         return super.mouseReleased(event)
     }
 
     override fun mouseScrolled(mouseX: Double, mouseY: Double, horizontalAmount: Double, amount: Double): Boolean {
         val p = pad
         val view = p?.view
-        if (view is MCEFBrowser) {
-            val mx = (mouseX - vx) / vw
-            val my = (mouseY - vy) / vh
-            if (mx in 0.0..1.0 && my in 0.0..1.0) {
-                val sx = (mx * p.resX).toInt()
-                val sy = (my * p.resY).toInt()
-                val mc = Minecraft.getInstance()
-                val mods = if (mc.hasControlDown() && !mc.hasAltDown() && !mc.hasShiftDown()) InputConstants.MOD_CONTROL else 0
+        if (view is MCEFBrowser && inViewport(mouseX, mouseY)) {
+            val sx = toClampedBrowserX(mouseX, p.resX)
+            val sy = toClampedBrowserY(mouseY, p.resY)
+            val mc = Minecraft.getInstance()
+            val mods = if (mc.hasControlDown() && !mc.hasAltDown() && !mc.hasShiftDown()) InputConstants.MOD_CONTROL else 0
+            if (amount != 0.0) {
                 view.sendMouseWheel(sx, sy, amount, mods)
             }
+            if (p.mobile && horizontalAmount != 0.0) {
+                view.executeJavaScript(
+                    "window.__wdWheelScroll && window.__wdWheelScroll($sx, $sy, ${-horizontalAmount * 48.0}, 0);",
+                    view.url ?: "",
+                    0
+                )
+            }
+            return true
         }
         return super.mouseScrolled(mouseX, mouseY, horizontalAmount, amount)
     }
@@ -659,6 +774,8 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
     override fun isForBlock(bp: BlockPos, side: BlockSide): Boolean = false
 
     override fun removed() {
+        touchDown = false
+        touchSwiped = false
         super.removed()
         val p = pad
         val view = p?.view
