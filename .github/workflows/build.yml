@@ -195,6 +195,17 @@ jobs:
                   post_comment("### 26.3 Mixin / AccessWidener check FAILED\nMissing:\n" + "\n".join(f"- {m}" for m in missing) + "\n\n```text\n" + report[:50000] + "\n```")
                   sys.exit(1)
               print("All Mixin and AccessWidener targets verified OK!")
+              for dc in [
+                  "com.mojang.blaze3d.platform.InputConstants",
+                  "net.minecraft.client.input.MouseButtonInfo",
+                  "net.minecraft.client.input.MouseButtonEvent",
+                  "net.minecraft.client.MouseHandler",
+                  "net.minecraft.client.gui.components.AbstractWidget",
+                  "net.minecraft.client.gui.screens.Screen",
+              ]:
+                  print("==== JAVAP " + dc + " ====")
+                  p = subprocess.run(["javap", "-p", "-c", "-cp", mc_jar, dc], capture_output=True, text=True, errors="replace")
+                  print(p.stdout[:18000])
           except Exception:
               post_comment("### 26.3 Mixin check crashed\n```text\n" + traceback.format_exc() + "\n```")
               sys.exit(1)
