@@ -5,6 +5,7 @@ import com.terrapaver.config.PavingMode
 import com.terrapaver.config.RiverStrategy
 import com.terrapaver.config.RoadStyle
 import com.terrapaver.config.TunnelShape
+import com.terrapaver.config.TunnelWallStyle
 import net.minecraft.core.BlockPos
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.world.level.block.Block
@@ -62,7 +63,15 @@ class BlockBuilder(
 
     private val palette: Palette = buildPalette()
 
+    private fun resolveTunnelWallBlock(): BlockState = when (cfg.tunnelWallStyle) {
+        TunnelWallStyle.SMOOTH_BASALT -> Blocks.SMOOTH_BASALT.defaultBlockState()
+        TunnelWallStyle.STONE_BRICKS -> Blocks.STONE_BRICKS.defaultBlockState()
+        TunnelWallStyle.POLISHED_DEEPSLATE -> Blocks.POLISHED_DEEPSLATE.defaultBlockState()
+        TunnelWallStyle.WHITE_CONCRETE -> Blocks.WHITE_CONCRETE.defaultBlockState()
+    }
+
     private fun buildPalette(): Palette {
+        val chosenTunnelWall = resolveTunnelWallBlock()
         if (cfg.pavingMode == PavingMode.CREATE_RAIL || cfg.roadStyle == RoadStyle.CREATE_BALLAST) {
             return Palette(
                 deck = Blocks.GRAVEL.defaultBlockState(),
@@ -74,7 +83,7 @@ class BlockBuilder(
                 guardrail = Blocks.ANDESITE_WALL.defaultBlockState(),
                 lampPost = Blocks.ANDESITE_WALL.defaultBlockState(),
                 lampBlock = Blocks.LANTERN.defaultBlockState(),
-                tunnelWall = Blocks.POLISHED_DEEPSLATE.defaultBlockState(),
+                tunnelWall = chosenTunnelWall,
                 tunnelLight = Blocks.SEA_LANTERN.defaultBlockState(),
                 viaductGirder = Blocks.POLISHED_DEEPSLATE.defaultBlockState(),
                 viaductPillar = Blocks.STONE_BRICKS.defaultBlockState(),
@@ -93,7 +102,7 @@ class BlockBuilder(
                 guardrail = Blocks.STONE_BRICK_WALL.defaultBlockState(),
                 lampPost = Blocks.STONE_BRICK_WALL.defaultBlockState(),
                 lampBlock = Blocks.LANTERN.defaultBlockState(),
-                tunnelWall = Blocks.SMOOTH_BASALT.defaultBlockState(),
+                tunnelWall = chosenTunnelWall,
                 tunnelLight = Blocks.SEA_LANTERN.defaultBlockState(),
                 viaductGirder = Blocks.POLISHED_DEEPSLATE.defaultBlockState(),
                 viaductPillar = Blocks.POLISHED_DEEPSLATE.defaultBlockState(),
@@ -109,8 +118,8 @@ class BlockBuilder(
                 guardrail = Blocks.STONE_BRICK_WALL.defaultBlockState(),
                 lampPost = Blocks.STONE_BRICK_WALL.defaultBlockState(),
                 lampBlock = Blocks.LANTERN.defaultBlockState(),
-                tunnelWall = Blocks.STONE_BRICKS.defaultBlockState(),
-                tunnelLight = Blocks.GLOWSTONE.defaultBlockState(),
+                tunnelWall = chosenTunnelWall,
+                tunnelLight = Blocks.SEA_LANTERN.defaultBlockState(),
                 viaductGirder = Blocks.STONE_BRICKS.defaultBlockState(),
                 viaductPillar = Blocks.DEEPSLATE_BRICKS.defaultBlockState(),
                 slopeSlab = Blocks.STONE_BRICK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM)
@@ -125,7 +134,7 @@ class BlockBuilder(
                 guardrail = Blocks.SPRUCE_FENCE.defaultBlockState(),
                 lampPost = Blocks.SPRUCE_FENCE.defaultBlockState(),
                 lampBlock = Blocks.LANTERN.defaultBlockState(),
-                tunnelWall = Blocks.COBBLESTONE.defaultBlockState(),
+                tunnelWall = chosenTunnelWall,
                 tunnelLight = Blocks.GLOWSTONE.defaultBlockState(),
                 viaductGirder = Blocks.STONE_BRICKS.defaultBlockState(),
                 viaductPillar = Blocks.COBBLESTONE.defaultBlockState(),
@@ -214,8 +223,8 @@ class BlockBuilder(
             }
         }
 
-        // Embankment slope taper & optional street lights
-        if (cfg.addStreetLights && index % cfg.lightInterval == 0 && cfg.roadWidth >= 3) {
+        // Embankment slope taper & optional street lights (separately configurable for Road vs Create Railbed)
+        if (cfg.shouldPlaceStreetLights() && index % cfg.lightInterval == 0 && cfg.roadWidth >= 3) {
             placeLampPost(st, roadHalfW + 1.0)
         }
     }
@@ -265,7 +274,7 @@ class BlockBuilder(
             buildViaductPier(st, roadHalfW)
         }
 
-        if (cfg.addStreetLights && index % cfg.lightInterval == 0) {
+        if (cfg.shouldPlaceStreetLights() && index % cfg.lightInterval == 0) {
             placeLampPost(st, outerHalfW)
         }
     }
@@ -330,6 +339,9 @@ class BlockBuilder(
         val isPortal = (prev == null || prev.type != StationType.TUNNEL) ||
             (next == null || next.type != StationType.TUNNEL)
         val isUnderwater = st.hasLiquid && cfg.riverStrategy == RiverStrategy.SHIELD_TUNNEL
+        val placeWalls = cfg.addTunnelWalls || isUnderwater
+        val isLightStation = cfg.addTunnelLights && (index % cfg.tunnelLightInterval == 0)
+        val wallLightDy = (innerH / 2).coerceIn(2, max(2, innerH - 1))
 
         // Sample transverse offsets + sub-steps along tangent to eliminate any diagonal shell leaks
         for (fwdStep in 0..1) {
@@ -345,7 +357,10 @@ class BlockBuilder(
                 for (dy in -1..(innerH + 1)) {
                     val wy = st.roadY + dy
                     val inside = isInsideTunnelSection(absT, dy, innerHalfW, innerH)
-                    val shell = !inside && isInsideTunnelSection(absT, dy, shellHalfW, innerH + 1)
+                    val shell = !inside && (
+                        isInsideTunnelSection(absT, dy, shellHalfW, innerH + 1) ||
+                            isInsideTunnelSection(absT, max(1, dy - 1), shellHalfW, innerH + 1)
+                        )
 
                     if (dy == -1) {
                         // Tunnel invert / foundation slab
@@ -357,22 +372,32 @@ class BlockBuilder(
                             setBlockSafe(bx, wy, bz, pickDeckBlock(absT, roadHalfW, index))
                         } else if (absT <= innerHalfW + 0.05) {
                             setBlockSafe(bx, wy, bz, palette.shoulder)
-                        } else if (shell) {
+                        } else if (placeWalls && absT <= shellHalfW) {
+                            // Solid wall footing at floor level
                             setBlockSafe(bx, wy, bz, palette.tunnelWall)
                         }
                     } else if (inside) {
-                        // Clear air inside bore
-                        setBlockSafe(bx, wy, bz, Blocks.AIR.defaultBlockState())
+                        // Clear air inside bore (and recessed ceiling light strip at crown)
+                        val isCeilingLight = isLightStation && dy == innerH && absT <= 0.75
+                        if (isCeilingLight) {
+                            setBlockSafe(bx, wy, bz, palette.tunnelLight)
+                        } else {
+                            setBlockSafe(bx, wy, bz, Blocks.AIR.defaultBlockState())
+                        }
                     } else if (shell) {
                         val isSkylight = isUnderwater && dy >= innerH && absT <= 1.2
-                        val isCeilingLight = (index % cfg.lightInterval == 0) && dy >= innerH && absT <= 0.75
-                        val wallBlock = when {
-                            isCeilingLight -> palette.tunnelLight
-                            isSkylight -> Blocks.LIGHT_BLUE_STAINED_GLASS.defaultBlockState()
-                            isPortal -> palette.viaductGirder
-                            else -> palette.tunnelWall
+                        val isCrownShellLight = isLightStation && dy >= innerH && absT <= 0.85
+                        val isSideWallLight = isLightStation && dy == wallLightDy && absT >= innerHalfW - 0.1
+                        when {
+                            isCrownShellLight || isSideWallLight -> setBlockSafe(bx, wy, bz, palette.tunnelLight)
+                            isSkylight -> setBlockSafe(bx, wy, bz, Blocks.LIGHT_BLUE_STAINED_GLASS.defaultBlockState())
+                            placeWalls -> setBlockSafe(
+                                bx,
+                                wy,
+                                bz,
+                                if (isPortal) palette.viaductGirder else palette.tunnelWall
+                            )
                         }
-                        setBlockSafe(bx, wy, bz, wallBlock)
                     }
                 }
                 t += 0.5
@@ -380,7 +405,7 @@ class BlockBuilder(
         }
 
         // Portal warning lights at tunnel entrances/exits
-        if (isPortal) {
+        if (isPortal && cfg.addTunnelLights) {
             for (side in intArrayOf(-1, 1)) {
                 val lx = (st.x + st.px * (innerHalfW + 0.6) * side).roundToInt()
                 val lz = (st.z + st.pz * (innerHalfW + 0.6) * side).roundToInt()

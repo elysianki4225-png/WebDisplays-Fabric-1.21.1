@@ -35,6 +35,13 @@ enum class TunnelShape(val key: String) {
     RECTANGULAR("terrapaver.shape.rectangular")
 }
 
+enum class TunnelWallStyle(val key: String) {
+    SMOOTH_BASALT("terrapaver.wall.basalt"),
+    STONE_BRICKS("terrapaver.wall.stone_bricks"),
+    POLISHED_DEEPSLATE("terrapaver.wall.deepslate"),
+    WHITE_CONCRETE("terrapaver.wall.concrete")
+}
+
 data class PavingConfig(
     var pavingMode: PavingMode = PavingMode.ROAD,
     var roadWidth: Int = 5,
@@ -46,11 +53,16 @@ data class PavingConfig(
     var tunnelWidth: Int = 7,
     var tunnelHeight: Int = 6,
     var tunnelShape: TunnelShape = TunnelShape.ARCH,
+    var tunnelWallStyle: TunnelWallStyle = TunnelWallStyle.SMOOTH_BASALT,
+    var addTunnelWalls: Boolean = true,
+    var addTunnelLights: Boolean = true,
+    var tunnelLightInterval: Int = 8,
     var tunnelCutThreshold: Int = 4,
     var viaductPillarSpacing: Int = 8,
     var addGuardrails: Boolean = true,
     var addLaneMarkings: Boolean = true,
-    var addStreetLights: Boolean = true,
+    var addRoadLights: Boolean = true,
+    var addRailLights: Boolean = false,
     var lightInterval: Int = 12,
     var blocksPerTick: Int = 128,
     var enableUnloadedChunks: Boolean = true,
@@ -63,6 +75,7 @@ data class PavingConfig(
         maxSlopeRun = maxSlopeRun.coerceIn(2, 8)
         tunnelWidth = tunnelWidth.coerceIn(5, 21)
         tunnelHeight = tunnelHeight.coerceIn(4, 15)
+        tunnelLightInterval = tunnelLightInterval.coerceIn(4, 16)
         tunnelCutThreshold = tunnelCutThreshold.coerceIn(2, 12)
         viaductPillarSpacing = viaductPillarSpacing.coerceIn(4, 16)
         lightInterval = lightInterval.coerceIn(6, 24)
@@ -70,6 +83,9 @@ data class PavingConfig(
         m3SeedTheme = m3SeedTheme.coerceIn(0, 3)
         return this
     }
+
+    fun shouldPlaceStreetLights(): Boolean =
+        if (pavingMode == PavingMode.CREATE_RAIL) addRailLights else addRoadLights
 
     fun effectiveTunnelWidth(): Int {
         if (!autoTunnelSize) return tunnelWidth.coerceIn(5, 21)

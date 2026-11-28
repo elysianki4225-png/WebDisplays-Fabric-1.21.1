@@ -187,7 +187,11 @@ object M3Draw {
         val shellThick = max(3, (scale * 0.9).roundToInt())
         val tunnelTopPx = (tunnelH * scale).roundToInt()
 
-        val shellColor = M3Theme.blend(theme.outline, theme.primaryContainer, 0.35f)
+        val shellColor = if (cfg.addTunnelWalls) {
+            M3Theme.blend(theme.outline, theme.primaryContainer, 0.35f)
+        } else {
+            M3Theme.withAlpha(theme.outlineVariant, 70)
+        }
         val boreColor = theme.card
 
         when (cfg.tunnelShape) {
@@ -269,8 +273,13 @@ object M3Draw {
             }
         }
 
-        // Ceiling lantern indicator
-        fillRoundedRect(g, originX.roundToInt() - 4, (floorY - tunnelTopPx + 1).roundToInt(), 8, 3, 1, 0xFFFFB300.toInt())
+        // Tunnel ceiling + side-wall lights indicator
+        if (cfg.addTunnelLights) {
+            fillRoundedRect(g, originX.roundToInt() - 4, (floorY - tunnelTopPx + 1).roundToInt(), 8, 3, 1, 0xFFFFB300.toInt())
+            val wallLightY = (floorY - tunnelTopPx * 0.48).roundToInt()
+            fillRoundedRect(g, (originX - halfTunnelPx + 1).roundToInt(), wallLightY, 3, 5, 1, 0xFFFFB300.toInt())
+            fillRoundedRect(g, (originX + halfTunnelPx - 4).roundToInt(), wallLightY, 3, 5, 1, 0xFFFFB300.toInt())
+        }
 
         // Roadbed / Create Railbed deck
         val halfRoadPx = (roadW * scale * 0.5).roundToInt()

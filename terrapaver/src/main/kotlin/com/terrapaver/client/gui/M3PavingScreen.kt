@@ -7,6 +7,7 @@ import com.terrapaver.config.PavingMode
 import com.terrapaver.config.RiverStrategy
 import com.terrapaver.config.RoadStyle
 import com.terrapaver.config.TunnelShape
+import com.terrapaver.config.TunnelWallStyle
 import com.terrapaver.network.TerraPaverNet
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphics
@@ -56,7 +57,7 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
     override fun init() {
         super.init()
         winW = min(560, width - 24).coerceAtLeast(380)
-        winH = min(350, height - 24).coerceAtLeast(260)
+        winH = min(376, height - 18).coerceAtLeast(256)
         winX = (width - winW) / 2
         winY = (height - winH) / 2
     }
@@ -418,15 +419,19 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
         }
         cy += 32
 
-        val colW = (w - 38) / 3
+        val colW = (w - 34) / 2
+        drawSwitchTile(g, mouseX, mouseY, x + 14, cy, colW, I18n.get("terrapaver.cfg.road_lights"), cfg.addRoadLights, t) {
+            cfg.addRoadLights = !cfg.addRoadLights; save()
+        }
+        drawSwitchTile(g, mouseX, mouseY, x + 20 + colW, cy, colW, I18n.get("terrapaver.cfg.rail_lights"), cfg.addRailLights, t) {
+            cfg.addRailLights = !cfg.addRailLights; save()
+        }
+        cy += 32
         drawSwitchTile(g, mouseX, mouseY, x + 14, cy, colW, I18n.get("terrapaver.cfg.guardrails"), cfg.addGuardrails, t) {
             cfg.addGuardrails = !cfg.addGuardrails; save()
         }
-        drawSwitchTile(g, mouseX, mouseY, x + 19 + colW, cy, colW, I18n.get("terrapaver.cfg.markings"), cfg.addLaneMarkings, t) {
+        drawSwitchTile(g, mouseX, mouseY, x + 20 + colW, cy, colW, I18n.get("terrapaver.cfg.markings"), cfg.addLaneMarkings, t) {
             cfg.addLaneMarkings = !cfg.addLaneMarkings; save()
-        }
-        drawSwitchTile(g, mouseX, mouseY, x + 24 + colW * 2, cy, colW, I18n.get("terrapaver.cfg.lights"), cfg.addStreetLights, t) {
-            cfg.addStreetLights = !cfg.addStreetLights; save()
         }
     }
 
@@ -435,7 +440,8 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
         x: Int, y: Int, w: Int, h: Int, t: M3Palette
     ) {
         M3Draw.drawCard(g, x, y, w, h, t, elevated = true)
-        var cy = y + 12
+        var cy = y + 10
+        val halfW = (w - 36) / 2
 
         // Auto-adapt tunnel diameter switch
         drawSwitchTile(
@@ -446,35 +452,68 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
             cfg.autoTunnelSize = !cfg.autoTunnelSize
             save()
         }
-        cy += 36
+        cy += 32
 
         if (!cfg.autoTunnelSize) {
-            cy = drawSliderRow(
-                g, mouseX, mouseY, x + 14, cy, w - 28,
+            drawSliderRow(
+                g, mouseX, mouseY, x + 14, cy, halfW,
                 I18n.get("terrapaver.cfg.tunnel_width"),
                 5, 21, { cfg.tunnelWidth }, "${cfg.tunnelWidth}m", t
             ) { v -> cfg.tunnelWidth = v; save() }
-
-            cy = drawSliderRow(
-                g, mouseX, mouseY, x + 14, cy, w - 28,
+            drawSliderRow(
+                g, mouseX, mouseY, x + 22 + halfW, cy, halfW,
                 I18n.get("terrapaver.cfg.tunnel_height"),
                 4, 15, { cfg.tunnelHeight }, "${cfg.tunnelHeight}m", t
             ) { v -> cfg.tunnelHeight = v; save() }
+            cy += 30
         } else {
-            M3Draw.fillRoundedRect(g, x + 14, cy, w - 28, 28, 10, t.primaryContainer)
+            M3Draw.fillRoundedRect(g, x + 14, cy, w - 28, 24, 10, t.primaryContainer)
             g.drawString(
                 font,
                 I18n.get("terrapaver.cfg.auto_tunnel_info", cfg.effectiveTunnelWidth(), cfg.effectiveTunnelHeight()),
-                x + 24, cy + 10, t.onPrimaryContainer, false
+                x + 24, cy + 8, t.onPrimaryContainer, false
             )
-            cy += 36
+            cy += 30
         }
 
+        // Tunnel Walls + Tunnel Lights switches
+        drawSwitchTile(
+            g, mouseX, mouseY, x + 14, cy, halfW,
+            I18n.get("terrapaver.cfg.tunnel_walls"),
+            cfg.addTunnelWalls, t
+        ) {
+            cfg.addTunnelWalls = !cfg.addTunnelWalls
+            save()
+        }
+        drawSwitchTile(
+            g, mouseX, mouseY, x + 22 + halfW, cy, halfW,
+            I18n.get("terrapaver.cfg.tunnel_lights"),
+            cfg.addTunnelLights, t
+        ) {
+            cfg.addTunnelLights = !cfg.addTunnelLights
+            save()
+        }
+        cy += 32
+
+        g.drawString(font, I18n.get("terrapaver.cfg.tunnel_wall_style"), x + 14, cy, t.onSurface, false)
+        cy += 12
+        val wallStyles = TunnelWallStyle.entries
+        drawSegmentedRow(
+            g, mouseX, mouseY, x + 14, cy, w - 28, 21,
+            wallStyles.map { I18n.get(it.key) },
+            wallStyles.indexOf(cfg.tunnelWallStyle),
+            t
+        ) { idx ->
+            cfg.tunnelWallStyle = wallStyles[idx]
+            save()
+        }
+        cy += 27
+
         g.drawString(font, I18n.get("terrapaver.cfg.tunnel_shape"), x + 14, cy, t.onSurface, false)
-        cy += 14
+        cy += 12
         val shapes = TunnelShape.entries
         drawSegmentedRow(
-            g, mouseX, mouseY, x + 14, cy, w - 28, 22,
+            g, mouseX, mouseY, x + 14, cy, w - 28, 21,
             shapes.map { I18n.get(it.key) },
             shapes.indexOf(cfg.tunnelShape),
             t
@@ -482,12 +521,12 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
             cfg.tunnelShape = shapes[idx]
             save()
         }
-        cy += 32
+        cy += 27
 
         g.drawString(font, I18n.get("terrapaver.cfg.river"), x + 14, cy, t.onSurface, false)
-        cy += 14
+        cy += 12
         drawSegmentedRow(
-            g, mouseX, mouseY, x + 14, cy, w - 28, 22,
+            g, mouseX, mouseY, x + 14, cy, w - 28, 21,
             listOf(I18n.get(RiverStrategy.AUTO_VIADUCT.key), I18n.get(RiverStrategy.SHIELD_TUNNEL.key)),
             if (cfg.riverStrategy == RiverStrategy.AUTO_VIADUCT) 0 else 1,
             t
@@ -495,16 +534,16 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
             cfg.riverStrategy = if (idx == 0) RiverStrategy.AUTO_VIADUCT else RiverStrategy.SHIELD_TUNNEL
             save()
         }
-        cy += 32
-
-        cy = drawSliderRow(
-            g, mouseX, mouseY, x + 14, cy, w - 28,
-            I18n.get("terrapaver.cfg.cut_threshold"),
-            2, 12, { cfg.tunnelCutThreshold }, "${cfg.tunnelCutThreshold}m", t
-        ) { v -> cfg.tunnelCutThreshold = v; save() }
+        cy += 28
 
         drawSliderRow(
-            g, mouseX, mouseY, x + 14, cy, w - 28,
+            g, mouseX, mouseY, x + 14, cy, halfW,
+            I18n.get("terrapaver.cfg.tunnel_light_interval"),
+            4, 16, { cfg.tunnelLightInterval }, "${cfg.tunnelLightInterval}m", t
+        ) { v -> cfg.tunnelLightInterval = v; save() }
+
+        drawSliderRow(
+            g, mouseX, mouseY, x + 22 + halfW, cy, halfW,
             I18n.get("terrapaver.cfg.pillar_spacing"),
             4, 16, { cfg.viaductPillarSpacing }, "${cfg.viaductPillarSpacing}m", t
         ) { v -> cfg.viaductPillarSpacing = v; save() }
@@ -515,7 +554,7 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
         x: Int, y: Int, w: Int, h: Int, t: M3Palette
     ) {
         M3Draw.drawCard(g, x, y, w, h, t, elevated = true)
-        var cy = y + 14
+        var cy = y + 12
 
         cy = drawSliderRow(
             g, mouseX, mouseY, x + 14, cy, w - 28,
@@ -528,6 +567,12 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
             I18n.get("terrapaver.cfg.light_interval"),
             6, 24, { cfg.lightInterval }, "${cfg.lightInterval}m", t
         ) { v -> cfg.lightInterval = v; save() }
+
+        cy = drawSliderRow(
+            g, mouseX, mouseY, x + 14, cy, w - 28,
+            I18n.get("terrapaver.cfg.cut_threshold"),
+            2, 12, { cfg.tunnelCutThreshold }, "${cfg.tunnelCutThreshold}m", t
+        ) { v -> cfg.tunnelCutThreshold = v; save() }
 
         drawSwitchTile(
             g, mouseX, mouseY, x + 14, cy, w - 28,
