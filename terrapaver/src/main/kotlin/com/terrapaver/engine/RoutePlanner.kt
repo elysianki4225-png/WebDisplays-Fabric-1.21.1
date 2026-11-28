@@ -319,8 +319,6 @@ class IncrementalRoutePlanner(
         open.add(Node3D(startState, startH))
 
         val tunnelH = cfg.effectiveTunnelHeight()
-        val maxSlope = 1.0 / cfg.maxSlopeRun.toDouble()
-        val neededSlope = abs(legEnd.y - legStart.y) / dist
         val effectiveSlope = max(maxSlope, neededSlope + 0.03)
 
         var bestEndState = -1
