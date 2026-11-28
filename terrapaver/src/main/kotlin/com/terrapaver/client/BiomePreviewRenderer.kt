@@ -9,6 +9,7 @@ import com.mojang.blaze3d.vertex.VertexFormat
 import com.terrapaver.TerraPaverMod
 import com.terrapaver.config.BiomeConfig
 import com.terrapaver.config.BiomeShape
+import com.terrapaver.config.BiomeSplitMode
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.GameRenderer
@@ -56,7 +57,7 @@ object BiomePreviewRenderer {
         when (cfg.shape) {
             BiomeShape.RADIUS_BRUSH -> {
                 val r = cfg.radius.toFloat()
-                val segs = 48
+                val segs = 56
                 val y = target.y + 1.08f
                 val cx = target.x + 0.5f
                 val cz = target.z + 0.5f
@@ -67,8 +68,13 @@ object BiomePreviewRenderer {
                         builder, matrix,
                         cx + cos(a0) * r, y, cz + sin(a0) * r,
                         cx + cos(a1) * r, y, cz + sin(a1) * r,
-                        0.16f, 0.12f, 0.85f, 0.62f, 0.78f
+                        0.18f, 0.12f, 0.85f, 0.62f, 0.82f
                     )
+                }
+                if (cfg.splitMode == BiomeSplitMode.SPLIT_X) {
+                    drawBeam(builder, matrix, cx, y, cz - r, cx, y, cz + r, 0.14f, 0.96f, 0.65f, 0.12f, 0.88f)
+                } else if (cfg.splitMode == BiomeSplitMode.SPLIT_Z) {
+                    drawBeam(builder, matrix, cx - r, y, cz, cx + r, y, cz, 0.14f, 0.96f, 0.65f, 0.12f, 0.88f)
                 }
                 drawVerticalBeacon(builder, matrix, cx, y, cz, 0.18f, 2.5f, 0.12f, 0.92f, 0.65f, 0.85f)
                 hasVerts = true
@@ -78,7 +84,12 @@ object BiomePreviewRenderer {
                 val y = target.y + 1.08f
                 val cx = target.x + 0.5f
                 val cz = target.z + 0.5f
-                drawRectOutline(builder, matrix, cx - r, cx + r, y, cz - r, cz + r, 0.16f, 0.12f, 0.85f, 0.62f, 0.78f)
+                drawRectOutline(builder, matrix, cx - r, cx + r, y, cz - r, cz + r, 0.18f, 0.12f, 0.85f, 0.62f, 0.82f)
+                if (cfg.splitMode == BiomeSplitMode.SPLIT_X) {
+                    drawBeam(builder, matrix, cx, y, cz - r, cx, y, cz + r, 0.14f, 0.96f, 0.65f, 0.12f, 0.88f)
+                } else if (cfg.splitMode == BiomeSplitMode.SPLIT_Z) {
+                    drawBeam(builder, matrix, cx - r, y, cz, cx + r, y, cz, 0.14f, 0.96f, 0.65f, 0.12f, 0.88f)
+                }
                 drawVerticalBeacon(builder, matrix, cx, y, cz, 0.18f, 2.5f, 0.12f, 0.92f, 0.65f, 0.85f)
                 hasVerts = true
             }

@@ -3,6 +3,7 @@ package com.terrapaver.client.gui
 import com.terrapaver.client.ClientBiomeState
 import com.terrapaver.config.BiomeConfig
 import com.terrapaver.config.BiomeShape
+import com.terrapaver.config.BiomeSplitMode
 import com.terrapaver.config.BiomeVerticalMode
 import com.terrapaver.config.PavingConfig
 import com.terrapaver.network.TerraPaverNet
@@ -14,6 +15,8 @@ import net.minecraft.client.resources.language.I18n
 import net.minecraft.core.registries.Registries
 import net.minecraft.network.chat.Component
 import net.minecraft.resources.ResourceLocation
+import net.minecraft.world.level.ClipContext
+import net.minecraft.world.phys.HitResult
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -23,6 +26,7 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
 
     private data class BiomeEntry(
         val id: String,
+        val namespace: String,
         val path: String,
         val displayName: String,
         val category: Int,
@@ -52,6 +56,8 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
     private var cfg: BiomeConfig = BiomeConfig.loadClient().copySanitized()
     private var activeTab = 0
     private var categoryFilter = 0
+    private var modNamespaces: List<String> = listOf("")
+    private var selectedModIdx = 0
     private val tabScroll = IntArray(4)
     private var lastContentHeight = 0
 
@@ -59,7 +65,6 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
     private var filteredBiomes: List<BiomeEntry> = emptyList()
     private var searchBox: EditBox? = null
     private var lastQuery = ""
-    private var lastCat = -1
 
     private val clickRegions = ArrayList<ClickRegion>()
     private val sliderRegions = ArrayList<SliderRegion>()
@@ -79,16 +84,16 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
 
     override fun init() {
         super.init()
-        winW = min(650, width - 16).coerceAtLeast(min(340, width - 8))
-        winH = min(420, height - 14).coerceAtLeast(min(220, height - 8))
+        winW = min(668, width - 16).coerceAtLeast(min(340, width - 8))
+        winH = min(432, height - 14).coerceAtLeast(min(220, height - 8))
         winX = (width - winW) / 2
         winY = (height - winH) / 2
 
         val barH = if (winH < 270) 36 else 42
-        val railW = if (winW < 420) 56 else 68
+        val railW = if (winW < 420) 56 else 72
         val sx = winX + railW + 24
         val sy = winY + barH + 18
-        val sw = (winW - railW - 44 - 110).coerceAtLeast(100)
+        val sw = (winW - railW - 44 - 160).coerceAtLeast(90)
 
         val box = EditBox(font, sx, sy, sw, 18, Component.empty())
         box.setMaxLength(64)
@@ -118,47 +123,63 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
 
     private fun loadBiomesFromRegistry() {
         allBiomes.clear()
+        val nsSet = LinkedHashSet<String>()
+        nsSet.add("")
         val level = Minecraft.getInstance().level ?: return
         val reg = level.registryAccess().registryOrThrow(Registries.BIOME)
         for (entry in reg.entrySet()) {
             val id = entry.key.location()
+            val ns = id.namespace
+            nsSet.add(ns)
             val path = id.path
             val fullId = id.toString()
-            val name = I18n.get("biome.${id.namespace}.$path").let {
-                if (it == "biome.${id.namespace}.$path") path.replace('_', ' ') else it
+            val name = I18n.get("biome.$ns.$path").let {
+                if (it == "biome.$ns.$path") path.replace('_', ' ') else it
             }
             val b = entry.value
-            val cat = classifyBiome(id.namespace, path, b.baseTemperature)
+            val cat = classifyBiome(ns, path, b.baseTemperature)
             val gCol = (b.getGrassColor(0.0, 0.0) and 0xFFFFFF) or (0xFF shl 24)
             val wCol = (b.waterColor and 0xFFFFFF) or (0xFF shl 24)
-            allBiomes.add(BiomeEntry(fullId, path, name, cat, gCol, wCol))
+            allBiomes.add(BiomeEntry(fullId, ns, path, name, cat, gCol, wCol))
         }
-        allBiomes.sortWith(compareBy<BiomeEntry> { it.id != cfg.targetBiome }.thenBy { it.displayName })
+        modNamespaces = nsSet.toList()
+        if (selectedModIdx >= modNamespaces.size) selectedModIdx = 0
+        allBiomes.sortWith(compareBy<BiomeEntry> { it.id != cfg.targetBiome }.thenBy { !cfg.favoriteBiomes.contains(it.id) }.thenBy { it.displayName })
     }
 
+    // Categories: 0=All, 1=Forest/Plains, 2=Cold/Snow, 3=Dry/Desert, 4=Lush/Swamp/Cave, 5=Water, 6=Nether, 7=End, 8=Modded
     private fun classifyBiome(ns: String, path: String, temp: Float): Int {
-        if (ns == "minecraft" && (path.contains("nether") || path.contains("crimson") || path.contains("warped") ||
-                path.contains("basalt") || path.contains("soul_sand") || path.contains("end") ||
-                path.contains("ocean") || path.contains("river"))
-        ) return 5
+        if (path.contains("nether") || path.contains("crimson") || path.contains("warped") ||
+            path.contains("basalt") || path.contains("soul_sand")
+        ) return 6
+        if (path.contains("end") && !path.contains("meadow")) return 7
+        if (path.contains("ocean") || path.contains("river") || path.contains("beach")) return 5
         if (path.contains("snow") || path.contains("frozen") || path.contains("ice") || path.contains("grove") ||
             path.contains("peaks") || path.contains("taiga") || temp <= 0.25f
         ) return 2
         if (path.contains("desert") || path.contains("badlands") || path.contains("savanna") || temp >= 1.2f) return 3
-        if (path.contains("jungle") || path.contains("swamp") || path.contains("mangrove") || path.contains("lush") || path.contains("mushroom")) return 4
+        if (path.contains("jungle") || path.contains("swamp") || path.contains("mangrove") ||
+            path.contains("lush") || path.contains("mushroom") || path.contains("dripstone") || path.contains("deep_dark")
+        ) return 4
+        if (ns != "minecraft") return 8
         return 1
     }
 
     private fun rebuildFilter() {
         val q = lastQuery.trim().lowercase()
-        lastCat = categoryFilter
+        val modFilter = modNamespaces.getOrElse(selectedModIdx) { "" }
         filteredBiomes = allBiomes.filter { b ->
-            val catOk = categoryFilter == 0 || b.category == categoryFilter
+            val modOk = modFilter.isEmpty() || b.namespace == modFilter
+            val catOk = when (categoryFilter) {
+                0 -> true
+                8 -> b.namespace != "minecraft"
+                else -> b.category == categoryFilter
+            }
             val qOk = q.isEmpty() ||
                 b.displayName.lowercase().contains(q) ||
                 b.id.lowercase().contains(q) ||
                 b.path.lowercase().contains(q)
-            catOk && qOk
+            modOk && catOk && qOk
         }
     }
 
@@ -180,7 +201,7 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
         M3Draw.strokeRoundedRect(g, winX, winY, winW, winH, 18, t.outlineVariant)
 
         val barH = if (winH < 270) 36 else 42
-        val railW = if (winW < 420) 56 else 68
+        val railW = if (winW < 420) 56 else 72
 
         renderTopAppBar(g, mouseX, mouseY, barH, t)
         renderNavigationRail(g, mouseX, mouseY, barH, railW, t)
@@ -204,8 +225,8 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
         val yStart = contentY - tabScroll[activeTab]
         val endY = when (activeTab) {
             0 -> renderBiomePickerTab(g, mouseX, mouseY, yStart, t, partialTick)
-            1 -> renderShapeTab(g, mouseX, mouseY, yStart, t)
-            2 -> renderHeightFilterTab(g, mouseX, mouseY, yStart, t)
+            1 -> renderShapeSplitTab(g, mouseX, mouseY, yStart, t)
+            2 -> renderDimensionHeightTab(g, mouseX, mouseY, yStart, t)
             else -> renderSurfaceActionsTab(g, mouseX, mouseY, yStart, t)
         }
         g.disableScissor()
@@ -232,10 +253,10 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
         val titleText = I18n.get("terrapaver.biome.gui.title")
         val titleX = winX + 34
         val closeX = winX + winW - 34
-        g.drawString(font, M3Draw.fitText(font, titleText, closeX - titleX - 130), titleX, winY + (barH - 8) / 2, t.onSurface, false)
+        g.drawString(font, M3Draw.fitText(font, titleText, closeX - titleX - 150), titleX, winY + (barH - 8) / 2, t.onSurface, false)
 
         val currentBiomeName = formatBiomeName(cfg.targetBiome)
-        val badgeText = M3Draw.fitText(font, currentBiomeName, 118)
+        val badgeText = M3Draw.fitText(font, currentBiomeName, 132)
         val badgeW = font.width(badgeText) + 16
         val badgeX = closeX - badgeW - 8
         M3Draw.fillRoundedRect(g, badgeX, winY + (barH - 20) / 2, badgeW, 20, 10, t.secondaryContainer)
@@ -294,9 +315,11 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
         var y = yStart
         val cardW = contentW - 8
 
-        // Top search bar + "Pick Standing Biome" button
-        val pickBtnW = 104
-        val searchW = (cardW - pickBtnW - 8).coerceAtLeast(100)
+        // Row 1: Search bar + Pick Feet + Pick Aim + Mod Filter cycle
+        val modBtnW = 78
+        val pickFeetW = 64
+        val pickAimW = 64
+        val searchW = (cardW - modBtnW - pickFeetW - pickAimW - 12).coerceAtLeast(80)
         M3Draw.fillRoundedRect(g, contentX, y, searchW, 24, 12, t.surfaceContainer)
         M3Draw.strokeRoundedRect(g, contentX, y, searchW, 24, 12, if (searchBox?.isFocused == true) t.primary else t.outlineVariant)
         searchBox?.let { sb ->
@@ -306,45 +329,76 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
             sb.setTextColor(t.onSurface)
             sb.render(g, mouseX, mouseY, partialTick)
         }
-        drawActionButton(
-            g, mouseX, mouseY,
-            contentX + searchW + 8, y, pickBtnW, 24,
-            I18n.get("terrapaver.biome.btn.pick_feet"),
-            ButtonStyle.TONAL, t
-        ) {
+        var bx = contentX + searchW + 4
+        drawActionButton(g, mouseX, mouseY, bx, y, pickFeetW, 24, I18n.get("terrapaver.biome.btn.pick_feet"), ButtonStyle.TONAL, t) {
             pickStandingBiome(asFilter = false)
         }
-        y += 30
+        bx += pickFeetW + 4
+        drawActionButton(g, mouseX, mouseY, bx, y, pickAimW, 24, I18n.get("terrapaver.biome.btn.pick_aim"), ButtonStyle.TONAL, t) {
+            pickAimedBiome()
+        }
+        bx += pickAimW + 4
+        val modLabel = modNamespaces.getOrElse(selectedModIdx) { "" }.ifEmpty { I18n.get("terrapaver.biome.mod_all") }
+        drawActionButton(g, mouseX, mouseY, bx, y, modBtnW, 24, modLabel, ButtonStyle.OUTLINED, t) {
+            selectedModIdx = (selectedModIdx + 1) % max(1, modNamespaces.size)
+            tabScroll[0] = 0
+            rebuildFilter()
+        }
+        y += 28
 
-        // Category filter chips
+        // Row 2: 9 Ecology & Dimension Categories
         val catKeys = arrayOf(
             "terrapaver.biome.cat.all",
             "terrapaver.biome.cat.forest",
             "terrapaver.biome.cat.cold",
             "terrapaver.biome.cat.dry",
             "terrapaver.biome.cat.lush",
-            "terrapaver.biome.cat.water"
+            "terrapaver.biome.cat.water",
+            "terrapaver.biome.cat.nether",
+            "terrapaver.biome.cat.end",
+            "terrapaver.biome.cat.modded"
         )
-        val chipGap = 4
+        val chipGap = 3
         val chipW = (cardW - chipGap * (catKeys.size - 1)) / catKeys.size
         for (i in catKeys.indices) {
             val cx = contentX + i * (chipW + chipGap)
             val sel = categoryFilter == i
-            val hov = mouseX in cx..(cx + chipW) && mouseY in y..(y + 20)
+            val hov = mouseX in cx..(cx + chipW) && mouseY in y..(y + 18)
             val bg = if (sel) t.primaryContainer else if (hov) t.surfaceHigh else t.surfaceContainer
-            M3Draw.fillRoundedRect(g, cx, y, chipW, 20, 10, bg)
-            if (!sel) M3Draw.strokeRoundedRect(g, cx, y, chipW, 20, 10, t.outlineVariant)
-            val lbl = M3Draw.fitText(font, I18n.get(catKeys[i]), chipW - 6)
-            g.drawString(font, lbl, cx + (chipW - font.width(lbl)) / 2, y + 6, if (sel) t.onPrimaryContainer else t.onSurfaceVariant, false)
-            registerClick(cx, y, chipW, 20) {
+            M3Draw.fillRoundedRect(g, cx, y, chipW, 18, 9, bg)
+            if (!sel) M3Draw.strokeRoundedRect(g, cx, y, chipW, 18, 9, t.outlineVariant)
+            val lbl = M3Draw.fitText(font, I18n.get(catKeys[i]), chipW - 4)
+            g.drawString(font, lbl, cx + (chipW - font.width(lbl)) / 2, y + 5, if (sel) t.onPrimaryContainer else t.onSurfaceVariant, false)
+            registerClick(cx, y, chipW, 18) {
                 categoryFilter = i
                 tabScroll[0] = 0
                 rebuildFilter()
             }
         }
-        y += 26
+        y += 23
 
-        // 2-column scrollable biome cards with live grass & water color swatches!
+        // Row 3: Quick Favorites & Recent strip
+        val quickIds = (cfg.favoriteBiomes + cfg.recentBiomes).distinct().take(6)
+        if (quickIds.isNotEmpty()) {
+            val qGap = 4
+            val qW = (cardW - qGap * (quickIds.size - 1)) / quickIds.size
+            for (i in quickIds.indices) {
+                val qid = quickIds[i]
+                val qx = contentX + i * (qW + qGap)
+                val sel = qid == cfg.targetBiome
+                val hov = mouseX in qx..(qx + qW) && mouseY in y..(y + 18)
+                M3Draw.fillRoundedRect(g, qx, y, qW, 18, 9, if (sel) t.secondaryContainer else if (hov) t.surfaceHigh else t.surfaceLow)
+                M3Draw.strokeRoundedRect(g, qx, y, qW, 18, 9, if (sel) t.primary else t.outlineVariant)
+                val lbl = M3Draw.fitText(font, "* ${formatBiomeName(qid)}", qW - 6)
+                g.drawString(font, lbl, qx + (qW - font.width(lbl)) / 2, y + 5, if (sel) t.onSecondaryContainer else t.onSurface, false)
+                registerClick(qx, y, qW, 18) {
+                    selectPrimaryBiome(qid)
+                }
+            }
+            y += 23
+        }
+
+        // Row 4: 2-column scrollable biome cards with swatch, favorite star, and +Split quick button!
         val cols = if (cardW >= 320) 2 else 1
         val colGap = 6
         val itemW = (cardW - colGap * (cols - 1)) / cols
@@ -359,6 +413,8 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
 
             if (iy + itemH >= clipTop - 10 && iy <= clipBottom + 10) {
                 val selected = b.id == cfg.targetBiome
+                val inSplit = cfg.splitPalette.contains(b.id)
+                val isFav = cfg.favoriteBiomes.contains(b.id)
                 val hover = mouseX in ix..(ix + itemW) && mouseY in iy..(iy + itemH)
                 val bg = when {
                     selected -> t.primaryContainer
@@ -372,16 +428,38 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
                 M3Draw.fillRoundedRect(g, ix + 6, iy + 6, 14, 22, 5, b.grassColor)
                 M3Draw.fillRoundedRect(g, ix + 14, iy + 18, 9, 10, 4, b.waterColor)
 
+                // Right-side mini buttons: [★] and [+Split]
+                val starX = ix + itemW - 22
+                val splitX = ix + itemW - 50
                 val textX = ix + 27
-                val maxTextW = itemW - 33
+                val maxTextW = (splitX - textX - 4).coerceAtLeast(36)
+
                 val nameStr = M3Draw.fitText(font, b.displayName, maxTextW)
                 val idStr = M3Draw.fitText(font, b.id, maxTextW)
                 g.drawString(font, nameStr, textX, iy + 6, if (selected) t.onPrimaryContainer else t.onSurface, false)
                 g.drawString(font, idStr, textX, iy + 19, if (selected) t.primary else t.onSurfaceVariant, false)
 
-                registerClick(ix, iy, itemW, itemH) {
-                    cfg.targetBiome = b.id
+                // +Split button
+                val splitBg = if (inSplit) t.secondaryContainer else t.surface
+                M3Draw.fillRoundedRect(g, splitX, iy + 8, 25, 18, 6, splitBg)
+                M3Draw.strokeRoundedRect(g, splitX, iy + 8, 25, 18, 6, t.outlineVariant)
+                val spLbl = if (inSplit) "✓" else "+分"
+                g.drawString(font, spLbl, splitX + (25 - font.width(spLbl)) / 2, iy + 13, if (inSplit) t.onSecondaryContainer else t.onSurfaceVariant, false)
+                registerClick(splitX, iy + 8, 25, 18) {
+                    toggleSplitBiome(b.id)
+                }
+
+                // Favorite ★ button
+                M3Draw.fillRoundedRect(g, starX, iy + 8, 18, 18, 6, if (isFav) 0xFFFFF3C4.toInt() else t.surface)
+                g.drawString(font, if (isFav) "★" else "☆", starX + 5, iy + 13, if (isFav) 0xFFB87800.toInt() else t.onSurfaceVariant, false)
+                registerClick(starX, iy + 8, 18, 18) {
+                    if (isFav) cfg.favoriteBiomes.remove(b.id) else cfg.favoriteBiomes.add(0, b.id)
                     save()
+                }
+
+                // Main card click selects primary target biome
+                registerClick(ix, iy, splitX - ix - 2, itemH) {
+                    selectPrimaryBiome(b.id)
                 }
             }
         }
@@ -389,7 +467,30 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
         return y + rows * (itemH + 5) + 6
     }
 
-    private fun renderShapeTab(g: GuiGraphics, mouseX: Int, mouseY: Int, yStart: Int, t: M3Palette): Int {
+    private fun selectPrimaryBiome(id: String) {
+        cfg.targetBiome = id
+        cfg.recordRecent(id)
+        if (!cfg.splitPalette.contains(id)) {
+            if (cfg.splitPalette.isEmpty()) cfg.splitPalette.add(id) else cfg.splitPalette[0] = id
+        }
+        save()
+    }
+
+    private fun toggleSplitBiome(id: String) {
+        if (cfg.splitPalette.contains(id) && cfg.splitPalette.size > 1) {
+            cfg.splitPalette.remove(id)
+        } else if (!cfg.splitPalette.contains(id)) {
+            if (cfg.splitPalette.size >= 6) cfg.splitPalette.removeAt(cfg.splitPalette.lastIndex)
+            cfg.splitPalette.add(id)
+            cfg.secondaryBiome = id
+        }
+        if (cfg.splitMode == BiomeSplitMode.SINGLE && cfg.splitPalette.size >= 2) {
+            cfg.splitMode = BiomeSplitMode.VORONOI_MIX
+        }
+        save()
+    }
+
+    private fun renderShapeSplitTab(g: GuiGraphics, mouseX: Int, mouseY: Int, yStart: Int, t: M3Palette): Int {
         var y = yStart
         val cardW = contentW - 8
 
@@ -403,9 +504,8 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
                 save()
             }
 
-            // Quick radius presets
-            val presets = intArrayOf(8, 16, 32, 64, 128)
-            val gap = 5
+            val presets = intArrayOf(8, 16, 32, 64, 128, 256)
+            val gap = 4
             val pw = (cw - gap * (presets.size - 1)) / presets.size
             for (i in presets.indices) {
                 val pVal = presets[i]
@@ -426,9 +526,58 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
             drawSliderRow(
                 g, mouseX, mouseY, cx, cy + 58, cw,
                 I18n.get("terrapaver.biome.cfg.radius"), "${cfg.radius} m",
-                2, 128, { cfg.radius }, t
+                2, 256, { cfg.radius }, t
             ) {
                 cfg.radius = it
+                save()
+            }
+        }
+
+        // Biome Split & Voronoi Mix Card!
+        y = drawSectionCard(g, contentX, y, cardW, 134, I18n.get("terrapaver.biome.sec.split"), t) { cx, cy, cw ->
+            drawSegmentedEnum(
+                g, mouseX, mouseY, cx, cy, cw, 26,
+                BiomeSplitMode.entries.toTypedArray(), cfg.splitMode,
+                { I18n.get(it.key) }, t
+            ) {
+                cfg.splitMode = it
+                save()
+            }
+
+            drawSliderRow(
+                g, mouseX, mouseY, cx, cy + 32, cw,
+                I18n.get("terrapaver.biome.cfg.patch_scale"), "${cfg.splitPatchScale} m",
+                4, 64, { cfg.splitPatchScale }, t
+            ) {
+                cfg.splitPatchScale = it
+                save()
+            }
+
+            // Palette chips + Swap Primary/Secondary button
+            val swapW = 72
+            val chipsW = cw - swapW - 6
+            val nChips = cfg.splitPalette.size.coerceAtLeast(1)
+            val gap = 4
+            val cwEach = (chipsW - gap * (nChips - 1)) / nChips
+            for (i in cfg.splitPalette.indices) {
+                val bid = cfg.splitPalette[i]
+                val bx = cx + i * (cwEach + gap)
+                val by = cy + 68
+                M3Draw.fillRoundedRect(g, bx, by, cwEach, 22, 9, t.surfaceLow)
+                M3Draw.strokeRoundedRect(g, bx, by, cwEach, 22, 9, t.outlineVariant)
+                val txt = M3Draw.fitText(font, "${formatBiomeName(bid)} ×", cwEach - 6)
+                g.drawString(font, txt, bx + 4, by + 7, t.onSurface, false)
+                registerClick(bx, by, cwEach, 22) {
+                    if (cfg.splitPalette.size > 1) {
+                        cfg.splitPalette.removeAt(i)
+                        save()
+                    }
+                }
+            }
+            drawActionButton(g, mouseX, mouseY, cx + chipsW + 6, cy + 68, swapW, 22, I18n.get("terrapaver.biome.btn.swap"), ButtonStyle.TONAL, t) {
+                val tmp = cfg.targetBiome
+                cfg.targetBiome = cfg.secondaryBiome
+                cfg.secondaryBiome = tmp
                 save()
             }
         }
@@ -438,7 +587,7 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
             drawSliderRow(
                 g, mouseX, mouseY, cx, cy, cw,
                 I18n.get("terrapaver.biome.cfg.chunk_grid"), "${chunkSide}x${chunkSide} chunks",
-                0, 4, { cfg.chunkRadius }, t
+                0, 7, { cfg.chunkRadius }, t
             ) {
                 cfg.chunkRadius = it
                 save()
@@ -446,7 +595,7 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
             drawSliderRow(
                 g, mouseX, mouseY, cx, cy + 36, cw,
                 I18n.get("terrapaver.biome.cfg.feather"), "${cfg.edgeFeather} m",
-                0, 24, { cfg.edgeFeather }, t
+                0, 32, { cfg.edgeFeather }, t
             ) {
                 cfg.edgeFeather = it
                 save()
@@ -456,10 +605,50 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
         return y
     }
 
-    private fun renderHeightFilterTab(g: GuiGraphics, mouseX: Int, mouseY: Int, yStart: Int, t: M3Palette): Int {
+    private fun renderDimensionHeightTab(g: GuiGraphics, mouseX: Int, mouseY: Int, yStart: Int, t: M3Palette): Int {
         var y = yStart
         val cardW = contentW - 8
 
+        // Loaded Dimensions Card (All Vanilla + Modded Dimensions!)
+        val dims = ClientBiomeState.serverDimensions
+        val dimRows = (dims.size + 1)
+        val dimCols = if (cardW >= 320) 2 else 1
+        val numGridRows = (dimRows + dimCols - 1) / dimCols
+        val dimCardH = 38 + numGridRows * 26
+
+        y = drawSectionCard(g, contentX, y, cardW, dimCardH, I18n.get("terrapaver.biome.sec.dimensions"), t) { cx, cy, cw ->
+            val gap = 5
+            val itemW = (cw - gap * (dimCols - 1)) / dimCols
+            for (idx in 0 until dimRows) {
+                val col = idx % dimCols
+                val row = idx / dimCols
+                val dx = cx + col * (itemW + gap)
+                val dy = cy + row * 26
+
+                val dimId = if (idx == 0) "" else dims[idx - 1].id
+                val label = if (idx == 0) {
+                    "${I18n.get("terrapaver.biome.dim_current")} (${shortDimName(ClientBiomeState.currentDimension)})"
+                } else {
+                    val info = dims[idx - 1]
+                    "${shortDimName(info.id)} [${info.minY}..${info.maxY}]"
+                }
+                val sel = cfg.targetDimension == dimId
+                val hov = mouseX in dx..(dx + itemW) && mouseY in dy..(dy + 22)
+                M3Draw.fillRoundedRect(g, dx, dy, itemW, 22, 10, if (sel) t.primaryContainer else if (hov) t.surfaceHigh else t.surface)
+                M3Draw.strokeRoundedRect(g, dx, dy, itemW, 22, 10, if (sel) t.primary else t.outlineVariant)
+                val txt = M3Draw.fitText(font, label, itemW - 10)
+                g.drawString(font, txt, dx + 6, dy + 7, if (sel) t.onPrimaryContainer else t.onSurface, false)
+                registerClick(dx, dy, itemW, 22) {
+                    cfg.targetDimension = dimId
+                    val targetBounds = activeDimBounds()
+                    cfg.customMinY = cfg.customMinY.coerceIn(targetBounds.first, targetBounds.second)
+                    cfg.customMaxY = cfg.customMaxY.coerceIn(targetBounds.first, targetBounds.second)
+                    save()
+                }
+            }
+        }
+
+        val (dimMinY, dimMaxY) = activeDimBounds()
         y = drawSectionCard(g, contentX, y, cardW, 180, I18n.get("terrapaver.biome.sec.vertical"), t) { cx, cy, cw ->
             drawSegmentedEnum(
                 g, mouseX, mouseY, cx, cy, cw, 26,
@@ -473,7 +662,7 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
             drawSliderRow(
                 g, mouseX, mouseY, cx, cy + 34, cw,
                 I18n.get("terrapaver.biome.cfg.surf_down"), "${cfg.surfaceDepthDown} m",
-                0, 64, { cfg.surfaceDepthDown }, t
+                0, 128, { cfg.surfaceDepthDown }, t
             ) {
                 cfg.surfaceDepthDown = it
                 save()
@@ -481,7 +670,7 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
             drawSliderRow(
                 g, mouseX, mouseY, cx, cy + 68, cw,
                 I18n.get("terrapaver.biome.cfg.surf_up"), "${cfg.surfaceHeightUp} m",
-                4, 128, { cfg.surfaceHeightUp }, t
+                4, 256, { cfg.surfaceHeightUp }, t
             ) {
                 cfg.surfaceHeightUp = it
                 save()
@@ -489,7 +678,7 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
             drawSliderRow(
                 g, mouseX, mouseY, cx, cy + 102, cw,
                 I18n.get("terrapaver.biome.cfg.min_y"), "Y = ${cfg.customMinY}",
-                -64, 320, { cfg.customMinY }, t
+                dimMinY, dimMaxY, { cfg.customMinY.coerceIn(dimMinY, dimMaxY) }, t
             ) {
                 cfg.customMinY = it
                 if (cfg.customMinY > cfg.customMaxY) cfg.customMaxY = cfg.customMinY
@@ -501,7 +690,7 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
             drawSliderRow(
                 g, mouseX, mouseY, cx, cy, cw,
                 I18n.get("terrapaver.biome.cfg.max_y"), "Y = ${cfg.customMaxY}",
-                -64, 320, { cfg.customMaxY }, t
+                dimMinY, dimMaxY, { cfg.customMaxY.coerceIn(dimMinY, dimMaxY) }, t
             ) {
                 cfg.customMaxY = it
                 if (cfg.customMaxY < cfg.customMinY) cfg.customMinY = cfg.customMaxY
@@ -542,12 +731,18 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
             }
         }
 
-        y = drawSectionCard(g, contentX, y, cardW, 122, I18n.get("terrapaver.biome.sec.overview"), t) { cx, cy, cw ->
+        y = drawSectionCard(g, contentX, y, cardW, 138, I18n.get("terrapaver.biome.sec.overview"), t) { cx, cy, cw ->
+            val dimTxt = if (cfg.targetDimension.isBlank()) {
+                "${I18n.get("terrapaver.biome.dim_current")} (${ClientBiomeState.currentDimension})"
+            } else {
+                cfg.targetDimension
+            }
             val lines = listOf(
                 "${I18n.get("terrapaver.biome.target")}: ${formatBiomeName(cfg.targetBiome)} (${cfg.targetBiome})",
+                "${I18n.get("terrapaver.biome.sec.split")}: ${I18n.get(cfg.splitMode.key)} (${cfg.splitPalette.size} biomes)",
+                "${I18n.get("terrapaver.biome.sec.dimensions")}: $dimTxt",
                 "${I18n.get("terrapaver.biome.sec.shape")}: ${I18n.get(cfg.shape.key)} (${cfg.radius}m, ${I18n.get("terrapaver.biome.cfg.feather")} ${cfg.edgeFeather}m)",
                 "${I18n.get("terrapaver.biome.sec.vertical")}: ${I18n.get(cfg.verticalMode.key)}",
-                if (cfg.filterSourceBiome) "${I18n.get("terrapaver.biome.cfg.filter_source")}: ${formatBiomeName(cfg.sourceBiomeFilter)}" else I18n.get("terrapaver.biome.filter_all"),
                 I18n.get("terrapaver.biome.tip_fast")
             )
             var ly = cy
@@ -601,6 +796,17 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
         }
     }
 
+    private fun activeDimBounds(): Pair<Int, Int> {
+        val target = if (cfg.targetDimension.isBlank()) ClientBiomeState.currentDimension else cfg.targetDimension
+        val found = ClientBiomeState.serverDimensions.firstOrNull { it.id == target }
+        return if (found != null) found.minY to found.maxY else -64 to 320
+    }
+
+    private fun shortDimName(idStr: String): String {
+        val rl = ResourceLocation.tryParse(idStr) ?: return idStr
+        return if (rl.namespace == "minecraft") rl.path.replace('_', ' ') else "${rl.namespace}:${rl.path}"
+    }
+
     private fun pickStandingBiome(asFilter: Boolean) {
         val mc = Minecraft.getInstance()
         val player = mc.player ?: return
@@ -609,12 +815,27 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
         if (asFilter) {
             cfg.sourceBiomeFilter = key
             cfg.filterSourceBiome = true
+            save()
         } else {
-            cfg.targetBiome = key
-            allBiomes.sortWith(compareBy<BiomeEntry> { it.id != cfg.targetBiome }.thenBy { it.displayName })
+            selectPrimaryBiome(key)
+            allBiomes.sortWith(compareBy<BiomeEntry> { it.id != cfg.targetBiome }.thenBy { !cfg.favoriteBiomes.contains(it.id) }.thenBy { it.displayName })
             rebuildFilter()
         }
-        save()
+    }
+
+    private fun pickAimedBiome() {
+        val mc = Minecraft.getInstance()
+        val player = mc.player ?: return
+        val level = mc.level ?: return
+        val start = player.getEyePosition(1.0f)
+        val look = player.lookAngle
+        val end = start.add(look.x * 96.0, look.y * 96.0, look.z * 96.0)
+        val hit = level.clip(ClipContext(start, end, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player))
+        val pos = if (hit.type == HitResult.Type.BLOCK) hit.blockPos else player.blockPosition()
+        val key = level.getBiome(pos).unwrapKey().orElse(null)?.location()?.toString() ?: return
+        selectPrimaryBiome(key)
+        allBiomes.sortWith(compareBy<BiomeEntry> { it.id != cfg.targetBiome }.thenBy { !cfg.favoriteBiomes.contains(it.id) }.thenBy { it.displayName })
+        rebuildFilter()
     }
 
     private fun formatBiomeName(idStr: String): String {
@@ -778,7 +999,7 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
         if (style == ButtonStyle.OUTLINED) {
             M3Draw.strokeRoundedRect(g, x, y, w, h, h / 2, t.outline)
         }
-        val txt = M3Draw.fitText(font, label, w - 12)
+        val txt = M3Draw.fitText(font, label, w - 10)
         g.drawString(font, txt, x + (w - font.width(txt)) / 2, y + (h - 8) / 2, fg, false)
         registerClick(x, y, w, h, onClick)
     }

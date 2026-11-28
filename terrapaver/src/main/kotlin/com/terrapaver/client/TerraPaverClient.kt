@@ -46,7 +46,8 @@ object TerraPaverClient : ClientModInitializer {
             onStatus = { ClientPavingState.updateStatus(it) },
             onSelection = { ClientPavingState.updateSelection(it) },
             onPreview = { ClientPavingState.updatePreview(it) },
-            onBiomeState = { ClientBiomeState.updateState(it) }
+            onBiomeState = { ClientBiomeState.updateState(it) },
+            onBiomeCatalog = { ClientBiomeState.updateCatalog(it) }
         )
 
         ClientTickEvents.END_CLIENT_TICK.register { mc ->
@@ -64,6 +65,7 @@ object TerraPaverClient : ClientModInitializer {
 
         HudRenderCallback.EVENT.register { guiGraphics, deltaTracker ->
             PavingHudOverlay.render(guiGraphics, deltaTracker)
+            BiomeHudOverlay.render(guiGraphics, deltaTracker)
         }
 
         WorldRenderEvents.AFTER_TRANSLUCENT.register { context ->

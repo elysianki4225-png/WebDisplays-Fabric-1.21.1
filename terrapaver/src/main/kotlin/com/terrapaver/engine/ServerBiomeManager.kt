@@ -2,6 +2,7 @@ package com.terrapaver.engine
 
 import com.terrapaver.config.BiomeConfig
 import com.terrapaver.config.BiomeShape
+import com.terrapaver.config.BiomeSplitMode
 import com.terrapaver.config.BiomeVerticalMode
 import com.terrapaver.network.TerraPaverNet
 import net.minecraft.core.BlockPos
@@ -25,6 +26,7 @@ import net.minecraft.world.level.chunk.status.ChunkStatus
 import net.minecraft.world.level.levelgen.Heightmap
 import java.util.UUID
 import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
@@ -67,9 +69,16 @@ object ServerBiomeManager {
         player.displayClientMessage(Component.translatable("terrapaver.biome.msg.cleared"), true)
     }
 
+    private fun resolveTargetLevel(player: ServerPlayer, cfg: BiomeConfig): ServerLevel {
+        if (cfg.targetDimension.isBlank()) return player.serverLevel()
+        val rl = ResourceLocation.tryParse(cfg.targetDimension) ?: return player.serverLevel()
+        val dimKey = ResourceKey.create(Registries.DIMENSION, rl)
+        return player.server.getLevel(dimKey) ?: player.serverLevel()
+    }
+
     fun applyBrush(player: ServerPlayer, center: BlockPos, rawCfg: BiomeConfig) {
         val cfg = rawCfg.copySanitized()
-        val level = player.serverLevel()
+        val level = resolveTargetLevel(player, cfg)
         when (cfg.shape) {
             BiomeShape.CHUNK_GRID -> {
                 val cPos = ChunkPos(center)
@@ -78,6 +87,8 @@ object ServerBiomeManager {
                 val minZ = (cPos.z - cr) shl 4
                 val maxX = ((cPos.x + cr) shl 4) + 15
                 val maxZ = ((cPos.z + cr) shl 4) + 15
+                val cx = (minX + maxX) / 2
+                val cz = (minZ + maxZ) / 2
                 executeEdit(
                     player = player,
                     level = level,
@@ -86,7 +97,8 @@ object ServerBiomeManager {
                     maxX = maxX,
                     minZ = minZ,
                     maxZ = maxZ,
-                    refY = center.y,
+                    splitCenterX = cx,
+                    splitCenterZ = cz,
                     inShapeFn = { _, _ -> true },
                     edgeAlphaFn = { _, _ -> 1.0 }
                 )
@@ -101,7 +113,8 @@ object ServerBiomeManager {
                     maxX = center.x + r,
                     minZ = center.z - r,
                     maxZ = center.z + r,
-                    refY = center.y,
+                    splitCenterX = center.x,
+                    splitCenterZ = center.z,
                     inShapeFn = { bx, bz ->
                         abs(bx - center.x) <= r && abs(bz - center.z) <= r
                     },
@@ -121,7 +134,8 @@ object ServerBiomeManager {
                     maxX = center.x + r,
                     minZ = center.z - r,
                     maxZ = center.z + r,
-                    refY = center.y,
+                    splitCenterX = center.x,
+                    splitCenterZ = center.z,
                     inShapeFn = { bx, bz ->
                         hypot((bx - center.x).toDouble(), (bz - center.z).toDouble()) <= r + 0.5
                     },
@@ -136,13 +150,11 @@ object ServerBiomeManager {
 
     fun applyBox(player: ServerPlayer, a: BlockPos, b: BlockPos, rawCfg: BiomeConfig) {
         val cfg = rawCfg.copySanitized()
-        val level = player.serverLevel()
+        val level = resolveTargetLevel(player, cfg)
         val minX = min(a.x, b.x)
         val maxX = max(a.x, b.x)
         val minZ = min(a.z, b.z)
         val maxZ = max(a.z, b.z)
-        val boxMinY = min(a.y, b.y)
-        val boxMaxY = max(a.y, b.y)
 
         executeEdit(
             player = player,
@@ -152,7 +164,8 @@ object ServerBiomeManager {
             maxX = maxX,
             minZ = minZ,
             maxZ = maxZ,
-            refY = (a.y + b.y) / 2,
+            splitCenterX = (minX + maxX) / 2,
+            splitCenterZ = (minZ + maxZ) / 2,
             inShapeFn = { bx, bz -> bx in minX..maxX && bz in minZ..maxZ },
             edgeAlphaFn = { bx, bz ->
                 if (cfg.edgeFeather <= 0) {
@@ -173,7 +186,8 @@ object ServerBiomeManager {
         maxX: Int,
         minZ: Int,
         maxZ: Int,
-        refY: Int,
+        splitCenterX: Int,
+        splitCenterZ: Int,
         inShapeFn: (Int, Int) -> Boolean,
         edgeAlphaFn: (Int, Int) -> Double
     ) {
@@ -192,9 +206,21 @@ object ServerBiomeManager {
             return
         }
 
+        val secondaryId = ResourceLocation.tryParse(cfg.secondaryBiome)
+        val secondaryHolder = (if (secondaryId != null) {
+            biomeReg.getHolder(ResourceKey.create(Registries.BIOME, secondaryId)).orElse(null)
+        } else null) ?: targetHolder
+
+        val mixHolders = ArrayList<Holder.Reference<Biome>>()
+        for (entry in cfg.splitPalette) {
+            val rl = ResourceLocation.tryParse(entry) ?: continue
+            val h = biomeReg.getHolder(ResourceKey.create(Registries.BIOME, rl)).orElse(null)
+            if (h != null) mixHolders.add(h)
+        }
+        if (mixHolders.isEmpty()) mixHolders.add(targetHolder)
+
         val sourceFilterId = if (cfg.filterSourceBiome) ResourceLocation.tryParse(cfg.sourceBiomeFilter) else null
 
-        // Safety cap on enormous accidental edits (up to ~300x300 = 90k columns, ~360 chunks)
         val minCx = minX shr 4
         val maxCx = maxX shr 4
         val minCz = minZ shr 4
@@ -218,12 +244,40 @@ object ServerBiomeManager {
         var changedQuarts = 0
         var changedBlocks = 0
 
+        fun pickHolderAt(bx: Int, bz: Int): Holder.Reference<Biome> {
+            return when (cfg.splitMode) {
+                BiomeSplitMode.SINGLE -> targetHolder
+                BiomeSplitMode.SPLIT_X -> {
+                    val d = bx - splitCenterX
+                    if (cfg.edgeFeather > 0 && abs(d) < cfg.edgeFeather / 2.0) {
+                        val p = (d + cfg.edgeFeather / 2.0) / cfg.edgeFeather.toDouble()
+                        if (deterministicNoise(bx, bz) < p) secondaryHolder else targetHolder
+                    } else {
+                        if (d < 0) targetHolder else secondaryHolder
+                    }
+                }
+                BiomeSplitMode.SPLIT_Z -> {
+                    val d = bz - splitCenterZ
+                    if (cfg.edgeFeather > 0 && abs(d) < cfg.edgeFeather / 2.0) {
+                        val p = (d + cfg.edgeFeather / 2.0) / cfg.edgeFeather.toDouble()
+                        if (deterministicNoise(bx, bz) < p) secondaryHolder else targetHolder
+                    } else {
+                        if (d < 0) targetHolder else secondaryHolder
+                    }
+                }
+                BiomeSplitMode.VORONOI_MIX -> {
+                    if (mixHolders.size == 1) return mixHolders[0]
+                    val idx = voronoiIndex(bx, bz, cfg.splitPatchScale, mixHolders.size)
+                    mixHolders[idx]
+                }
+            }
+        }
+
         for (cx in minCx..maxCx) {
             for (cz in minCz..maxCz) {
                 val chunk = level.chunkSource.getChunk(cx, cz, ChunkStatus.FULL, true) ?: continue
                 val backups = ArrayList<QuartBackup>(64)
 
-                // Fast surface height lookup table for SURFACE_BAND (4x4 quart grid per chunk = only 16 samples!)
                 val quartSurfaceY = if (cfg.verticalMode == BiomeVerticalMode.SURFACE_BAND) {
                     IntArray(16) { idx ->
                         val lx = (idx and 3) * 4 + 2
@@ -273,11 +327,12 @@ object ServerBiomeManager {
                         }
                     }
 
-                    if (existing != targetHolder) {
+                    val chosen = pickHolderAt(bx, bz)
+                    if (existing != chosen) {
                         backups.add(QuartBackup(qx, qy, qz, existing))
                         changedQuarts++
                     }
-                    targetHolder
+                    chosen
                 }
 
                 chunk.fillBiomesFromNoise(resolver, sampler)
@@ -287,7 +342,6 @@ object ServerBiomeManager {
                     chunkBackups[ChunkPos(cx, cz)] = backups
                 }
 
-                // Optional fast surface block / snow adaptation
                 if (cfg.adaptSurfaceBlocks || cfg.adaptWeatherSnow) {
                     val cMinX = max(minX, cx shl 4)
                     val cMaxX = min(maxX, (cx shl 4) + 15)
@@ -296,8 +350,7 @@ object ServerBiomeManager {
                     changedBlocks += adaptChunkSurface(
                         level = level,
                         chunk = chunk,
-                        targetHolder = targetHolder,
-                        targetId = targetId!!,
+                        pickHolderFn = { bx, bz -> pickHolderAt(bx, bz) },
                         cfg = cfg,
                         sourceFilterId = sourceFilterId,
                         cMinX = cMinX,
@@ -338,8 +391,7 @@ object ServerBiomeManager {
     private fun adaptChunkSurface(
         level: ServerLevel,
         chunk: ChunkAccess,
-        targetHolder: Holder.Reference<Biome>,
-        targetId: ResourceLocation,
+        pickHolderFn: (Int, Int) -> Holder.Reference<Biome>,
         cfg: BiomeConfig,
         sourceFilterId: ResourceLocation?,
         cMinX: Int,
@@ -352,13 +404,6 @@ object ServerBiomeManager {
     ): Int {
         var count = 0
         val pos = BlockPos.MutableBlockPos()
-        val path = targetId.path
-        val isDesert = path.contains("desert") || path.contains("beach")
-        val isBadlands = path.contains("badlands")
-        val isMushroom = path.contains("mushroom")
-        val isSnowy = path.contains("snowy") || path.contains("frozen") || path.contains("ice") || path.contains("peaks")
-        val isSwamp = path.contains("swamp") || path.contains("mangrove")
-        val biomeVal = targetHolder.value()
 
         for (bx in cMinX..cMaxX) {
             for (bz in cMinZ..cMaxZ) {
@@ -379,6 +424,15 @@ object ServerBiomeManager {
                     continue
                 }
 
+                val targetHolder = pickHolderFn(bx, bz)
+                val targetId = targetHolder.key().location()
+                val path = targetId.path
+                val isDesert = path.contains("desert") || path.contains("beach")
+                val isBadlands = path.contains("badlands")
+                val isMushroom = path.contains("mushroom")
+                val isSnowy = path.contains("snowy") || path.contains("frozen") || path.contains("ice") || path.contains("peaks")
+                val isSwamp = path.contains("swamp") || path.contains("mangrove")
+
                 val curState = level.getBlockState(pos)
                 if (cfg.adaptSurfaceBlocks && curState.fluidState.isEmpty) {
                     val replacement: BlockState? = when {
@@ -395,8 +449,7 @@ object ServerBiomeManager {
                         else -> null
                     }
                     if (replacement != null && replacement != curState) {
-                        val key = pos.asLong()
-                        blockBackups.putIfAbsent(key, curState)
+                        blockBackups.putIfAbsent(pos.asLong(), curState)
                         level.setBlock(pos, replacement, 2)
                         count++
                     }
@@ -405,7 +458,7 @@ object ServerBiomeManager {
                 if (cfg.adaptWeatherSnow) {
                     pos.set(bx, groundY + 1, bz)
                     val above = level.getBlockState(pos)
-                    val shouldSnow = isSnowy || biomeVal.coldEnoughToSnow(pos)
+                    val shouldSnow = isSnowy || targetHolder.value().coldEnoughToSnow(pos)
                     if (shouldSnow && above.isAir && level.getBlockState(pos.below()).isSolidRender(level, pos.below())) {
                         blockBackups.putIfAbsent(pos.asLong(), above)
                         level.setBlock(pos, Blocks.SNOW.defaultBlockState(), 2)
@@ -477,6 +530,23 @@ object ServerBiomeManager {
                 canUndo = canUndo
             )
         )
+        syncCatalog(player)
+    }
+
+    fun syncCatalog(player: ServerPlayer) {
+        val dims = ArrayList<String>()
+        val mins = ArrayList<Int>()
+        val maxs = ArrayList<Int>()
+        for (lvl in player.server.allLevels) {
+            dims.add(lvl.dimension().location().toString())
+            mins.add(lvl.minBuildHeight)
+            maxs.add(lvl.maxBuildHeight - 1)
+        }
+        val cur = player.serverLevel().dimension().location().toString()
+        TerraPaverNet.sendToPlayer(
+            player,
+            TerraPaverNet.S2CBiomeCatalog(cur, dims, mins.toIntArray(), maxs.toIntArray())
+        )
     }
 
     fun onDisconnect(player: ServerPlayer) {
@@ -491,7 +561,7 @@ object ServerBiomeManager {
     private fun pushUndo(uuid: UUID, entry: UndoEntry) {
         val stack = undoStacks.getOrPut(uuid) { ArrayDeque() }
         stack.addLast(entry)
-        while (stack.size > 12) {
+        while (stack.size > 16) {
             stack.removeFirst()
         }
     }
@@ -503,6 +573,30 @@ object ServerBiomeManager {
         if (dist >= radius) return 0.0
         val t = ((dist - inner) / feather).coerceIn(0.0, 1.0)
         return 1.0 - (t * t * (3.0 - 2.0 * t))
+    }
+
+    private fun voronoiIndex(bx: Int, bz: Int, scale: Int, count: Int): Int {
+        val s = scale.coerceAtLeast(4).toDouble()
+        val gx = floor(bx / s).toInt()
+        val gz = floor(bz / s).toInt()
+        var bestDist = Double.POSITIVE_INFINITY
+        var bestHash = 0
+        for (ox in -1..1) {
+            for (oz in -1..1) {
+                val cx = gx + ox
+                val cz = gz + oz
+                val rx = (cx + 0.15 + 0.7 * deterministicNoise(cx * 17 + 3, cz * 31 + 7)) * s
+                val rz = (cz + 0.15 + 0.7 * deterministicNoise(cx * 53 + 11, cz * 19 + 5)) * s
+                val d = (bx - rx) * (bx - rx) + (bz - rz) * (bz - rz)
+                if (d < bestDist) {
+                    bestDist = d
+                    var h = (cx * 374761393) xor (cz * 668265263)
+                    h = (h xor (h shr 13)) * 1274126177
+                    bestHash = (h xor (h shr 16)) and 0x7FFFFFFF
+                }
+            }
+        }
+        return bestHash % count
     }
 
     private fun deterministicNoise(x: Int, z: Int): Double {

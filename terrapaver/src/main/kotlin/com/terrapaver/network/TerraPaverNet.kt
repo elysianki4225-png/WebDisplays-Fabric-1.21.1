@@ -181,6 +181,61 @@ object TerraPaverNet {
         }
     }
 
+    data class S2CBiomeCatalog(
+        val currentDimension: String,
+        val dimIds: List<String>,
+        val minYs: IntArray,
+        val maxYs: IntArray
+    ) : CustomPacketPayload {
+        override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = TYPE
+
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is S2CBiomeCatalog) return false
+            return currentDimension == other.currentDimension && dimIds == other.dimIds &&
+                minYs.contentEquals(other.minYs) && maxYs.contentEquals(other.maxYs)
+        }
+
+        override fun hashCode(): Int {
+            var r = currentDimension.hashCode()
+            r = 31 * r + dimIds.hashCode()
+            r = 31 * r + minYs.contentHashCode()
+            r = 31 * r + maxYs.contentHashCode()
+            return r
+        }
+
+        companion object {
+            val TYPE = CustomPacketPayload.Type<S2CBiomeCatalog>(
+                ResourceLocation.fromNamespaceAndPath("terrapaver", "biome_catalog")
+            )
+            val CODEC: StreamCodec<RegistryFriendlyByteBuf, S2CBiomeCatalog> = StreamCodec.of(
+                { buf, p ->
+                    buf.writeUtf(p.currentDimension, 256)
+                    val n = p.dimIds.size
+                    buf.writeVarInt(n)
+                    for (i in 0 until n) {
+                        buf.writeUtf(p.dimIds[i], 256)
+                        buf.writeVarInt(p.minYs[i])
+                        buf.writeVarInt(p.maxYs[i])
+                    }
+                },
+                { buf ->
+                    val cur = buf.readUtf(256)
+                    val n = buf.readVarInt().coerceIn(0, 256)
+                    val ids = ArrayList<String>(n)
+                    val mins = IntArray(n)
+                    val maxs = IntArray(n)
+                    for (i in 0 until n) {
+                        ids.add(buf.readUtf(256))
+                        mins[i] = buf.readVarInt()
+                        maxs[i] = buf.readVarInt()
+                    }
+                    S2CBiomeCatalog(cur, ids, mins, maxs)
+                }
+            )
+        }
+    }
+
     data class S2CPavingStatus(
         val active: Boolean,
         val paused: Boolean,
@@ -342,6 +397,7 @@ object TerraPaverNet {
             PayloadTypeRegistry.playS2C().register(S2CSyncSelection.TYPE, S2CSyncSelection.CODEC)
             PayloadTypeRegistry.playS2C().register(S2CRoutePreview.TYPE, S2CRoutePreview.CODEC)
             PayloadTypeRegistry.playS2C().register(S2CBiomeState.TYPE, S2CBiomeState.CODEC)
+            PayloadTypeRegistry.playS2C().register(S2CBiomeCatalog.TYPE, S2CBiomeCatalog.CODEC)
         }
 
         ServerPlayNetworking.registerGlobalReceiver(C2SStartPave.TYPE) { payload, ctx ->
@@ -411,7 +467,8 @@ object TerraPaverNet {
         onStatus: (S2CPavingStatus) -> Unit,
         onSelection: (S2CSyncSelection) -> Unit,
         onPreview: (S2CRoutePreview) -> Unit,
-        onBiomeState: (S2CBiomeState) -> Unit
+        onBiomeState: (S2CBiomeState) -> Unit,
+        onBiomeCatalog: (S2CBiomeCatalog) -> Unit
     ) {
         ClientPlayNetworking.registerGlobalReceiver(S2CPavingStatus.TYPE) { payload, ctx ->
             ctx.client().execute { onStatus(payload) }
@@ -424,6 +481,9 @@ object TerraPaverNet {
         }
         ClientPlayNetworking.registerGlobalReceiver(S2CBiomeState.TYPE) { payload, ctx ->
             ctx.client().execute { onBiomeState(payload) }
+        }
+        ClientPlayNetworking.registerGlobalReceiver(S2CBiomeCatalog.TYPE) { payload, ctx ->
+            ctx.client().execute { onBiomeCatalog(payload) }
         }
     }
 

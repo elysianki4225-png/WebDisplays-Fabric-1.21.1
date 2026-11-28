@@ -20,8 +20,20 @@ enum class BiomeVerticalMode(val key: String) {
     CUSTOM_Y("terrapaver.biome.vmode.custom")
 }
 
+enum class BiomeSplitMode(val key: String) {
+    SINGLE("terrapaver.biome.split.single"),
+    SPLIT_X("terrapaver.biome.split.x"),
+    SPLIT_Z("terrapaver.biome.split.z"),
+    VORONOI_MIX("terrapaver.biome.split.voronoi")
+}
+
 data class BiomeConfig(
     var targetBiome: String = "minecraft:cherry_grove",
+    var secondaryBiome: String = "minecraft:meadow",
+    var splitPalette: MutableList<String> = mutableListOf("minecraft:cherry_grove", "minecraft:meadow"),
+    var splitMode: BiomeSplitMode = BiomeSplitMode.SINGLE,
+    var splitPatchScale: Int = 16,
+    var targetDimension: String = "",
     var shape: BiomeShape = BiomeShape.RADIUS_BRUSH,
     var radius: Int = 24,
     var chunkRadius: Int = 1,
@@ -35,33 +47,63 @@ data class BiomeConfig(
     var sourceBiomeFilter: String = "minecraft:plains",
     var preserveRiversAndOceans: Boolean = false,
     var adaptSurfaceBlocks: Boolean = false,
-    var adaptWeatherSnow: Boolean = false
+    var adaptWeatherSnow: Boolean = false,
+    var recentBiomes: MutableList<String> = mutableListOf(),
+    var favoriteBiomes: MutableList<String> = mutableListOf(
+        "minecraft:cherry_grove",
+        "minecraft:plains",
+        "minecraft:desert",
+        "minecraft:snowy_plains"
+    )
 ) {
     fun copySanitized(): BiomeConfig {
-        val c = copy()
+        val c = copy(
+            splitPalette = splitPalette?.toMutableList() ?: mutableListOf("minecraft:cherry_grove", "minecraft:meadow"),
+            recentBiomes = recentBiomes?.toMutableList() ?: mutableListOf(),
+            favoriteBiomes = favoriteBiomes?.toMutableList() ?: mutableListOf()
+        )
         @Suppress("USELESS_ELVIS")
         c.shape = c.shape ?: BiomeShape.RADIUS_BRUSH
         @Suppress("USELESS_ELVIS")
         c.verticalMode = c.verticalMode ?: BiomeVerticalMode.FULL_HEIGHT
         @Suppress("USELESS_ELVIS")
+        c.splitMode = c.splitMode ?: BiomeSplitMode.SINGLE
+        @Suppress("USELESS_ELVIS")
         c.targetBiome = (c.targetBiome ?: "minecraft:cherry_grove").trim().ifEmpty { "minecraft:cherry_grove" }
+        @Suppress("USELESS_ELVIS")
+        c.secondaryBiome = (c.secondaryBiome ?: "minecraft:meadow").trim().ifEmpty { "minecraft:meadow" }
+        @Suppress("USELESS_ELVIS")
+        c.targetDimension = (c.targetDimension ?: "").trim()
         @Suppress("USELESS_ELVIS")
         c.sourceBiomeFilter = (c.sourceBiomeFilter ?: "minecraft:plains").trim().ifEmpty { "minecraft:plains" }
 
-        c.radius = c.radius.coerceIn(2, 128)
-        c.chunkRadius = c.chunkRadius.coerceIn(0, 4)
-        c.surfaceDepthDown = c.surfaceDepthDown.coerceIn(0, 64)
-        c.surfaceHeightUp = c.surfaceHeightUp.coerceIn(4, 128)
-        c.customMinY = c.customMinY.coerceIn(-64, 320)
-        c.customMaxY = c.customMaxY.coerceIn(-64, 320)
+        if (c.splitPalette.isEmpty()) {
+            c.splitPalette.add(c.targetBiome)
+            c.splitPalette.add(c.secondaryBiome)
+        }
+        c.splitPatchScale = c.splitPatchScale.coerceIn(4, 64)
+        c.radius = c.radius.coerceIn(2, 256)
+        c.chunkRadius = c.chunkRadius.coerceIn(0, 7)
+        c.surfaceDepthDown = c.surfaceDepthDown.coerceIn(0, 128)
+        c.surfaceHeightUp = c.surfaceHeightUp.coerceIn(4, 256)
+        c.customMinY = c.customMinY.coerceIn(-256, 512)
+        c.customMaxY = c.customMaxY.coerceIn(-256, 512)
         if (c.customMinY > c.customMaxY) {
             val lo = min(c.customMinY, c.customMaxY)
             val hi = max(c.customMinY, c.customMaxY)
             c.customMinY = lo
             c.customMaxY = hi
         }
-        c.edgeFeather = c.edgeFeather.coerceIn(0, 24)
+        c.edgeFeather = c.edgeFeather.coerceIn(0, 32)
         return c
+    }
+
+    fun recordRecent(biomeId: String) {
+        recentBiomes.remove(biomeId)
+        recentBiomes.add(0, biomeId)
+        while (recentBiomes.size > 6) {
+            recentBiomes.removeAt(recentBiomes.lastIndex)
+        }
     }
 
     fun toJson(): String = GSON.toJson(copySanitized())

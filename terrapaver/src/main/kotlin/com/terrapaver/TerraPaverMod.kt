@@ -72,6 +72,10 @@ object TerraPaverMod : ModInitializer {
             ServerBiomeManager.shutdown(server)
         }
 
+        ServerPlayConnectionEvents.JOIN.register { handler, _, _ ->
+            ServerBiomeManager.syncState(handler.player)
+        }
+
         ServerPlayConnectionEvents.DISCONNECT.register { handler, _ ->
             ServerPavingManager.onDisconnect(handler.player)
             ServerBiomeManager.onDisconnect(handler.player)
@@ -143,6 +147,17 @@ object TerraPaverMod : ModInitializer {
                         ServerPavingManager.undoLast(ctx.source.playerOrException)
                         1
                     })
+                    .then(
+                        Commands.literal("biome")
+                            .then(Commands.literal("undo").executes { ctx ->
+                                ServerBiomeManager.undoLast(ctx.source.playerOrException)
+                                1
+                            })
+                            .then(Commands.literal("clear").executes { ctx ->
+                                ServerBiomeManager.clearSelection(ctx.source.playerOrException)
+                                1
+                            })
+                    )
                     .then(Commands.literal("clear").executes { ctx ->
                         ServerPavingManager.clearSelection(ctx.source.playerOrException)
                         1
