@@ -24,28 +24,35 @@ import org.cef.CefClient;
 import org.cef.CefSettings;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefFrame;
+import org.cef.callback.CefAuthCallback;
+import org.cef.callback.CefCallback;
 import org.cef.callback.CefContextMenuParams;
 import org.cef.callback.CefMenuModel;
 import org.cef.handler.CefAudioHandler;
 import org.cef.handler.CefContextMenuHandler;
 import org.cef.handler.CefDisplayHandler;
 import org.cef.handler.CefLoadHandler;
+import org.cef.handler.CefRequestHandler;
+import org.cef.handler.CefResourceRequestHandler;
+import org.cef.misc.BoolRef;
 import org.cef.misc.CefAudioParameters;
 import org.cef.misc.DataPointer;
 import org.cef.network.CefRequest;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * A wrapper around {@link CefClient}
  */
-public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDisplayHandler, CefAudioHandler {
+public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDisplayHandler, CefAudioHandler, CefRequestHandler {
     private final CefClient handle;
-    private final List<CefLoadHandler> loadHandlers = new ArrayList<>();
+    private final List<CefLoadHandler> loadHandlers = new CopyOnWriteArrayList<>();
     private final List<CefContextMenuHandler> contextMenuHandlers = new ArrayList<>();
     private final List<CefDisplayHandler> displayHandlers = new ArrayList<>();
     private final List<CefAudioHandler> audioHandlers = new ArrayList<>();
+    private final List<CefRequestHandler> requestHandlers = new CopyOnWriteArrayList<>();
 
     public MCEFClient(CefClient cefClient) {
         handle = cefClient;
@@ -53,6 +60,7 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
         cefClient.addContextMenuHandler(this);
         cefClient.addDisplayHandler(this);
         cefClient.addAudioHandler(this);
+        cefClient.addRequestHandler(this);
     }
 
     public CefClient getHandle() {
@@ -192,5 +200,72 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
             audioHandler.onAudioStreamError(browser, text);
         }
         MCEF.getLogger().warn("An audio stream threw an error: " + text);
+    }
+
+    public void addRequestHandler(CefRequestHandler handler) {
+        requestHandlers.add(handler);
+    }
+
+    @Override
+    public boolean onBeforeBrowse(CefBrowser browser, CefFrame frame, CefRequest request, boolean user_gesture, boolean is_redirect) {
+        for (CefRequestHandler requestHandler : requestHandlers) {
+            if (requestHandler.onBeforeBrowse(browser, frame, request, user_gesture, is_redirect)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean onOpenURLFromTab(CefBrowser browser, CefFrame frame, String target_url, boolean user_gesture) {
+        for (CefRequestHandler requestHandler : requestHandlers) {
+            if (requestHandler.onOpenURLFromTab(browser, frame, target_url, user_gesture)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public CefResourceRequestHandler getResourceRequestHandler(CefBrowser browser, CefFrame frame, CefRequest request,
+                                                               boolean isNavigation, boolean isDownload, String requestInitiator,
+                                                               BoolRef disableDefaultHandling) {
+        for (CefRequestHandler requestHandler : requestHandlers) {
+            CefResourceRequestHandler rrh = requestHandler.getResourceRequestHandler(
+                    browser, frame, request, isNavigation, isDownload, requestInitiator, disableDefaultHandling
+            );
+            if (rrh != null) {
+                return rrh;
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public boolean getAuthCredentials(CefBrowser browser, String origin_url, boolean isProxy, String host, int port,
+                                      String realm, String scheme, CefAuthCallback callback) {
+        for (CefRequestHandler requestHandler : requestHandlers) {
+            if (requestHandler.getAuthCredentials(browser, origin_url, isProxy, host, port, realm, scheme, callback)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean onCertificateError(CefBrowser browser, ErrorCode cert_error, String request_url, CefCallback callback) {
+        for (CefRequestHandler requestHandler : requestHandlers) {
+            if (requestHandler.onCertificateError(browser, cert_error, request_url, callback)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public void onRenderProcessTerminated(CefBrowser browser, TerminationStatus status) {
+        for (CefRequestHandler requestHandler : requestHandlers) {
+            requestHandler.onRenderProcessTerminated(browser, status);
+        }
     }
 }

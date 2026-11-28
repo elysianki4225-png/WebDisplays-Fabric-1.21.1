@@ -52,6 +52,7 @@ public class MCEFBrowser extends CefBrowserOsr {
     private int btnMask = 0;
     private boolean visible = true;
     private boolean closed = false;
+    private volatile boolean mobileMode = false;
 
     protected ByteBuffer popupGraphics;
     protected Rectangle popupSize;
@@ -94,6 +95,14 @@ public class MCEFBrowser extends CefBrowserOsr {
 
     public MCEFDragContext getDragContext() {
         return dragContext;
+    }
+
+    public boolean isMobileMode() {
+        return mobileMode;
+    }
+
+    public void setMobileMode(boolean mobileMode) {
+        this.mobileMode = mobileMode;
     }
 
     public void setVisible(boolean visible) {

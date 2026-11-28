@@ -145,8 +145,13 @@ public final class MCEF {
     }
 
     public static MCEFBrowser createBrowser(String url, boolean transparent, int width, int height) {
+        return createBrowser(url, transparent, width, height, false);
+    }
+
+    public static MCEFBrowser createBrowser(String url, boolean transparent, int width, int height, boolean mobile) {
         assertInitialized();
         MCEFBrowser browser = new MCEFBrowser(client, url, transparent);
+        browser.setMobileMode(mobile);
         browser.setCloseAllowed();
         browser.createImmediately();
         browser.resize(width, height);
