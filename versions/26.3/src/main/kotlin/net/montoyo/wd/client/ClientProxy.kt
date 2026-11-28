@@ -86,7 +86,7 @@ import kotlin.math.min
 
 @Environment(EnvType.CLIENT)
 class ClientProxy : SharedProxy(), CefDisplayHandler {
-    inner class PadData(url: String, @JvmField val id: UUID, @JvmField val mobile: Boolean) {
+    inner class PadData(private val initialUrl: String, @JvmField val id: UUID, @JvmField val mobile: Boolean) {
         @JvmField
         var view: CefBrowser? = null
 
@@ -103,20 +103,25 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
         var activeCursor = 0
 
         init {
-            if (MCEF.isInitialized()) {
-                val resolved = if (url.isBlank()) CommonConfig.Browser.homepage else Util.resolveUrlOrSearch(url)
-                val webUrl = try {
-                    TileEntityScreen.url(resolved)
-                } catch (e: IOException) {
-                    throw RuntimeException(e)
-                }
-                ensureSchemeHandlers()
-                view = MCEF.createBrowser(WebDisplays.applyBlacklist(webUrl) ?: webUrl, false, resX, resY, mobile)
-                val v = view
-                if (v is MCEFBrowser) {
-                    v.setCursorChangeListener { cursor -> activeCursor = cursor }
-                }
+            ensureView()
+        }
+
+        fun ensureView(): Boolean {
+            if (view != null) return true
+            if (!MCEF.isInitialized()) return false
+            val resolved = if (initialUrl.isBlank()) CommonConfig.Browser.homepage else Util.resolveUrlOrSearch(initialUrl)
+            val webUrl = try {
+                TileEntityScreen.url(resolved)
+            } catch (e: IOException) {
+                throw RuntimeException(e)
             }
+            ensureSchemeHandlers()
+            view = MCEF.createBrowser(WebDisplays.applyBlacklist(webUrl) ?: webUrl, false, resX, resY, mobile)
+            val v = view
+            if (v is MCEFBrowser) {
+                v.setCursorChangeListener { cursor -> activeCursor = cursor }
+            }
+            return view != null
         }
     }
 
@@ -310,8 +315,10 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
             }
         }
 
-        if (pd?.view != null) {
+        if (pd != null && pd.ensureView()) {
             mc.gui.setScreen(GuiMinePad(pd))
+        } else if (player != null && !MCEF.isInitialized()) {
+            Util.toast(player, "noMCEF")
         }
     }
 
@@ -320,6 +327,7 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
         val existing = padMap[id]
         if (existing != null) {
             existing.isInHotbar = true
+            existing.ensureView()
             return existing
         }
         val pd = PadData(url, id, mobile)

@@ -270,18 +270,32 @@ public class MCEFBrowser extends CefBrowserOsr {
         sendKeyEvent(e);
     }
 
+    private int clampX(int mouseX) {
+        if (mouseX < 0) return -1;
+        return lastWidth > 0 ? Math.min(mouseX, lastWidth - 1) : mouseX;
+    }
+
+    private int clampY(int mouseY) {
+        if (mouseY < 0) return -1;
+        return lastHeight > 0 ? Math.min(mouseY, lastHeight - 1) : mouseY;
+    }
+
     public void sendMouseMove(int mouseX, int mouseY) {
         MCEF.markBrowserActivity();
-        CefMouseEvent e = new CefMouseEvent(CefMouseEvent.MOUSE_MOVED, mouseX, mouseY, 0, 0, dragContext.getVirtualModifiers(btnMask));
+        int cx = clampX(mouseX);
+        int cy = clampY(mouseY);
+        CefMouseEvent e = new CefMouseEvent(CefMouseEvent.MOUSE_MOVED, cx, cy, 0, 0, dragContext.getVirtualModifiers(btnMask));
         sendMouseEvent(e);
 
         if (dragContext.isDragging()) {
-            this.dragTargetDragOver(new Point(mouseX, mouseY), 0, dragContext.getMask());
+            this.dragTargetDragOver(new Point(cx, cy), 0, dragContext.getMask());
         }
     }
 
     public void sendMousePress(int mouseX, int mouseY, int button) {
         MCEF.markBrowserActivity();
+        int cx = clampX(mouseX);
+        int cy = clampY(mouseY);
         if (button == 1) button = 2;
         else if (button == 2) button = 1;
 
@@ -289,12 +303,14 @@ public class MCEFBrowser extends CefBrowserOsr {
         else if (button == 1) btnMask |= CefMouseEvent.BUTTON2_MASK;
         else if (button == 2) btnMask |= CefMouseEvent.BUTTON3_MASK;
 
-        CefMouseEvent e = new CefMouseEvent(1, mouseX, mouseY, 1, button, btnMask);
+        CefMouseEvent e = new CefMouseEvent(1, cx, cy, 1, button, btnMask);
         sendMouseEvent(e);
     }
 
     public void sendMouseRelease(int mouseX, int mouseY, int button) {
         MCEF.markBrowserActivity();
+        int cx = clampX(mouseX);
+        int cy = clampY(mouseY);
         if (button == 1) button = 2;
         else if (button == 2) button = 1;
 
@@ -302,11 +318,11 @@ public class MCEFBrowser extends CefBrowserOsr {
         else if (button == 1 && (btnMask & CefMouseEvent.BUTTON2_MASK) != 0) btnMask ^= CefMouseEvent.BUTTON2_MASK;
         else if (button == 2 && (btnMask & CefMouseEvent.BUTTON3_MASK) != 0) btnMask ^= CefMouseEvent.BUTTON3_MASK;
 
-        CefMouseEvent e = new CefMouseEvent(0, mouseX, mouseY, 1, button, btnMask);
+        CefMouseEvent e = new CefMouseEvent(0, cx, cy, 1, button, btnMask);
         sendMouseEvent(e);
 
         if (dragContext.isDragging() && button == 0) {
-            finishDragging(mouseX, mouseY);
+            finishDragging(cx, cy);
         }
     }
 

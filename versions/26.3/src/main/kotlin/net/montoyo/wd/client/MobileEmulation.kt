@@ -287,21 +287,38 @@ object MobileEmulation {
   } catch (_) {}
 
   try {
-    if (window.screen && (!window.screen.orientation || window.screen.orientation.type !== 'portrait-primary')) {
-      var fakeOrientation = {
-        type: 'portrait-primary',
-        angle: 0,
-        onchange: null,
-        lock: function() { return Promise.resolve(); },
-        unlock: function() {},
-        addEventListener: function() {},
-        removeEventListener: function() {},
-        dispatchEvent: function() { return false; }
-      };
-      Object.defineProperty(window.screen, 'orientation', {
-        get: function() { return fakeOrientation; },
-        configurable: true
-      });
+    if (window.screen) {
+      var scrProps = ['width', 'availWidth', 'height', 'availHeight'];
+      for (var sp = 0; sp < scrProps.length; sp++) {
+        (function(prop) {
+          try {
+            Object.defineProperty(window.screen, prop, {
+              get: function() {
+                return (prop === 'width' || prop === 'availWidth')
+                  ? (window.innerWidth || 412)
+                  : (window.innerHeight || 732);
+              },
+              configurable: true
+            });
+          } catch (_) {}
+        })(scrProps[sp]);
+      }
+      if (!window.screen.orientation || window.screen.orientation.type !== 'portrait-primary') {
+        var fakeOrientation = {
+          type: 'portrait-primary',
+          angle: 0,
+          onchange: null,
+          lock: function() { return Promise.resolve(); },
+          unlock: function() {},
+          addEventListener: function() {},
+          removeEventListener: function() {},
+          dispatchEvent: function() { return false; }
+        };
+        Object.defineProperty(window.screen, 'orientation', {
+          get: function() { return fakeOrientation; },
+          configurable: true
+        });
+      }
     }
   } catch (_) {}
 
@@ -315,10 +332,16 @@ object MobileEmulation {
     var ox = 0;
     var oy = 0;
     var el = null;
-    for (var depth = 0; depth < 6; depth++) {
+    for (var depth = 0; depth < 8; depth++) {
       var hit = null;
       try { hit = doc.elementFromPoint(lx, ly); } catch (_) { hit = null; }
       if (!hit) break;
+      while (hit && hit.shadowRoot && typeof hit.shadowRoot.elementFromPoint === 'function') {
+        var shadowHit = null;
+        try { shadowHit = hit.shadowRoot.elementFromPoint(lx, ly); } catch (_) { shadowHit = null; }
+        if (!shadowHit || shadowHit === hit) break;
+        hit = shadowHit;
+      }
       el = hit;
       if (hit.tagName === 'IFRAME' || hit.tagName === 'FRAME') {
         try {
@@ -462,7 +485,7 @@ object MobileEmulation {
     }
   }
 
-  window.__wdTouchStart = function(x, y) {
+  window.__wdTouchStart = function(x, y, touchOnly) {
     var hit = deepElementFromPoint(x, y);
     wdTouchState.active = true;
     wdTouchState.target = hit.el;
@@ -473,13 +496,15 @@ object MobileEmulation {
     wdTouchState.startY = y;
     wdTouchState.curX = x;
     wdTouchState.curY = y;
-    dispatchSyntheticPointer('pointerdown', hit.el, hit.localX, hit.localY, hit.win);
+    if (!touchOnly) {
+      dispatchSyntheticPointer('pointerdown', hit.el, hit.localX, hit.localY, hit.win);
+    }
     dispatchSyntheticTouch('touchstart', hit.el, hit.localX, hit.localY, true, hit.win);
   };
 
   window.__wdTouchMove = function(x, y, dx, dy) {
     if (!wdTouchState.active) {
-      window.__wdTouchStart(x, y);
+      window.__wdTouchStart(x, y, false);
     }
     wdTouchState.curX = x;
     wdTouchState.curY = y;
@@ -507,6 +532,31 @@ object MobileEmulation {
     wdTouchState.win = window;
     dispatchSyntheticPointer('pointerup', el, lx, ly, win);
     dispatchSyntheticTouch('touchend', el, lx, ly, false, win);
+  };
+
+  window.__wdTouchEndTap = function(x, y) {
+    var hit = deepElementFromPoint(x, y);
+    var el = wdTouchState.target || hit.el;
+    var lx = x - (wdTouchState.active ? wdTouchState.offsetX : hit.offsetX);
+    var ly = y - (wdTouchState.active ? wdTouchState.offsetY : hit.offsetY);
+    var win = wdTouchState.active ? (wdTouchState.win || window) : hit.win;
+    wdTouchState.active = false;
+    wdTouchState.target = null;
+    wdTouchState.offsetX = 0;
+    wdTouchState.offsetY = 0;
+    wdTouchState.win = window;
+    dispatchSyntheticTouch('touchend', el, lx, ly, false, win);
+    try {
+      var cur = el;
+      for (var d = 0; d < 6 && cur; d++) {
+        var tag = cur.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || cur.isContentEditable) {
+          if (typeof cur.focus === 'function') cur.focus();
+          break;
+        }
+        cur = cur.parentElement;
+      }
+    } catch (_) {}
   };
 
   window.__wdTouchTap = function(x, y) {

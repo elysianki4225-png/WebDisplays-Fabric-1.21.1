@@ -109,6 +109,7 @@
   "webdisplays.message.missingCC": "ComputerCraft недоступен.",
   "webdisplays.message.missingOC": "OpenComputers недоступен.",
   "webdisplays.message.newOwner": "Теперь вы владелец этого экрана!",
+  "webdisplays.message.noMCEF": "Движок браузера (MCEF) ещё инициализируется или недоступен на этой платформе.",
   "webdisplays.message.noMiniserv": "Блок сервера отключён на этом сервере",
   "webdisplays.message.notAScreen": "Сначала нажмите ПКМ по экрану...",
   "webdisplays.message.notLinked": "Это устройство ещё не привязано.",

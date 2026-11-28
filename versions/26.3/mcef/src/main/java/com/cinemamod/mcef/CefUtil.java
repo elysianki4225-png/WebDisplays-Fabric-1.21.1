@@ -119,6 +119,8 @@ final class CefUtil {
         switches.add("--disable-domain-reliability");
         switches.add("--disable-breakpad");
         switches.add("--renderer-process-limit=4");
+        switches.add("--disable-ipc-flooding-protection");
+        switches.add("--enable-smooth-scrolling");
         switches.add("--disable-features=Translate,BackForwardCache,OptimizationHints,MediaRouter,DialMediaRouteProvider");
 
         // On Linux ARM64 or restricted sandboxes, --no-sandbox prevents zygote crashes
