@@ -88,10 +88,10 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
         var lastURLSent: Long = 0
 
         @JvmField
-        val resX: Int = if (mobile) 450 else max(1, WebDisplays.INSTANCE.padResX.toInt())
+        val resX: Int = if (mobile) 412 else max(1, WebDisplays.INSTANCE.padResX.toInt())
 
         @JvmField
-        val resY: Int = if (mobile) 800 else max(1, WebDisplays.INSTANCE.padResY.toInt())
+        val resY: Int = if (mobile) 732 else max(1, WebDisplays.INSTANCE.padResY.toInt())
 
         @JvmField
         var activeCursor = 0
@@ -104,7 +104,7 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
                     throw RuntimeException(e)
                 }
                 ensureSchemeHandlers()
-                view = MCEF.createBrowser(WebDisplays.applyBlacklist(webUrl) ?: webUrl, false, resX, resY)
+                view = MCEF.createBrowser(WebDisplays.applyBlacklist(webUrl) ?: webUrl, false, resX, resY, mobile)
                 val v = view
                 if (v is MCEFBrowser) {
                     v.setCursorChangeListener { cursor -> activeCursor = cursor }
@@ -737,7 +737,9 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
 
         @JvmStatic
         fun ensureSchemeHandlers() {
-            if (schemeHandlersRegistered || !MCEF.isInitialized()) return
+            if (!MCEF.isInitialized()) return
+            MobileEmulation.register()
+            if (schemeHandlersRegistered) return
             schemeHandlersRegistered = true
 
             val wd = MCEF.getApp().handle.registerSchemeHandlerFactory(
