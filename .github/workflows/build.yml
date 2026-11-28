@@ -196,54 +196,17 @@ jobs:
                   sys.exit(1)
               print("All Mixin and AccessWidener targets verified OK!")
               out_parts = []
-              for dc in [
-                  "com.mojang.blaze3d.platform.InputConstants",
-                  "net.minecraft.client.input.MouseButtonInfo",
-                  "net.minecraft.client.input.MouseButtonEvent",
-                  "net.minecraft.client.MouseHandler",
-                  "net.minecraft.client.gui.components.AbstractWidget",
-                  "net.minecraft.client.gui.screens.Screen",
-              ]:
-                  p = subprocess.run(["javap", "-p", "-c", "-cp", mc_jar, dc], capture_output=True, text=True, errors="replace")
-                  txt = p.stdout
-                  if dc.endswith("MouseHandler"):
-                      lines = txt.splitlines()
-                      kept = []
-                      keep = False
-                      for ln in lines:
-                          if "onButton(" in ln or "onMove(" in ln or "mousePressed(" in ln or "mouseReleased(" in ln or "handleAccumulatedMovement(" in ln:
-                              keep = True
-                          elif ln and not ln.startswith(" ") and "(" in ln:
-                              keep = False
-                          if keep:
-                              kept.append(ln)
-                      txt = "\n".join(kept)
-                  elif dc.endswith("AbstractWidget"):
-                      lines = txt.splitlines()
-                      kept = []
-                      keep = False
-                      for ln in lines:
-                          if "mouseClicked(" in ln or "isValidClickButton(" in ln or "clicked(" in ln or "onClick(" in ln:
-                              keep = True
-                          elif ln and not ln.startswith(" ") and "(" in ln:
-                              keep = False
-                          if keep:
-                              kept.append(ln)
-                      txt = "\n".join(kept)
-                  elif dc.endswith("Screen"):
-                      lines = txt.splitlines()
-                      kept = []
-                      keep = False
-                      for ln in lines:
-                          if "mouseClicked(" in ln or "mouseReleased(" in ln or "mouseMoved(" in ln:
-                              keep = True
-                          elif ln and not ln.startswith(" ") and "(" in ln:
-                              keep = False
-                          if keep:
-                              kept.append(ln)
-                      txt = "\n".join(kept)
-                  out_parts.append(f"=== {dc} ===\n{txt[:9000]}")
-              post_comment("### 26.3 mouse javap\n```text\n" + "\n\n".join(out_parts)[:58000] + "\n```")
+              p1 = subprocess.run(["javap", "-p", "-c", "-cp", mc_jar, "com.mojang.blaze3d.platform.InputConstants"], capture_output=True, text=True, errors="replace")
+              lines1 = p1.stdout.splitlines()
+              idx = next((i for i, l in enumerate(lines1) if "static {};" in l), None)
+              if idx is not None:
+                  out_parts.append("=== InputConstants.<clinit> ===\n" + "\n".join(lines1[idx:idx+180]))
+              p2 = subprocess.run(["javap", "-p", "-c", "-cp", mc_jar, "net.minecraft.client.MouseHandler"], capture_output=True, text=True, errors="replace")
+              lines2 = p2.stdout.splitlines()
+              idx2 = next((i for i, l in enumerate(lines2) if "onButton(" in l), None)
+              if idx2 is not None:
+                  out_parts.append("=== MouseHandler.onButton ===\n" + "\n".join(lines2[idx2:idx2+160]))
+              post_comment("### 26.3 InputConstants & MouseHandler\n```text\n" + "\n\n".join(out_parts)[:58000] + "\n```")
           except Exception:
               post_comment("### 26.3 Mixin check crashed\n```text\n" + traceback.format_exc() + "\n```")
               sys.exit(1)
