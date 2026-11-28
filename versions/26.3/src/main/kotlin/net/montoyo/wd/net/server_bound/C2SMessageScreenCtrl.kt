@@ -85,7 +85,8 @@ class C2SMessageScreenCtrl : Packet {
 
     @Throws(MissingPermissionException::class)
     fun checkPermission(sender: ServerPlayer, scr: TileEntityScreen, right: Int) {
-        val prights = scr.getScreen(side!!).rightsFor(sender)
+        val screenSide = scr.getScreen(side!!) ?: return
+        val prights = screenSide.rightsFor(sender)
         if ((prights and right) == 0) {
             throw MissingPermissionException(right, sender)
         }

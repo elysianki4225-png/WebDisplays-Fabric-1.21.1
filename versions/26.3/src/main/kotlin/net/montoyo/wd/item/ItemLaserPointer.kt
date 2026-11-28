@@ -51,7 +51,7 @@ class ItemLaserPointer(properties: Properties) : Item(properties.stacksTo(1)), W
 
                 if (te != null && te.hasUpgrade(side, DefaultUpgrade.LASERMOUSE)) {
                     val scr = te.getScreen(side)
-                    if (scr.browser != null) {
+                    if (scr != null && scr.browser != null) {
                         val hitX = result.location.x.toFloat() - pos.x.toFloat()
                         val hitY = result.location.y.toFloat() - pos.y.toFloat()
                         val hitZ = result.location.z.toFloat() - pos.z.toFloat()
@@ -119,7 +119,7 @@ class ItemLaserPointer(properties: Properties) : Item(properties.stacksTo(1)), W
             val te = level.getBlockEntity(pos.toBlock()) as? TileEntityScreen ?: return
             if (te.hasUpgrade(side, DefaultUpgrade.LASERMOUSE)) {
                 val scr = te.getScreen(side)
-                if (scr.browser != null) {
+                if (scr != null && scr.browser != null) {
                     if (BlockScreen.hit2pixels(side, result.blockPos, Vector3i(result.blockPos), scr, hitX, hitY, hitZ, tmp)) {
                         te.handleMouseEvent(side, ClickControl.ControlType.MOVE, tmp, -1)
                         te.handleMouseEvent(side, if (press) ClickControl.ControlType.DOWN else ClickControl.ControlType.UP, tmp, btn)

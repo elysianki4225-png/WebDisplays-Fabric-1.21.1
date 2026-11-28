@@ -147,9 +147,9 @@ class BlockScreen(properties: Properties) :
 
         Multiblock.findOrigin(world, pos, side, null)
         var te = world.getBlockEntity(pos.toBlock()) as? TileEntityScreen
+        val scr = te?.getScreen(side)
 
-        if (te != null && te.getScreen(side) != null) {
-            val scr = te.getScreen(side)
+        if (te != null && scr != null) {
 
             if (sneaking) {
                 if ((scr.rightsFor(player) and ScreenRights.CHANGE_URL) == 0) {

@@ -46,7 +46,7 @@ class ItemOwnershipThief(properties: Properties) : Item(properties.stacksTo(1)),
 
                 Log.warning(
                     "Owner of screen at %d %d %d, side %s was changed from %s (UUID %s) to %s (UUID %s)",
-                    bp.x, bp.y, bp.z, side.toString(), scr.owner.name, scr.owner.uuid.toString(),
+                    bp.x, bp.y, bp.z, side.toString(), scr.owner?.name, scr.owner?.uuid?.toString(),
                     player.name, player.gameProfile.id().toString()
                 )
                 player.setItemInHand(context.hand, ItemStack.EMPTY)

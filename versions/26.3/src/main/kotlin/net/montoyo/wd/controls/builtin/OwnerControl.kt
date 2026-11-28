@@ -41,7 +41,7 @@ class OwnerControl : ScreenControl {
 
     @Environment(EnvType.CLIENT)
     override fun handleClient(pos: BlockPos, side: BlockSide?, tes: TileEntityScreen, ctx: WDContext) {
-        tes.getScreen(side!!).owner = owner
+        tes.getScreen(side!!)?.owner = owner
     }
 
     companion object {

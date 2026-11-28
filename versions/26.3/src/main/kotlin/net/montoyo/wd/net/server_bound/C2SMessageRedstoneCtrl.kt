@@ -51,8 +51,10 @@ class C2SMessageRedstoneCtrl : Packet, Runnable {
             return
         }
 
-        val tes = te.connectedScreen ?: return
-        if ((tes.getScreen(te.screenSide).rightsFor(ply) and ScreenRights.CHANGE_URL) == 0) return
+        val tes = te.getConnectedScreen() ?: return
+        val side = te.getScreenSide() ?: return
+        val scr = tes.getScreen(side) ?: return
+        if ((scr.rightsFor(ply) and ScreenRights.CHANGE_URL) == 0) return
 
         te.setURLs(risingEdgeURL, fallingEdgeURL)
     }

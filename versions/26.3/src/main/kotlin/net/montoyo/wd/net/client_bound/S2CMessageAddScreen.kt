@@ -79,7 +79,7 @@ class S2CMessageAddScreen : Packet {
             buf.writeUtf(scr.url)
             scr.resolution.writeTo(buf)
             buf.writeByte(scr.rotation.ordinal)
-            scr.owner.writeTo(buf)
+            scr.owner?.writeTo(buf) ?: NameUUIDPair().writeTo(buf)
             buf.writeByte(scr.upgrades.size)
 
             for (isItem in scr.upgrades) {
