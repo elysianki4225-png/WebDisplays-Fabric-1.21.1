@@ -90,10 +90,11 @@ class ManageRightsAndUpdgradesControl : ScreenControl {
             }
             ControlType.RIGHTS -> {
                 val scr = tes.getScreen(side!!)
-                val fr = if (scr.owner.uuid == player.gameProfile.id) friendRights else scr.friendRights
-                val or = if ((scr.rightsFor(player) and ScreenRights.MANAGE_OTHER_RIGHTS) == 0) scr.otherRights else otherRights
+                val nonNullPlayer = player!!
+                val fr = if (scr.owner.uuid == nonNullPlayer.gameProfile.id) friendRights else scr.friendRights
+                val or = if ((scr.rightsFor(nonNullPlayer) and ScreenRights.MANAGE_OTHER_RIGHTS) == 0) scr.otherRights else otherRights
                 if (scr.friendRights != fr || scr.otherRights != or) {
-                    tes.setRights(player, side, fr, or)
+                    tes.setRights(nonNullPlayer, side, fr, or)
                 }
             }
         }

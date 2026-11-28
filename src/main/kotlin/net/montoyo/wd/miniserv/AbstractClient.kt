@@ -103,9 +103,9 @@ abstract class AbstractClient {
                     pkt = sendQueue.poll()
                     if (pkt == null) {
                         selKey.interestOps(SelectionKey.OP_READ) // Remove write op
-                        break
                     }
                 }
+                if (pkt == null) break
 
                 packetWriter.reset(pkt!!.finish())
             }

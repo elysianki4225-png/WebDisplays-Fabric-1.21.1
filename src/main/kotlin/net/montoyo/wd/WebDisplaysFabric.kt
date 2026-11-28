@@ -50,7 +50,7 @@ object WebDisplaysFabric : ModInitializer {
 
         ServerPlayConnectionEvents.JOIN.register { handler, _, _ -> onPlayerLogin(handler.player) }
         ServerPlayConnectionEvents.DISCONNECT.register { handler, _ ->
-            Server.getInstance().clientManager.revokeClientKey(handler.player.gameProfile.id)
+            Server.getInstance().getClientManager().revokeClientKey(handler.player.gameProfile.id)
         }
 
         ServerMessageEvents.CHAT_MESSAGE.register { message, player, _ ->
@@ -65,8 +65,8 @@ object WebDisplaysFabric : ModInitializer {
         val sv = Server.getInstance()
 
         if (world.dimension() !in serverStartedDimensions) {
-            sv.port = WebDisplays.INSTANCE.miniservPort
-            sv.directory = File(worldDir, "wd_filehost")
+            sv.setPort(WebDisplays.INSTANCE.miniservPort)
+            sv.setDirectory(File(worldDir, "wd_filehost"))
             sv.start()
             serverStartedDimensions += world.dimension()
         }
