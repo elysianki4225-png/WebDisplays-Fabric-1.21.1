@@ -34,8 +34,11 @@ object BiomeHudOverlay {
         val targetName = formatBiomeName(cfg.targetBiome)
         val standingLoc = level.getBiome(player.blockPosition()).unwrapKey().orElse(null)?.location()
         val standingName = if (standingLoc != null) formatBiomeName(standingLoc.toString()) else "?"
-        val dimLoc = if (cfg.targetDimension.isBlank()) level.dimension().location().toString() else cfg.targetDimension
+        val currentDimLoc = level.dimension().location().toString()
+        val dimLoc = if (cfg.targetDimension.isBlank()) currentDimLoc else cfg.targetDimension
         val dimShort = formatDimName(dimLoc)
+        val isCrossDim = cfg.targetDimension.isNotBlank() && cfg.targetDimension != currentDimLoc
+        val dimBadge = if (isCrossDim) I18n.get("terrapaver.biome.hud.cross_dim", dimShort) else dimShort
 
         val shapeInfo = when (cfg.shape) {
             BiomeShape.RADIUS_BRUSH -> "${I18n.get(cfg.shape.key)} ${cfg.radius}m"
@@ -59,7 +62,7 @@ object BiomeHudOverlay {
         }
 
         val line1 = "$targetName$splitSuffix"
-        val line2 = "$shapeInfo · $dimShort · ${I18n.get("terrapaver.biome.hud.standing", standingName)} · [B]"
+        val line2 = "$shapeInfo · $dimBadge · ${I18n.get("terrapaver.biome.hud.standing", standingName)} · [B]"
 
         val cardW = (maxOf(font.width(line1), font.width(line2)) + 38).coerceIn(190, screenW - 24)
         val cardH = 34

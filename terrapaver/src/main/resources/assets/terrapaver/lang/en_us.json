@@ -213,6 +213,7 @@
   "terrapaver.biome.cfg.adapt_snow": "Adapt Snow Layer to Temperature",
 
   "terrapaver.biome.hud.standing": "Here: %s",
+  "terrapaver.biome.hud.cross_dim": "Target Dim: %s",
   "terrapaver.biome.target": "Target Biome",
   "terrapaver.biome.filter_all": "Replacing: All Biomes in Region",
   "terrapaver.biome.tip_fast": "Right-Click with Biome Brush in hand to apply instantly!",
@@ -221,6 +222,11 @@
   "terrapaver.biome.msg.cleared": "Cleared Biome Box selection.",
   "terrapaver.biome.msg.invalid_biome": "Unknown biome ID: %s",
   "terrapaver.biome.msg.applied": "Painted %s (~%d blocks across %d chunks in %d ms)!",
+  "terrapaver.biome.msg.surface_only": "Adapted %d surface/snow blocks for %s (%d ms)!",
+  "terrapaver.biome.msg.already_target": "Area already matches target biome(s) (%d chunks checked).",
+  "terrapaver.biome.msg.filtered_zero": "0 blocks matched Source Filter (%s) — check Dim & Y tab!",
+  "terrapaver.biome.msg.y_empty": "Y range [%d..%d] missed biome layers — check Dim & Y tab!",
+  "terrapaver.biome.msg.water_protected": "Area only contains protected rivers/oceans.",
   "terrapaver.biome.msg.nothing_undo": "No biome edit to undo.",
   "terrapaver.biome.msg.undone": "Restored original biomes across %d chunks!"
 }

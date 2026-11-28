@@ -213,6 +213,7 @@
   "terrapaver.biome.cfg.adapt_snow": "按温度同步生成/清除积雪",
 
   "terrapaver.biome.hud.standing": "脚下: %s",
+  "terrapaver.biome.hud.cross_dim": "跨维度: %s",
   "terrapaver.biome.target": "目标生物群系",
   "terrapaver.biome.filter_all": "替换范围：区域内所有生物群系",
   "terrapaver.biome.tip_fast": "手持生物群系编辑器直接右键，即可毫秒级修改整片区域！",
@@ -221,6 +222,11 @@
   "terrapaver.biome.msg.cleared": "已清空区域框选。",
   "terrapaver.biome.msg.invalid_biome": "未知的生物群系 ID: %s",
   "terrapaver.biome.msg.applied": "已替换为 %s（约 %d 格 / %d 个区块，耗时 %d ms）！",
+  "terrapaver.biome.msg.surface_only": "已为 %s 适配 %d 个地表/积雪方块（耗时 %d ms）！",
+  "terrapaver.biome.msg.already_target": "该区域已是目标生物群系（已检查 %d 个区块，无需重复修改）。",
+  "terrapaver.biome.msg.filtered_zero": "0 格匹配源群系过滤「%s」— 请检查[维度高度]页过滤开关！",
+  "terrapaver.biome.msg.y_empty": "当前 Y 轴范围 [%d..%d] 未命中有效高度层 — 请调整[维度高度]！",
+  "terrapaver.biome.msg.water_protected": "区域内均为受保护的河流/海洋群系。",
   "terrapaver.biome.msg.nothing_undo": "没有可撤销的生物群系编辑记录。",
   "terrapaver.biome.msg.undone": "已还原 %d 个区块的原始生物群系！"
 }

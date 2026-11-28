@@ -48,12 +48,22 @@ object BiomePreviewRenderer {
         RenderSystem.enableBlend()
         RenderSystem.defaultBlendFunc()
         RenderSystem.disableCull()
-        RenderSystem.enableDepthTest()
         RenderSystem.setShader(GameRenderer::getPositionColorShader)
 
-        val builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR)
-        var hasVerts = false
+        // Pass 1: Subtle X-ray ghost outline visible even through tree canopies & hills
+        RenderSystem.disableDepthTest()
+        drawShapeGeometry(matrix, cfg, target, alphaMul = 0.24f)
 
+        // Pass 2: Crisp bright depth-tested outline on open surfaces
+        RenderSystem.enableDepthTest()
+        drawShapeGeometry(matrix, cfg, target, alphaMul = 0.88f)
+
+        RenderSystem.enableCull()
+        RenderSystem.disableBlend()
+    }
+
+    private fun drawShapeGeometry(matrix: Matrix4f, cfg: BiomeConfig, target: BlockPos, alphaMul: Float) {
+        val builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR)
         when (cfg.shape) {
             BiomeShape.RADIUS_BRUSH -> {
                 val r = cfg.radius.toFloat()
@@ -68,30 +78,29 @@ object BiomePreviewRenderer {
                         builder, matrix,
                         cx + cos(a0) * r, y, cz + sin(a0) * r,
                         cx + cos(a1) * r, y, cz + sin(a1) * r,
-                        0.18f, 0.12f, 0.85f, 0.62f, 0.82f
+                        0.18f, 0.12f, 0.85f, 0.62f, alphaMul
                     )
                 }
                 if (cfg.splitMode == BiomeSplitMode.SPLIT_X) {
-                    drawBeam(builder, matrix, cx, y, cz - r, cx, y, cz + r, 0.14f, 0.96f, 0.65f, 0.12f, 0.88f)
+                    drawBeam(builder, matrix, cx, y, cz - r, cx, y, cz + r, 0.14f, 0.96f, 0.65f, 0.12f, alphaMul)
                 } else if (cfg.splitMode == BiomeSplitMode.SPLIT_Z) {
-                    drawBeam(builder, matrix, cx - r, y, cz, cx + r, y, cz, 0.14f, 0.96f, 0.65f, 0.12f, 0.88f)
+                    drawBeam(builder, matrix, cx - r, y, cz, cx + r, y, cz, 0.14f, 0.96f, 0.65f, 0.12f, alphaMul)
                 }
-                drawVerticalBeacon(builder, matrix, cx, y, cz, 0.18f, 2.5f, 0.12f, 0.92f, 0.65f, 0.85f)
-                hasVerts = true
+                drawVerticalBeacon(builder, matrix, cx, y, cz, 0.18f, 2.5f, 0.12f, 0.92f, 0.65f, alphaMul)
             }
             BiomeShape.SQUARE_BRUSH -> {
                 val r = cfg.radius.toFloat() + 0.5f
                 val y = target.y + 1.08f
                 val cx = target.x + 0.5f
                 val cz = target.z + 0.5f
-                drawRectOutline(builder, matrix, cx - r, cx + r, y, cz - r, cz + r, 0.18f, 0.12f, 0.85f, 0.62f, 0.82f)
+                drawRectOutline(builder, matrix, cx - r, cx + r, y, cz - r, cz + r, 0.18f, 0.12f, 0.85f, 0.62f, alphaMul)
+                drawCornerPosts(builder, matrix, cx - r, cx + r, y, cz - r, cz + r, 0.12f, 0.85f, 0.62f, alphaMul)
                 if (cfg.splitMode == BiomeSplitMode.SPLIT_X) {
-                    drawBeam(builder, matrix, cx, y, cz - r, cx, y, cz + r, 0.14f, 0.96f, 0.65f, 0.12f, 0.88f)
+                    drawBeam(builder, matrix, cx, y, cz - r, cx, y, cz + r, 0.14f, 0.96f, 0.65f, 0.12f, alphaMul)
                 } else if (cfg.splitMode == BiomeSplitMode.SPLIT_Z) {
-                    drawBeam(builder, matrix, cx - r, y, cz, cx + r, y, cz, 0.14f, 0.96f, 0.65f, 0.12f, 0.88f)
+                    drawBeam(builder, matrix, cx - r, y, cz, cx + r, y, cz, 0.14f, 0.96f, 0.65f, 0.12f, alphaMul)
                 }
-                drawVerticalBeacon(builder, matrix, cx, y, cz, 0.18f, 2.5f, 0.12f, 0.92f, 0.65f, 0.85f)
-                hasVerts = true
+                drawVerticalBeacon(builder, matrix, cx, y, cz, 0.18f, 2.5f, 0.12f, 0.92f, 0.65f, alphaMul)
             }
             BiomeShape.CHUNK_GRID -> {
                 val cp = ChunkPos(target)
@@ -101,8 +110,15 @@ object BiomePreviewRenderer {
                 val x1 = (((cp.x + cr) shl 4) + 16).toFloat()
                 val z1 = (((cp.z + cr) shl 4) + 16).toFloat()
                 val y = target.y + 1.08f
-                drawRectOutline(builder, matrix, x0, x1, y, z0, z1, 0.18f, 0.16f, 0.76f, 0.95f, 0.80f)
-                hasVerts = true
+                val cx = (x0 + x1) * 0.5f
+                val cz = (z0 + z1) * 0.5f
+                drawRectOutline(builder, matrix, x0, x1, y, z0, z1, 0.20f, 0.16f, 0.76f, 0.95f, alphaMul)
+                drawCornerPosts(builder, matrix, x0, x1, y, z0, z1, 0.16f, 0.76f, 0.95f, alphaMul)
+                if (cfg.splitMode == BiomeSplitMode.SPLIT_X) {
+                    drawBeam(builder, matrix, cx, y, z0, cx, y, z1, 0.14f, 0.96f, 0.65f, 0.12f, alphaMul)
+                } else if (cfg.splitMode == BiomeSplitMode.SPLIT_Z) {
+                    drawBeam(builder, matrix, x0, y, cz, x1, y, cz, 0.14f, 0.96f, 0.65f, 0.12f, alphaMul)
+                }
             }
             BiomeShape.BOX_2POINT -> {
                 if (ClientBiomeState.hasCorner1) {
@@ -112,24 +128,36 @@ object BiomePreviewRenderer {
                     val z0 = min(c1.z, target.z).toFloat()
                     val z1 = max(c1.z, target.z).toFloat() + 1f
                     val y = max(c1.y, target.y).toFloat() + 1.12f
-                    drawRectOutline(builder, matrix, x0, x1, y, z0, z1, 0.18f, 0.95f, 0.62f, 0.18f, 0.82f)
-                    drawVerticalBeacon(builder, matrix, c1.x + 0.5f, c1.y + 1f, c1.z + 0.5f, 0.22f, 3.0f, 0.95f, 0.62f, 0.18f, 0.9f)
+                    val cx = (x0 + x1) * 0.5f
+                    val cz = (z0 + z1) * 0.5f
+                    drawRectOutline(builder, matrix, x0, x1, y, z0, z1, 0.20f, 0.95f, 0.62f, 0.18f, alphaMul)
+                    drawCornerPosts(builder, matrix, x0, x1, y, z0, z1, 0.95f, 0.62f, 0.18f, alphaMul)
+                    if (cfg.splitMode == BiomeSplitMode.SPLIT_X) {
+                        drawBeam(builder, matrix, cx, y, z0, cx, y, z1, 0.14f, 0.96f, 0.65f, 0.12f, alphaMul)
+                    } else if (cfg.splitMode == BiomeSplitMode.SPLIT_Z) {
+                        drawBeam(builder, matrix, x0, y, cz, x1, y, cz, 0.14f, 0.96f, 0.65f, 0.12f, alphaMul)
+                    }
+                    drawVerticalBeacon(builder, matrix, c1.x + 0.5f, c1.y + 1f, c1.z + 0.5f, 0.22f, 3.0f, 0.95f, 0.62f, 0.18f, alphaMul)
                 } else {
-                    drawVerticalBeacon(builder, matrix, target.x + 0.5f, target.y + 1f, target.z + 0.5f, 0.18f, 2.2f, 0.12f, 0.85f, 0.62f, 0.8f)
+                    drawVerticalBeacon(builder, matrix, target.x + 0.5f, target.y + 1f, target.z + 0.5f, 0.18f, 2.2f, 0.12f, 0.85f, 0.62f, alphaMul)
                 }
-                hasVerts = true
             }
         }
-
-        if (hasVerts) {
-            val mesh = builder.build()
-            if (mesh != null) {
-                BufferUploader.drawWithShader(mesh)
-            }
+        val mesh = builder.build()
+        if (mesh != null) {
+            BufferUploader.drawWithShader(mesh)
         }
+    }
 
-        RenderSystem.enableCull()
-        RenderSystem.disableBlend()
+    private fun drawCornerPosts(
+        bb: BufferBuilder, m: Matrix4f,
+        x0: Float, x1: Float, y: Float, z0: Float, z1: Float,
+        r: Float, g: Float, b: Float, a: Float
+    ) {
+        drawVerticalBeacon(bb, m, x0, y, z0, 0.14f, 3.5f, r, g, b, a)
+        drawVerticalBeacon(bb, m, x1, y, z0, 0.14f, 3.5f, r, g, b, a)
+        drawVerticalBeacon(bb, m, x1, y, z1, 0.14f, 3.5f, r, g, b, a)
+        drawVerticalBeacon(bb, m, x0, y, z1, 0.14f, 3.5f, r, g, b, a)
     }
 
     private fun drawRectOutline(

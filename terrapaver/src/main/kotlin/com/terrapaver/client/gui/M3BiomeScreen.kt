@@ -339,13 +339,15 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
             sb.y = sbY
             sb.width = sbW
             sb.setTextColor(t.onSurface)
-            if (sb.value.isEmpty()) {
-                val hint = M3Draw.fitText(font, I18n.get("terrapaver.biome.search_hint"), sbW)
-                g.drawString(font, hint, sbX, sbY, t.outline, false)
+            if (y + 28 >= clipTop && y <= clipBottom) {
+                if (sb.value.isEmpty()) {
+                    val hint = M3Draw.fitText(font, I18n.get("terrapaver.biome.search_hint"), sbW)
+                    g.drawString(font, hint, sbX, sbY, t.outline, false)
+                }
+                g.enableScissor(sbX - 1, max(clipTop, y + 2), sbX + sbW + 1, min(clipBottom, y + 26))
+                sb.render(g, mouseX, mouseY, partialTick)
+                g.disableScissor()
             }
-            g.enableScissor(sbX - 1, y + 2, sbX + sbW + 1, y + 26)
-            sb.render(g, mouseX, mouseY, partialTick)
-            g.disableScissor()
         }
 
         var bx = contentX + searchW + 6
@@ -1100,7 +1102,8 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
         val my = mouseY.roundToInt()
 
         searchBox?.let { sb ->
-            if (activeTab == 0 && mx in sb.x..(sb.x + sb.width) && my in (sb.y - 8)..(sb.y + sb.height + 8)) {
+            val inView = sb.y >= clipTop - 2 && sb.y + sb.height <= clipBottom + 2
+            if (activeTab == 0 && inView && mx in sb.x..(sb.x + sb.width) && my in max(clipTop, sb.y - 8)..min(clipBottom, sb.y + sb.height + 8)) {
                 sb.isFocused = true
                 focused = sb
                 return true

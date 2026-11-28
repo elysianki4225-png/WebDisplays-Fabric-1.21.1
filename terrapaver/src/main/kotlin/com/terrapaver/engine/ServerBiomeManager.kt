@@ -243,6 +243,11 @@ object ServerBiomeManager {
         val sampler = level.chunkSource.randomState().sampler()
         var changedQuarts = 0
         var changedBlocks = 0
+        var alreadyTargetQuarts = 0
+        var filteredOutQuarts = 0
+        var yOutOfRangeQuarts = 0
+        var waterProtectedQuarts = 0
+        var checkedChunks = 0
 
         fun pickHolderAt(bx: Int, bz: Int): Holder.Reference<Biome> {
             return when (cfg.splitMode) {
@@ -276,6 +281,7 @@ object ServerBiomeManager {
         for (cx in minCx..maxCx) {
             for (cz in minCz..maxCz) {
                 val chunk = level.chunkSource.getChunk(cx, cz, ChunkStatus.FULL, true) ?: continue
+                checkedChunks++
                 val backups = ArrayList<QuartBackup>(64)
 
                 val quartSurfaceY = if (cfg.verticalMode == BiomeVerticalMode.SURFACE_BAND) {
@@ -309,14 +315,21 @@ object ServerBiomeManager {
                     } else {
                         yHiBound
                     }
-                    if (by < loY || by > hiY) return@BiomeResolver existing
+                    if (by + 1 < loY || by - 2 > hiY) {
+                        yOutOfRangeQuarts++
+                        return@BiomeResolver existing
+                    }
 
                     if (cfg.preserveRiversAndOceans && (existing.`is`(BiomeTags.IS_RIVER) || existing.`is`(BiomeTags.IS_OCEAN))) {
+                        waterProtectedQuarts++
                         return@BiomeResolver existing
                     }
                     if (sourceFilterId != null) {
                         val existingId = existing.unwrapKey().map { it.location() }.orElse(null)
-                        if (existingId != sourceFilterId) return@BiomeResolver existing
+                        if (existingId != sourceFilterId) {
+                            filteredOutQuarts++
+                            return@BiomeResolver existing
+                        }
                     }
 
                     if (cfg.edgeFeather > 0) {
@@ -331,6 +344,8 @@ object ServerBiomeManager {
                     if (existing != chosen) {
                         backups.add(QuartBackup(qx, qy, qz, existing))
                         changedQuarts++
+                    } else {
+                        alreadyTargetQuarts++
                     }
                     chosen
                 }
@@ -347,7 +362,7 @@ object ServerBiomeManager {
                     val cMaxX = min(maxX, (cx shl 4) + 15)
                     val cMinZ = max(minZ, cz shl 4)
                     val cMaxZ = min(maxZ, (cz shl 4) + 15)
-                    changedBlocks += adaptChunkSurface(
+                    val chunkBlocks = adaptChunkSurface(
                         level = level,
                         chunk = chunk,
                         pickHolderFn = { bx, bz -> pickHolderAt(bx, bz) },
@@ -361,7 +376,10 @@ object ServerBiomeManager {
                         edgeAlphaFn = edgeAlphaFn,
                         blockBackups = blockBackups
                     )
-                    if (changedBlocks > 0) chunk.setUnsaved(true)
+                    if (chunkBlocks > 0) {
+                        changedBlocks += chunkBlocks
+                        chunk.setUnsaved(true)
+                    }
                 }
             }
         }
@@ -376,16 +394,56 @@ object ServerBiomeManager {
 
         val ms = max(1L, (System.nanoTime() - startNs) / 1_000_000L)
         val biomeDisplayName = Component.translatable("biome.${targetId!!.namespace}.${targetId.path}")
-        player.displayClientMessage(
-            Component.translatable(
-                "terrapaver.biome.msg.applied",
-                biomeDisplayName,
-                changedQuarts * 64,
-                modifiedChunks.size,
-                ms
-            ),
-            true
-        )
+        when {
+            changedQuarts > 0 -> {
+                player.displayClientMessage(
+                    Component.translatable(
+                        "terrapaver.biome.msg.applied",
+                        biomeDisplayName,
+                        changedQuarts * 64,
+                        modifiedChunks.size,
+                        ms
+                    ),
+                    true
+                )
+            }
+            changedBlocks > 0 -> {
+                player.displayClientMessage(
+                    Component.translatable(
+                        "terrapaver.biome.msg.surface_only",
+                        biomeDisplayName,
+                        changedBlocks,
+                        ms
+                    ),
+                    true
+                )
+            }
+            filteredOutQuarts > 0 && alreadyTargetQuarts == 0 && sourceFilterId != null -> {
+                val filterName = Component.translatable("biome.${sourceFilterId.namespace}.${sourceFilterId.path}")
+                player.displayClientMessage(
+                    Component.translatable("terrapaver.biome.msg.filtered_zero", filterName),
+                    true
+                )
+            }
+            yOutOfRangeQuarts > 0 && alreadyTargetQuarts == 0 -> {
+                player.displayClientMessage(
+                    Component.translatable("terrapaver.biome.msg.y_empty", yLoBound, yHiBound),
+                    true
+                )
+            }
+            waterProtectedQuarts > 0 && alreadyTargetQuarts == 0 -> {
+                player.displayClientMessage(
+                    Component.translatable("terrapaver.biome.msg.water_protected"),
+                    true
+                )
+            }
+            else -> {
+                player.displayClientMessage(
+                    Component.translatable("terrapaver.biome.msg.already_target", checkedChunks),
+                    true
+                )
+            }
+        }
     }
 
     private fun adaptChunkSurface(
@@ -590,7 +648,7 @@ object ServerBiomeManager {
                 val d = (bx - rx) * (bx - rx) + (bz - rz) * (bz - rz)
                 if (d < bestDist) {
                     bestDist = d
-                    var h = (cx * 374761393) xor (cz * 668265263)
+                    var h = (cx * 374761393) + (cz * 668265263) + 0x9E3779B9.toInt()
                     h = (h xor (h shr 13)) * 1274126177
                     bestHash = (h xor (h shr 16)) and 0x7FFFFFFF
                 }
