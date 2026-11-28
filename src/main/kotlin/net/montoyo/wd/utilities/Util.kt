@@ -12,6 +12,8 @@ import net.minecraft.network.chat.Style
 import net.minecraft.resources.ResourceLocation
 import net.minecraft.world.entity.player.Player
 import java.lang.reflect.Modifier
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.util.Arrays
 import java.util.StringJoiner
 import java.util.UUID
@@ -19,6 +21,12 @@ import java.util.UUID
 object Util {
     @JvmField
     val SIZES = arrayOf("bytes", "KiB", "MiB", "GiB", "TiB")
+
+    private val SCHEME_REGEX = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://.*")
+    private val SPECIAL_SCHEME_REGEX = Regex("^(?:about|data|javascript|blob|chrome|devtools):.*", RegexOption.IGNORE_CASE)
+    private val IPV4_REGEX = Regex("^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})$")
+    private val IPV6_AUTH_REGEX = Regex("^\\[[0-9a-fA-F:]+\\](?::(\\d{1,5}))?$")
+    private val DOMAIN_LABEL_REGEX = Regex("^[\\p{L}\\p{N}-]+$")
 
     @Deprecated("For removal", level = DeprecationLevel.WARNING)
     @JvmStatic
@@ -147,6 +155,83 @@ object Util {
     @JvmStatic
     fun addProtocol(str: String): String =
         if (str.isEmpty() || str.contains("://")) str else "http://$str"
+
+    @JvmStatic
+    fun resolveUrlOrSearch(str: String): String {
+        val trimmed = str.trim()
+        if (trimmed.isEmpty()) return ""
+        if (SCHEME_REGEX.matches(trimmed) || SPECIAL_SCHEME_REGEX.matches(trimmed)) {
+            return trimmed
+        }
+        if (isLikelyHostOrUrl(trimmed)) {
+            return "http://$trimmed"
+        }
+        return "https://www.google.com/search?q=" + URLEncoder.encode(trimmed, StandardCharsets.UTF_8)
+    }
+
+    private fun isLikelyHostOrUrl(trimmed: String): Boolean {
+        if (trimmed.any { it.isWhitespace() }) return false
+
+        val sepIdx = trimmed.indexOfAny(charArrayOf('/', '?', '#'))
+        val authority = if (sepIdx >= 0) trimmed.substring(0, sepIdx) else trimmed
+        if (authority.isEmpty()) return false
+
+        if (authority.startsWith("[")) {
+            val m = IPV6_AUTH_REGEX.matchEntire(authority) ?: return false
+            val portStr = m.groupValues[1]
+            if (portStr.isNotEmpty()) {
+                val port = portStr.toIntOrNull() ?: return false
+                if (port !in 1..65535) return false
+            }
+            return true
+        }
+
+        val colonCount = authority.count { it == ':' }
+        if (colonCount > 1) return false
+
+        val host: String
+        val port: Int?
+        if (colonCount == 1) {
+            val colonIdx = authority.indexOf(':')
+            host = authority.substring(0, colonIdx)
+            val portStr = authority.substring(colonIdx + 1)
+            port = portStr.toIntOrNull() ?: return false
+            if (port !in 1..65535) return false
+        } else {
+            host = authority
+            port = null
+        }
+
+        if (host.isEmpty()) return false
+        if (host.equals("localhost", ignoreCase = true)) return true
+
+        val ipv4Match = IPV4_REGEX.matchEntire(host)
+        if (ipv4Match != null) {
+            return (1..4).all { i ->
+                val oct = ipv4Match.groupValues[i].toIntOrNull()
+                oct != null && oct in 0..255
+            }
+        }
+
+        if (port != null && !host.contains('.') && DOMAIN_LABEL_REGEX.matches(host) &&
+            !host.startsWith('-') && !host.endsWith('-')
+        ) {
+            return true
+        }
+
+        if (!host.contains('.')) return false
+        if (host.startsWith('.') || host.endsWith('.')) return false
+
+        val labels = host.split('.')
+        if (labels.size < 2) return false
+        for (label in labels) {
+            if (label.isEmpty() || label.startsWith('-') || label.endsWith('-')) return false
+            if (!DOMAIN_LABEL_REGEX.matches(label)) return false
+        }
+
+        val tld = labels.last()
+        return tld.length >= 2 && tld.any { it.isLetter() }
+    }
 
     @JvmStatic
     fun isFileNameInvalid(fname: String): Boolean =

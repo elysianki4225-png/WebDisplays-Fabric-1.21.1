@@ -157,7 +157,7 @@ class GuiSetURL2 : WDScreen {
                 throw RuntimeException(e)
             }
 
-            url = Util.addProtocol(url)
+            url = Util.resolveUrlOrSearch(url)
 
             if (isPad) {
                 val uuid = getUUID()
