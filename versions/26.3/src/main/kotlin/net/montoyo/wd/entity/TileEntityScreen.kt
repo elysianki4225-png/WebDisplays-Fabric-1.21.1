@@ -878,13 +878,13 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
 
                             when (actualEv.getAction()) {
                                 TypeData.Action.PRESS -> {
-                                    browser.sendKeyPress(actualEv.getKeyCode(), actualEv.getScanCode(), actualEv.getModifier())
+                                    browser.sendKeyPress(actualEv.getKeyCode(), actualEv.getScanCode().toLong(), actualEv.getModifier())
                                     if (actualEv.getKeyCode() == 10) {
                                         browser.sendKeyTyped('\r', actualEv.getModifier())
                                     }
                                 }
                                 TypeData.Action.RELEASE -> {
-                                    browser.sendKeyRelease(actualEv.getKeyCode(), actualEv.getScanCode(), actualEv.getModifier())
+                                    browser.sendKeyRelease(actualEv.getKeyCode(), actualEv.getScanCode().toLong(), actualEv.getModifier())
                                 }
                                 TypeData.Action.TYPE -> {
                                     browser.sendKeyTyped(actualEv.getKeyCode().toChar(), actualEv.getModifier())
