@@ -2,6 +2,9 @@ package com.terrapaver.client.gui
 
 import com.terrapaver.client.ClientPavingState
 import com.terrapaver.config.AlignmentMode
+import com.terrapaver.config.LampLayout
+import com.terrapaver.config.LampStyle
+import com.terrapaver.config.ObstacleMode
 import com.terrapaver.config.PavingConfig
 import com.terrapaver.config.PavingMode
 import com.terrapaver.config.RiverStrategy
@@ -44,6 +47,8 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
 
     private var cfg: PavingConfig = PavingConfig.loadClient().copySanitized()
     private var activeTab = 0
+    private val tabScroll = IntArray(4)
+    private var lastContentHeight = 0
 
     private val clickRegions = ArrayList<ClickRegion>()
     private val sliderRegions = ArrayList<SliderRegion>()
@@ -54,10 +59,19 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
     private var winW = 0
     private var winH = 0
 
+    private var contentX = 0
+    private var contentY = 0
+    private var contentW = 0
+    private var contentH = 0
+
+    // Current active clip box for interactive hit registration
+    private var clipTop = 0
+    private var clipBottom = Int.MAX_VALUE
+
     override fun init() {
         super.init()
-        winW = min(560, width - 24).coerceAtLeast(380)
-        winH = min(376, height - 18).coerceAtLeast(256)
+        winW = min(640, width - 16).coerceAtLeast(min(340, width - 8))
+        winH = min(410, height - 14).coerceAtLeast(min(220, height - 8))
         winX = (width - winW) / 2
         winY = (height - winH) / 2
     }
@@ -66,13 +80,18 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
 
     private fun save() {
         PavingConfig.saveClient(cfg)
+        if (ClientPavingState.hasEnoughWaypoints() && ClientPavingState.status?.active != true) {
+            TerraPaverNet.sendToServer(
+                TerraPaverNet.C2SPreviewRoute(ClientPavingState.waypoints.toList(), cfg.toJson())
+            )
+        }
     }
 
     private fun theme(): M3Palette = M3Theme.get(cfg.m3SeedTheme)
 
     override fun renderBackground(g: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
-        // Subtle scrim behind M3 floating dialog
-        g.fill(0, 0, width, height, 0x660B1018)
+        // Draw only a clean semi-transparent backdrop behind the M3 sheet; never on top of it.
+        g.fill(0, 0, width, height, 0x550B1018)
     }
 
     override fun render(g: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
@@ -81,61 +100,100 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
         sliderRegions.clear()
 
         val t = theme()
+        clipTop = 0
+        clipBottom = height
 
-        // Main M3 Light Sheet
-        M3Draw.drawElevationShadow(g, winX, winY, winW, winH, 20, 4)
-        M3Draw.fillRoundedRect(g, winX, winY, winW, winH, 20, t.surface)
-        M3Draw.strokeRoundedRect(g, winX, winY, winW, winH, 20, t.outlineVariant)
+        // Main crisp M3 Light Sheet (NO super.render after this, avoiding 1.21.1 gray overlay!)
+        M3Draw.drawElevationShadow(g, winX, winY, winW, winH, 18, 4)
+        M3Draw.fillRoundedRect(g, winX, winY, winW, winH, 18, t.surface)
+        M3Draw.strokeRoundedRect(g, winX, winY, winW, winH, 18, t.outlineVariant)
 
-        renderTopAppBar(g, mouseX, mouseY, t)
-        renderNavigationRail(g, mouseX, mouseY, t)
+        val barH = if (winH < 270) 36 else 42
+        val railW = if (winW < 420) 56 else 68
 
-        val contentX = winX + 86
-        val contentY = winY + 52
-        val contentW = winW - 98
-        val contentH = winH - 64
+        renderTopAppBar(g, mouseX, mouseY, barH, t)
+        renderNavigationRail(g, mouseX, mouseY, barH, railW, t)
 
-        when (activeTab) {
-            0 -> renderOverviewTab(g, mouseX, mouseY, contentX, contentY, contentW, contentH, t)
-            1 -> renderRoadRailTab(g, mouseX, mouseY, contentX, contentY, contentW, contentH, t)
-            2 -> renderTunnelBridgeTab(g, mouseX, mouseY, contentX, contentY, contentW, contentH, t)
-            3 -> renderEngineTab(g, mouseX, mouseY, contentX, contentY, contentW, contentH, t)
+        contentX = winX + railW + 14
+        contentY = winY + barH + 8
+        contentW = winW - railW - 24
+        contentH = winH - barH - 16
+
+        val scroll = tabScroll[activeTab]
+        val contentMouseY = if (mouseX in contentX..(contentX + contentW) && mouseY in contentY..(contentY + contentH)) {
+            mouseY
+        } else -10000
+
+        // Scissor-clipped scrollable tab viewport
+        g.enableScissor(contentX, contentY, contentX + contentW, contentY + contentH)
+        clipTop = contentY
+        clipBottom = contentY + contentH
+
+        val totalH = when (activeTab) {
+            0 -> renderOverviewTab(g, mouseX, contentMouseY, contentX, contentY - scroll, contentW - 8, contentH, t)
+            1 -> renderRoadRailTab(g, mouseX, contentMouseY, contentX, contentY - scroll, contentW - 8, t)
+            2 -> renderTunnelBridgeTab(g, mouseX, contentMouseY, contentX, contentY - scroll, contentW - 8, t)
+            else -> renderEngineTab(g, mouseX, contentMouseY, contentX, contentY - scroll, contentW - 8, t)
         }
 
-        super.render(g, mouseX, mouseY, partialTick)
+        g.disableScissor()
+        clipTop = 0
+        clipBottom = height
+
+        lastContentHeight = totalH
+        val maxScroll = max(0, totalH - contentH)
+        if (tabScroll[activeTab] > maxScroll) {
+            tabScroll[activeTab] = maxScroll
+        }
+
+        // M3 slim scrollbar indicator when content overflows
+        if (maxScroll > 0) {
+            val trackX = contentX + contentW - 4
+            M3Draw.fillRoundedRect(g, trackX, contentY + 2, 4, contentH - 4, 2, t.surfaceHigh)
+            val thumbH = max(20, ((contentH.toFloat() / totalH.toFloat()) * (contentH - 4)).roundToInt())
+            val thumbY = contentY + 2 + ((tabScroll[activeTab].toFloat() / maxScroll.toFloat()) * (contentH - 4 - thumbH)).roundToInt()
+            M3Draw.fillRoundedRect(g, trackX, thumbY, 4, thumbH, 2, t.primary)
+        }
     }
 
-    private fun renderTopAppBar(g: GuiGraphics, mouseX: Int, mouseY: Int, t: M3Palette) {
-        val barH = 44
-        M3Draw.fillRoundedRect(g, winX + 4, winY + 4, winW - 8, barH, 16, t.surfaceLow)
+    private fun renderTopAppBar(g: GuiGraphics, mouseX: Int, mouseY: Int, barH: Int, t: M3Palette) {
+        M3Draw.fillRoundedRect(g, winX + 4, winY + 4, winW - 8, barH, 14, t.surfaceLow)
 
-        // Accent brand badge
-        M3Draw.fillRoundedRect(g, winX + 16, winY + 13, 24, 24, 8, t.primaryContainer)
-        M3Draw.fillRoundedRect(g, winX + 22, winY + 19, 12, 12, 4, t.primary)
+        val badgeSize = if (barH < 40) 20 else 24
+        val badgeY = winY + 4 + (barH - badgeSize) / 2
+        M3Draw.fillRoundedRect(g, winX + 14, badgeY, badgeSize, badgeSize, 7, t.primaryContainer)
+        M3Draw.fillRoundedRect(g, winX + 19, badgeY + 5, badgeSize - 10, badgeSize - 10, 4, t.primary)
 
-        g.drawString(font, I18n.get("terrapaver.gui.title"), winX + 48, winY + 14, t.onSurface, false)
-        g.drawString(font, I18n.get("terrapaver.gui.subtitle"), winX + 48, winY + 26, t.onSurfaceVariant, false)
+        val titleMaxW = winW - 235
+        val titleStr = M3Draw.fitText(font, I18n.get("terrapaver.gui.title"), titleMaxW)
+        if (barH >= 40) {
+            g.drawString(font, titleStr, winX + 44, winY + 11, t.onSurface, false)
+            val subStr = M3Draw.fitText(font, I18n.get("terrapaver.gui.subtitle"), titleMaxW)
+            g.drawString(font, subStr, winX + 44, winY + 23, t.onSurfaceVariant, false)
+        } else {
+            g.drawString(font, titleStr, winX + 40, winY + 14, t.onSurface, false)
+        }
 
         // 4 M3 Dynamic Color Seed Chips
         val seedColors = intArrayOf(0xFF0B57D0.toInt(), 0xFF6750A4.toInt(), 0xFF006A60.toInt(), 0xFF984716.toInt())
-        val seedStartX = winX + winW - 190
+        val doneW = 76
+        val seedStartX = winX + winW - doneW - 96
+        val seedY = winY + 4 + (barH - 14) / 2
         for (i in seedColors.indices) {
-            val sx = seedStartX + i * 20
-            val sy = winY + 18
+            val sx = seedStartX + i * 19
             if (cfg.m3SeedTheme == i) {
-                M3Draw.fillCircle(g, sx + 7, sy + 7, 9, t.primaryContainer)
+                M3Draw.fillCircle(g, sx + 7, seedY + 7, 9, t.primaryContainer)
             }
-            M3Draw.fillCircle(g, sx + 7, sy + 7, 6, seedColors[i])
-            clickRegions.add(ClickRegion(sx, sy, 15, 15) {
+            M3Draw.fillCircle(g, sx + 7, seedY + 7, 6, seedColors[i])
+            registerClick(sx, seedY, 15, 15) {
                 cfg.m3SeedTheme = i
                 save()
-            })
+            }
         }
 
-        // Primary Save & Close pill
         drawPillButton(
             g, mouseX, mouseY,
-            winX + winW - 98, winY + 13, 84, 24,
+            winX + winW - doneW - 12, winY + 4 + (barH - 22) / 2, doneW, 22,
             I18n.get("terrapaver.gui.done"),
             ButtonStyle.FILLED, t, true
         ) {
@@ -144,12 +202,11 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
         }
     }
 
-    private fun renderNavigationRail(g: GuiGraphics, mouseX: Int, mouseY: Int, t: M3Palette) {
-        val railX = winX + 10
-        val railY = winY + 52
-        val railW = 68
-        val railH = winH - 64
-        M3Draw.fillRoundedRect(g, railX, railY, railW, railH, 16, t.surfaceLow)
+    private fun renderNavigationRail(g: GuiGraphics, mouseX: Int, mouseY: Int, barH: Int, railW: Int, t: M3Palette) {
+        val railX = winX + 8
+        val railY = winY + barH + 8
+        val railH = winH - barH - 16
+        M3Draw.fillRoundedRect(g, railX, railY, railW, railH, 14, t.surfaceLow)
 
         val tabs = arrayOf(
             "terrapaver.tab.overview" to "AI",
@@ -158,85 +215,108 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
             "terrapaver.tab.engine" to "SYS"
         )
 
+        val step = min(56, (railH - 16) / tabs.size).coerceAtLeast(36)
         for (i in tabs.indices) {
-            val iy = railY + 12 + i * 60
+            val iy = railY + 8 + i * step
             val selected = activeTab == i
-            val hovered = mouseX in (railX + 6)..(railX + railW - 6) && mouseY in iy..(iy + 48)
+            val hovered = mouseX in (railX + 4)..(railX + railW - 4) && mouseY in iy..(iy + step - 4)
 
-            // Active pill indicator
             val pillColor = when {
                 selected -> t.secondaryContainer
                 hovered -> M3Theme.withAlpha(t.onSurface, 18)
                 else -> 0x00000000
             }
             if (pillColor != 0) {
-                M3Draw.fillRoundedRect(g, railX + 10, iy + 4, railW - 20, 24, 12, pillColor)
+                M3Draw.fillRoundedRect(g, railX + 6, iy + 2, railW - 12, 20, 10, pillColor)
             }
 
             val iconColor = if (selected) t.onSecondaryContainer else t.onSurfaceVariant
             val badgeW = font.width(tabs[i].second)
-            g.drawString(font, tabs[i].second, railX + (railW - badgeW) / 2, iy + 12, iconColor, false)
+            g.drawString(font, tabs[i].second, railX + (railW - badgeW) / 2, iy + 8, iconColor, false)
 
-            val label = I18n.get(tabs[i].first)
+            val label = M3Draw.fitText(font, I18n.get(tabs[i].first), railW - 8)
             val lw = font.width(label)
             g.drawString(
                 font,
                 label,
                 railX + (railW - lw) / 2,
-                iy + 32,
+                iy + 24,
                 if (selected) t.primary else t.onSurfaceVariant,
                 false
             )
 
-            clickRegions.add(ClickRegion(railX + 6, iy, railW - 12, 48) {
+            registerClick(railX + 4, iy, railW - 8, step - 4) {
                 activeTab = i
-            })
+            }
         }
     }
 
     private fun renderOverviewTab(
         g: GuiGraphics, mouseX: Int, mouseY: Int,
-        x: Int, y: Int, w: Int, h: Int, t: M3Palette
-    ) {
-        val leftW = (w * 0.56).toInt()
-        val rightX = x + leftW + 10
-        val rightW = w - leftW - 10
+        x: Int, y: Int, w: Int, viewportH: Int, t: M3Palette
+    ): Int {
+        val stacked = w < 380
+        val leftW = if (stacked) w else (w * 0.57).toInt()
+        val rightX = if (stacked) x else x + leftW + 10
+        val rightW = if (stacked) w else w - leftW - 10
 
-        // Card 1: Route Anchors & Quick Actions
-        M3Draw.drawCard(g, x, y, leftW, 134, t, elevated = true)
-        g.drawString(font, I18n.get("terrapaver.overview.route_title"), x + 12, y + 10, t.onSurface, false)
+        val wps = ClientPavingState.waypoints
+        val card1H = 162
+        M3Draw.drawCard(g, x, y, leftW, card1H, t, elevated = true)
+        g.drawString(font, M3Draw.fitText(font, I18n.get("terrapaver.overview.route_title"), leftW - 24), x + 12, y + 10, t.onSurface, false)
 
-        val startStr = if (ClientPavingState.hasStart) {
-            val p = ClientPavingState.startPos
-            "${p.x}, ${p.y}, ${p.z}"
-        } else I18n.get("terrapaver.overview.unset")
-
-        val endStr = if (ClientPavingState.hasEnd) {
-            val p = ClientPavingState.endPos
-            "${p.x}, ${p.y}, ${p.z}"
-        } else I18n.get("terrapaver.overview.unset")
-
-        g.drawString(font, "${I18n.get("terrapaver.overview.start")}: $startStr", x + 12, y + 27, t.onSurfaceVariant, false)
-        g.drawString(font, "${I18n.get("terrapaver.overview.end")}: $endStr", x + 12, y + 40, t.onSurfaceVariant, false)
-
-        if (ClientPavingState.hasStart && ClientPavingState.hasEnd) {
-            val d = hypot(
-                (ClientPavingState.endPos.x - ClientPavingState.startPos.x).toDouble(),
-                (ClientPavingState.endPos.z - ClientPavingState.startPos.z).toDouble()
-            ).roundToInt()
-            g.drawString(font, I18n.get("terrapaver.overview.distance", d), x + 12, y + 54, t.primary, false)
+        val wpSummary = if (wps.isEmpty()) {
+            I18n.get("terrapaver.overview.wp_empty")
         } else {
-            g.drawString(font, I18n.get("terrapaver.overview.hint_extend"), x + 12, y + 54, t.onSurfaceVariant, false)
+            val first = wps.first()
+            val last = wps.last()
+            if (wps.size == 1) {
+                I18n.get("terrapaver.overview.wp_one", first.x, first.y, first.z)
+            } else {
+                I18n.get("terrapaver.overview.wp_multi", wps.size, first.x, first.z, last.x, last.z)
+            }
+        }
+        g.drawString(font, M3Draw.fitText(font, wpSummary, leftW - 24), x + 12, y + 26, t.onSurfaceVariant, false)
+
+        val spanInfo = if (ClientPavingState.hasEnoughWaypoints()) {
+            I18n.get("terrapaver.overview.distance_multi", ClientPavingState.totalSpanBlocks(), wps.size - 1)
+        } else {
+            I18n.get("terrapaver.overview.hint_extend")
+        }
+        g.drawString(font, M3Draw.fitText(font, spanInfo, leftW - 24), x + 12, y + 40, t.primary, false)
+
+        // Row 1: Add Here | Undo Point | Clear
+        val b3W = (leftW - 32) / 3
+        drawPillButton(
+            g, mouseX, mouseY, x + 12, y + 56, b3W, 20,
+            I18n.get("terrapaver.action.add_wp"),
+            ButtonStyle.TONAL, t, true
+        ) {
+            val player = Minecraft.getInstance().player ?: return@drawPillButton
+            TerraPaverNet.sendToServer(TerraPaverNet.C2SAddWaypoint(player.blockPosition().below()))
+        }
+        drawPillButton(
+            g, mouseX, mouseY, x + 16 + b3W, y + 56, b3W, 20,
+            I18n.get("terrapaver.action.pop_wp"),
+            ButtonStyle.OUTLINED, t, wps.isNotEmpty()
+        ) {
+            TerraPaverNet.sendToServer(TerraPaverNet.C2SControlPave(TerraPaverNet.ACTION_POP_WAYPOINT))
+        }
+        drawPillButton(
+            g, mouseX, mouseY, x + 20 + b3W * 2, y + 56, leftW - 32 - b3W * 2, 20,
+            I18n.get("terrapaver.action.clear"),
+            ButtonStyle.OUTLINED, t, wps.isNotEmpty()
+        ) {
+            TerraPaverNet.sendToServer(TerraPaverNet.C2SControlPave(TerraPaverNet.ACTION_CLEAR_SELECTION))
         }
 
-        // Quick Extend Ahead pills (+100m, +250m, +500m)
-        val btnW = (leftW - 36) / 3
+        // Row 2: Quick Extend Ahead (+100m, +250m, +500m)
         val dists = intArrayOf(100, 250, 500)
         for (i in dists.indices) {
             val d = dists[i]
             drawPillButton(
                 g, mouseX, mouseY,
-                x + 12 + i * (btnW + 6), y + 70, btnW, 22,
+                x + 12 + i * (b3W + 4), y + 82, b3W, 20,
                 "+${d}m",
                 ButtonStyle.TONAL, t, true
             ) {
@@ -244,33 +324,29 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
             }
         }
 
-        // Main Action Row: Start / Pause / Cancel / Undo
+        // Row 3: Start / Pause / Cancel / Undo Build
         val st = ClientPavingState.status
         val isActive = st?.active == true
-        val canStart = ClientPavingState.hasStart && ClientPavingState.hasEnd
+        val canStart = ClientPavingState.hasEnoughWaypoints()
         val halfActW = (leftW - 30) / 2
 
         if (!isActive) {
             drawPillButton(
                 g, mouseX, mouseY,
-                x + 12, y + 100, halfActW, 24,
+                x + 12, y + 110, halfActW, 24,
                 I18n.get("terrapaver.action.start"),
                 ButtonStyle.FILLED, t, canStart
             ) {
                 save()
                 TerraPaverNet.sendToServer(
-                    TerraPaverNet.C2SStartPave(
-                        ClientPavingState.startPos,
-                        ClientPavingState.endPos,
-                        cfg.toJson()
-                    )
+                    TerraPaverNet.C2SStartPave(ClientPavingState.waypoints.toList(), cfg.toJson())
                 )
             }
         } else {
             val pauseText = I18n.get(if (st?.paused == true) "terrapaver.action.resume" else "terrapaver.action.pause")
             drawPillButton(
                 g, mouseX, mouseY,
-                x + 12, y + 100, halfActW, 24,
+                x + 12, y + 110, halfActW, 24,
                 pauseText,
                 ButtonStyle.TONAL, t, true
             ) {
@@ -281,7 +357,7 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
         if (isActive) {
             drawPillButton(
                 g, mouseX, mouseY,
-                x + 18 + halfActW, y + 100, halfActW, 24,
+                x + 18 + halfActW, y + 110, halfActW, 24,
                 I18n.get("terrapaver.action.cancel"),
                 ButtonStyle.DANGER, t, true
             ) {
@@ -290,7 +366,7 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
         } else {
             drawPillButton(
                 g, mouseX, mouseY,
-                x + 18 + halfActW, y + 100, halfActW, 24,
+                x + 18 + halfActW, y + 110, halfActW, 24,
                 I18n.get("terrapaver.action.undo"),
                 ButtonStyle.OUTLINED, t, ClientPavingState.canUndo
             ) {
@@ -298,18 +374,21 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
             }
         }
 
+        val hintLine = M3Draw.fitText(font, I18n.get("terrapaver.overview.wp_tip"), leftW - 24)
+        g.drawString(font, hintLine, x + 12, y + 142, t.onSurfaceVariant, false)
+
         // Card 2: Live Progress & Telemetry Card
-        val progY = y + 144
-        val progH = h - 144
+        val progY = y + card1H + 10
+        val progH = max(108, viewportH - card1H - 10)
         M3Draw.drawCard(g, x, progY, leftW, progH, t, elevated = true)
-        g.drawString(font, I18n.get("terrapaver.overview.progress_title"), x + 12, progY + 10, t.onSurface, false)
+        g.drawString(font, M3Draw.fitText(font, I18n.get("terrapaver.overview.progress_title"), leftW - 24), x + 12, progY + 10, t.onSurface, false)
 
         val statusLabel = if (st != null) I18n.get(st.statusKey) else I18n.get("terrapaver.status.ready")
         val pct = if (st != null) (st.progress * 100f).roundToInt() else 0
-        g.drawString(font, "$statusLabel ($pct%)", x + 12, progY + 28, t.primary, false)
+        g.drawString(font, M3Draw.fitText(font, "$statusLabel ($pct%)", leftW - 24), x + 12, progY + 26, t.primary, false)
 
         M3Draw.drawLinearProgress(
-            g, x + 12, progY + 44, leftW - 24, 8,
+            g, x + 12, progY + 42, leftW - 24, 8,
             st?.progress ?: 0f,
             t,
             indeterminate = (st?.active == true && st.phase == TerraPaverNet.S2CPavingStatus.PHASE_SURVEYING && st.progress < 0.05f)
@@ -320,8 +399,8 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
         val viaducts = st?.viaductSegments ?: 0
         g.drawString(
             font,
-            I18n.get("terrapaver.overview.stats", placed, tunnels, viaducts),
-            x + 12, progY + 60, t.onSurfaceVariant, false
+            M3Draw.fitText(font, I18n.get("terrapaver.overview.stats", placed, tunnels, viaducts), leftW - 24),
+            x + 12, progY + 58, t.onSurfaceVariant, false
         )
 
         val modeHint = if (cfg.pavingMode == PavingMode.CREATE_RAIL) {
@@ -329,43 +408,42 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
         } else {
             I18n.get("terrapaver.overview.road_note")
         }
-        g.drawString(font, modeHint, x + 12, progY + 76, t.tertiary, false)
+        g.drawString(font, M3Draw.fitText(font, modeHint, leftW - 24), x + 12, progY + 76, t.tertiary, false)
 
-        drawPillButton(
-            g, mouseX, mouseY,
-            x + 12, progY + progH - 30, leftW - 24, 22,
-            I18n.get("terrapaver.action.clear"),
-            ButtonStyle.OUTLINED, t, ClientPavingState.hasStart || ClientPavingState.hasEnd
-        ) {
-            TerraPaverNet.sendToServer(TerraPaverNet.C2SControlPave(TerraPaverNet.ACTION_CLEAR_SELECTION))
-        }
+        val leftBottom = progY + progH
 
         // Right Column: Live Cross-Section Preview + Engineering Summary
-        M3Draw.drawCard(g, rightX, y, rightW, h, t, elevated = true)
+        val rightY = if (stacked) leftBottom + 10 else y
+        val rightH = if (stacked) 220 else max(280, viewportH)
+        M3Draw.drawCard(g, rightX, rightY, rightW, rightH, t, elevated = true)
         M3Draw.drawCrossSectionPreview(
             g, font,
-            rightX + 8, y + 8, rightW - 16, h - 76,
+            rightX + 8, rightY + 8, rightW - 16, rightH - 74,
             cfg, t, I18n.get("terrapaver.preview.cross_section")
         )
 
-        val sy = y + h - 60
-        g.drawString(font, "${I18n.get("terrapaver.cfg.mode")}: ${I18n.get(cfg.pavingMode.key)}", rightX + 12, sy, t.onSurface, false)
-        g.drawString(font, "${I18n.get("terrapaver.cfg.river")}: ${I18n.get(cfg.riverStrategy.key)}", rightX + 12, sy + 14, t.onSurfaceVariant, false)
-        g.drawString(font, "${I18n.get("terrapaver.cfg.align")}: ${I18n.get(cfg.alignmentMode.key)}", rightX + 12, sy + 28, t.onSurfaceVariant, false)
-        g.drawString(font, "Max Grade: 1:${cfg.maxSlopeRun}", rightX + 12, sy + 42, t.primary, false)
+        val sy = rightY + rightH - 58
+        g.drawString(font, M3Draw.fitText(font, "${I18n.get("terrapaver.cfg.mode")}: ${I18n.get(cfg.pavingMode.key)}", rightW - 24), rightX + 12, sy, t.onSurface, false)
+        g.drawString(font, M3Draw.fitText(font, "${I18n.get("terrapaver.cfg.align")}: ${I18n.get(cfg.alignmentMode.key)}", rightW - 24), rightX + 12, sy + 14, t.onSurfaceVariant, false)
+        g.drawString(font, M3Draw.fitText(font, "${I18n.get("terrapaver.cfg.obstacle")}: ${I18n.get(cfg.obstacleMode.key)}", rightW - 24), rightX + 12, sy + 28, t.onSurfaceVariant, false)
+        val smoothVal = if (cfg.terrainBlending) "${cfg.blendRadius}m" else I18n.get("terrapaver.common.off")
+        g.drawString(font, M3Draw.fitText(font, I18n.get("terrapaver.overview.grade_smooth", cfg.maxSlopeRun, smoothVal), rightW - 24), rightX + 12, sy + 42, t.primary, false)
+
+        return max(leftBottom, rightY + rightH) - y
     }
 
     private fun renderRoadRailTab(
         g: GuiGraphics, mouseX: Int, mouseY: Int,
-        x: Int, y: Int, w: Int, h: Int, t: M3Palette
-    ) {
-        M3Draw.drawCard(g, x, y, w, h, t, elevated = true)
+        x: Int, y: Int, w: Int, t: M3Palette
+    ): Int {
+        val cardH = 446
+        M3Draw.drawCard(g, x, y, w, cardH, t, elevated = true)
         var cy = y + 12
 
         g.drawString(font, I18n.get("terrapaver.cfg.mode"), x + 14, cy, t.onSurface, false)
-        cy += 14
+        cy += 13
         drawSegmentedRow(
-            g, mouseX, mouseY, x + 14, cy, w - 28, 24,
+            g, mouseX, mouseY, x + 14, cy, w - 28, 22,
             listOf(I18n.get(PavingMode.ROAD.key), I18n.get(PavingMode.CREATE_RAIL.key)),
             if (cfg.pavingMode == PavingMode.ROAD) 0 else 1,
             t
@@ -378,10 +456,10 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
             }
             save()
         }
-        cy += 34
+        cy += 30
 
         g.drawString(font, I18n.get("terrapaver.cfg.style"), x + 14, cy, t.onSurface, false)
-        cy += 14
+        cy += 13
         val styles = RoadStyle.entries
         drawSegmentedRow(
             g, mouseX, mouseY, x + 14, cy, w - 28, 22,
@@ -390,6 +468,20 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
             t
         ) { idx ->
             cfg.roadStyle = styles[idx]
+            save()
+        }
+        cy += 30
+
+        g.drawString(font, I18n.get("terrapaver.cfg.align"), x + 14, cy, t.onSurface, false)
+        cy += 13
+        val aligns = AlignmentMode.entries
+        drawSegmentedRow(
+            g, mouseX, mouseY, x + 14, cy, w - 28, 22,
+            aligns.map { I18n.get(it.key) },
+            aligns.indexOf(cfg.alignmentMode),
+            t
+        ) { idx ->
+            cfg.alignmentMode = aligns[idx]
             save()
         }
         cy += 32
@@ -406,44 +498,85 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
             2, 8, { cfg.maxSlopeRun }, "1:${cfg.maxSlopeRun}", t
         ) { v -> cfg.maxSlopeRun = v; save() }
 
-        g.drawString(font, I18n.get("terrapaver.cfg.align"), x + 14, cy, t.onSurface, false)
-        cy += 14
+        // Architectural Street Lighting Controls
+        g.drawString(font, I18n.get("terrapaver.cfg.road_lamp_layout"), x + 14, cy, t.onSurface, false)
+        cy += 13
+        val layouts = LampLayout.entries
         drawSegmentedRow(
-            g, mouseX, mouseY, x + 14, cy, w - 28, 22,
-            listOf(I18n.get(AlignmentMode.TERRAIN_SMART.key), I18n.get(AlignmentMode.DIRECT.key)),
-            if (cfg.alignmentMode == AlignmentMode.TERRAIN_SMART) 0 else 1,
+            g, mouseX, mouseY, x + 14, cy, w - 28, 21,
+            layouts.map { I18n.get(it.key) },
+            layouts.indexOf(cfg.roadLampLayout),
             t
         ) { idx ->
-            cfg.alignmentMode = if (idx == 0) AlignmentMode.TERRAIN_SMART else AlignmentMode.DIRECT
+            cfg.roadLampLayout = layouts[idx]
             save()
         }
-        cy += 32
+        cy += 28
+
+        g.drawString(font, I18n.get("terrapaver.cfg.rail_lamp_layout"), x + 14, cy, t.onSurface, false)
+        cy += 13
+        drawSegmentedRow(
+            g, mouseX, mouseY, x + 14, cy, w - 28, 21,
+            layouts.map { I18n.get(it.key) },
+            layouts.indexOf(cfg.railLampLayout),
+            t
+        ) { idx ->
+            cfg.railLampLayout = layouts[idx]
+            save()
+        }
+        cy += 28
+
+        g.drawString(font, I18n.get("terrapaver.cfg.lamp_style"), x + 14, cy, t.onSurface, false)
+        cy += 13
+        val lampStyles = LampStyle.entries
+        drawSegmentedRow(
+            g, mouseX, mouseY, x + 14, cy, w - 28, 21,
+            lampStyles.map { I18n.get(it.key) },
+            lampStyles.indexOf(cfg.lampStyle),
+            t
+        ) { idx ->
+            cfg.lampStyle = lampStyles[idx]
+            save()
+        }
+        cy += 30
 
         val colW = (w - 34) / 2
-        drawSwitchTile(g, mouseX, mouseY, x + 14, cy, colW, I18n.get("terrapaver.cfg.road_lights"), cfg.addRoadLights, t) {
-            cfg.addRoadLights = !cfg.addRoadLights; save()
-        }
-        drawSwitchTile(g, mouseX, mouseY, x + 20 + colW, cy, colW, I18n.get("terrapaver.cfg.rail_lights"), cfg.addRailLights, t) {
-            cfg.addRailLights = !cfg.addRailLights; save()
-        }
-        cy += 32
         drawSwitchTile(g, mouseX, mouseY, x + 14, cy, colW, I18n.get("terrapaver.cfg.guardrails"), cfg.addGuardrails, t) {
             cfg.addGuardrails = !cfg.addGuardrails; save()
         }
         drawSwitchTile(g, mouseX, mouseY, x + 20 + colW, cy, colW, I18n.get("terrapaver.cfg.markings"), cfg.addLaneMarkings, t) {
             cfg.addLaneMarkings = !cfg.addLaneMarkings; save()
         }
+        cy += 32
+        drawSwitchTile(g, mouseX, mouseY, x + 14, cy, w - 28, I18n.get("terrapaver.cfg.smooth_slabs"), cfg.smoothSlabs, t) {
+            cfg.smoothSlabs = !cfg.smoothSlabs; save()
+        }
+        return cardH
     }
 
     private fun renderTunnelBridgeTab(
         g: GuiGraphics, mouseX: Int, mouseY: Int,
-        x: Int, y: Int, w: Int, h: Int, t: M3Palette
-    ) {
-        M3Draw.drawCard(g, x, y, w, h, t, elevated = true)
+        x: Int, y: Int, w: Int, t: M3Palette
+    ): Int {
+        val cardH = 352
+        M3Draw.drawCard(g, x, y, w, cardH, t, elevated = true)
         var cy = y + 10
         val halfW = (w - 36) / 2
 
-        // Auto-adapt tunnel diameter switch
+        g.drawString(font, I18n.get("terrapaver.cfg.obstacle"), x + 14, cy, t.onSurface, false)
+        cy += 12
+        val obsModes = ObstacleMode.entries
+        drawSegmentedRow(
+            g, mouseX, mouseY, x + 14, cy, w - 28, 22,
+            obsModes.map { I18n.get(it.key) },
+            obsModes.indexOf(cfg.obstacleMode),
+            t
+        ) { idx ->
+            cfg.obstacleMode = obsModes[idx]
+            save()
+        }
+        cy += 30
+
         drawSwitchTile(
             g, mouseX, mouseY, x + 14, cy, w - 28,
             I18n.get("terrapaver.cfg.auto_tunnel", cfg.effectiveTunnelWidth(), cfg.effectiveTunnelHeight()),
@@ -467,16 +600,15 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
             ) { v -> cfg.tunnelHeight = v; save() }
             cy += 30
         } else {
-            M3Draw.fillRoundedRect(g, x + 14, cy, w - 28, 24, 10, t.primaryContainer)
+            M3Draw.fillRoundedRect(g, x + 14, cy, w - 28, 22, 10, t.primaryContainer)
             g.drawString(
                 font,
-                I18n.get("terrapaver.cfg.auto_tunnel_info", cfg.effectiveTunnelWidth(), cfg.effectiveTunnelHeight()),
-                x + 24, cy + 8, t.onPrimaryContainer, false
+                M3Draw.fitText(font, I18n.get("terrapaver.cfg.auto_tunnel_info", cfg.effectiveTunnelWidth(), cfg.effectiveTunnelHeight()), w - 48),
+                x + 22, cy + 7, t.onPrimaryContainer, false
             )
-            cy += 30
+            cy += 28
         }
 
-        // Tunnel Walls + Tunnel Lights switches
         drawSwitchTile(
             g, mouseX, mouseY, x + 14, cy, halfW,
             I18n.get("terrapaver.cfg.tunnel_walls"),
@@ -547,13 +679,32 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
             I18n.get("terrapaver.cfg.pillar_spacing"),
             4, 16, { cfg.viaductPillarSpacing }, "${cfg.viaductPillarSpacing}m", t
         ) { v -> cfg.viaductPillarSpacing = v; save() }
+        cy += 32
+
+        // Natural Terrain Blending Section
+        drawSwitchTile(
+            g, mouseX, mouseY, x + 14, cy, halfW,
+            I18n.get("terrapaver.cfg.terrain_blending"),
+            cfg.terrainBlending, t
+        ) {
+            cfg.terrainBlending = !cfg.terrainBlending
+            save()
+        }
+        drawSliderRow(
+            g, mouseX, mouseY, x + 22 + halfW, cy + 1, halfW,
+            I18n.get("terrapaver.cfg.blend_radius"),
+            2, 10, { cfg.blendRadius }, "${cfg.blendRadius}m", t
+        ) { v -> cfg.blendRadius = v; save() }
+
+        return cardH
     }
 
     private fun renderEngineTab(
         g: GuiGraphics, mouseX: Int, mouseY: Int,
-        x: Int, y: Int, w: Int, h: Int, t: M3Palette
-    ) {
-        M3Draw.drawCard(g, x, y, w, h, t, elevated = true)
+        x: Int, y: Int, w: Int, t: M3Palette
+    ): Int {
+        val cardH = 266
+        M3Draw.drawCard(g, x, y, w, cardH, t, elevated = true)
         var cy = y + 12
 
         cy = drawSliderRow(
@@ -582,7 +733,7 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
             cfg.enableUnloadedChunks = !cfg.enableUnloadedChunks
             save()
         }
-        cy += 36
+        cy += 32
 
         drawSwitchTile(
             g, mouseX, mouseY, x + 14, cy, w - 28,
@@ -592,7 +743,7 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
             cfg.showRoutePreview = !cfg.showRoutePreview
             save()
         }
-        cy += 36
+        cy += 32
 
         drawSwitchTile(
             g, mouseX, mouseY, x + 14, cy, w - 28,
@@ -602,17 +753,38 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
             cfg.dropExcavatedBlocks = !cfg.dropExcavatedBlocks
             save()
         }
-        cy += 42
+        cy += 38
 
         drawPillButton(
             g, mouseX, mouseY,
-            x + 14, cy, 140, 24,
+            x + 14, cy, 140, 22,
             I18n.get("terrapaver.action.reset"),
             ButtonStyle.OUTLINED, t, true
         ) {
             val themeKeep = cfg.m3SeedTheme
             cfg = PavingConfig(m3SeedTheme = themeKeep)
             save()
+        }
+        return cardH
+    }
+
+    private fun registerClick(x: Int, y: Int, w: Int, h: Int, onClick: () -> Unit) {
+        val top = max(y, clipTop)
+        val bottom = min(y + h, clipBottom)
+        if (bottom > top) {
+            clickRegions.add(ClickRegion(x, top, w, bottom - top, onClick))
+        }
+    }
+
+    private fun registerSlider(
+        x: Int, y: Int, w: Int, h: Int,
+        minVal: Int, maxVal: Int,
+        getter: () -> Int, setter: (Int) -> Unit
+    ) {
+        val top = max(y, clipTop)
+        val bottom = min(y + h, clipBottom)
+        if (bottom > top) {
+            sliderRegions.add(SliderRegion(x, top, w, bottom - top, minVal, maxVal, getter, setter))
         }
     }
 
@@ -647,10 +819,11 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
             M3Draw.strokeRoundedRect(g, x, y, w, h, r, if (enabled) t.outline else t.outlineVariant)
         }
 
-        val tw = font.width(label)
-        g.drawString(font, label, x + (w - tw) / 2, y + (h - 8) / 2, fg, false)
+        val fitted = M3Draw.fitText(font, label, w - 10)
+        val tw = font.width(fitted)
+        g.drawString(font, fitted, x + (w - tw) / 2, y + (h - 8) / 2, fg, false)
         if (enabled) {
-            clickRegions.add(ClickRegion(x, y, w, h, onClick))
+            registerClick(x, y, w, h, onClick)
         }
     }
 
@@ -679,15 +852,16 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
             if (i > 0) {
                 g.fill(sx, y + 2, sx + 1, y + h - 2, t.outlineVariant)
             }
-            val text = if (active) "✓ ${labels[i]}" else labels[i]
-            val tw = font.width(text)
+            val raw = if (active) "✓ ${labels[i]}" else labels[i]
+            val fitted = M3Draw.fitText(font, raw, sw - 6)
+            val tw = font.width(fitted)
             g.drawString(
-                font, text,
+                font, fitted,
                 sx + (sw - tw) / 2, y + (h - 8) / 2,
                 if (active) t.onSecondaryContainer else t.onSurface,
                 false
             )
-            clickRegions.add(ClickRegion(sx, y, sw, h) { onSelect(i) })
+            registerClick(sx, y, sw, h) { onSelect(i) }
         }
     }
 
@@ -697,25 +871,27 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
         label: String, checked: Boolean, t: M3Palette,
         onToggle: () -> Unit
     ) {
-        val h = 28
+        val h = 26
         val hovered = mouseX in x..(x + w) && mouseY in y..(y + h)
         val bg = if (hovered) t.surfaceContainer else t.surfaceLow
         M3Draw.fillRoundedRect(g, x, y, w, h, 10, bg)
-        g.drawString(font, label, x + 8, y + 10, t.onSurface, false)
 
-        val swW = 34
-        val swH = 18
+        val swW = 32
+        val swH = 16
+        val fitted = M3Draw.fitText(font, label, w - swW - 20)
+        g.drawString(font, fitted, x + 8, y + 9, t.onSurface, false)
+
         val swX = x + w - swW - 8
         val swY = y + 5
-        M3Draw.fillRoundedRect(g, swX, swY, swW, swH, 9, if (checked) t.primary else t.surfaceHigh)
+        M3Draw.fillRoundedRect(g, swX, swY, swW, swH, 8, if (checked) t.primary else t.surfaceHigh)
         if (!checked) {
-            M3Draw.strokeRoundedRect(g, swX, swY, swW, swH, 9, t.outline)
+            M3Draw.strokeRoundedRect(g, swX, swY, swW, swH, 8, t.outline)
         }
-        val thumbR = if (checked) 6 else 5
-        val thumbCx = if (checked) swX + swW - 9 else swX + 9
-        M3Draw.fillCircle(g, thumbCx, swY + 9, thumbR, if (checked) t.onPrimary else t.outline)
+        val thumbR = if (checked) 5 else 4
+        val thumbCx = if (checked) swX + swW - 8 else swX + 8
+        M3Draw.fillCircle(g, thumbCx, swY + 8, thumbR, if (checked) t.onPrimary else t.outline)
 
-        clickRegions.add(ClickRegion(x, y, w, h, onToggle))
+        registerClick(x, y, w, h, onToggle)
     }
 
     private fun drawSliderRow(
@@ -725,12 +901,13 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
         getter: () -> Int, valueText: String, t: M3Palette,
         setter: (Int) -> Unit
     ): Int {
-        g.drawString(font, label, x, y, t.onSurface, false)
         val vw = font.width(valueText)
-        M3Draw.fillRoundedRect(g, x + w - vw - 12, y - 2, vw + 12, 13, 6, t.primaryContainer)
-        g.drawString(font, valueText, x + w - vw - 6, y + 1, t.onPrimaryContainer, false)
+        val fittedLabel = M3Draw.fitText(font, label, w - vw - 20)
+        g.drawString(font, fittedLabel, x, y, t.onSurface, false)
+        M3Draw.fillRoundedRect(g, x + w - vw - 10, y - 2, vw + 10, 13, 6, t.primaryContainer)
+        g.drawString(font, valueText, x + w - vw - 5, y + 1, t.onPrimaryContainer, false)
 
-        val trackY = y + 15
+        val trackY = y + 14
         val trackH = 6
         val cur = getter().coerceIn(minVal, maxVal)
         val frac = (cur - minVal).toFloat() / max(1, maxVal - minVal).toFloat()
@@ -739,23 +916,35 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
         val activeW = (w * frac).roundToInt().coerceAtLeast(trackH)
         M3Draw.fillRoundedRect(g, x, trackY, activeW, trackH, 3, t.primary)
 
-        // M3 pill thumb handle
         val thumbX = (x + w * frac).roundToInt().coerceIn(x + 3, x + w - 3)
         M3Draw.fillRoundedRect(g, thumbX - 3, trackY - 4, 6, 14, 3, t.primary)
 
-        sliderRegions.add(SliderRegion(x, trackY - 6, w, 18, minVal, maxVal, getter, setter))
-        return y + 30
+        registerSlider(x, trackY - 6, w, 18, minVal, maxVal, getter, setter)
+        return y + 29
     }
 
     private fun extendAheadClient(distance: Int) {
         val player = Minecraft.getInstance().player ?: return
-        val start = if (ClientPavingState.hasStart) ClientPavingState.startPos else player.blockPosition().below()
+        val base = ClientPavingState.waypoints.lastOrNull() ?: run {
+            val start = player.blockPosition().below()
+            TerraPaverNet.sendToServer(TerraPaverNet.C2SAddWaypoint(start))
+            start
+        }
         val look = player.lookAngle
         val hLen = hypot(look.x, look.z).coerceAtLeast(1e-4)
-        val ex = (start.x + look.x / hLen * distance).roundToInt()
-        val ez = (start.z + look.z / hLen * distance).roundToInt()
-        val end = BlockPos(ex, start.y, ez)
-        TerraPaverNet.sendToServer(TerraPaverNet.C2SSetEndPos(end))
+        val ex = (base.x + look.x / hLen * distance).roundToInt()
+        val ez = (base.z + look.z / hLen * distance).roundToInt()
+        val next = BlockPos(ex, base.y, ez)
+        TerraPaverNet.sendToServer(TerraPaverNet.C2SAddWaypoint(next))
+    }
+
+    override fun mouseScrolled(mouseX: Double, mouseY: Double, scrollX: Double, scrollY: Double): Boolean {
+        val maxScroll = max(0, lastContentHeight - contentH)
+        if (maxScroll > 0) {
+            tabScroll[activeTab] = (tabScroll[activeTab] - (scrollY * 24).roundToInt()).coerceIn(0, maxScroll)
+            return true
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY)
     }
 
     override fun mouseClicked(mouseX: Double, mouseY: Double, button: Int): Boolean {

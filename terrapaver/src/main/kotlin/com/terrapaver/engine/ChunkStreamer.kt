@@ -2,6 +2,7 @@ package com.terrapaver.engine
 
 import net.minecraft.core.BlockPos
 import net.minecraft.server.level.ServerLevel
+import net.minecraft.tags.BlockTags
 import net.minecraft.tags.FluidTags
 import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.level.block.state.BlockState
@@ -12,7 +13,9 @@ data class ColumnSample(
     val groundY: Int,
     val waterTopY: Int,
     val hasLiquid: Boolean,
-    val topSolidY: Int
+    val topSolidY: Int,
+    val surfaceBlock: BlockState,
+    val hasSnowCover: Boolean
 )
 
 class ChunkStreamer(private val level: ServerLevel, private val allowUnloaded: Boolean) {
@@ -80,55 +83,114 @@ class ChunkStreamer(private val level: ServerLevel, private val allowUnloaded: B
 
     fun sampleColumn(x: Int, z: Int): ColumnSample {
         ensureLoaded(x, z)
-        val topH = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z)
-        val oceanFloor = level.getHeight(Heightmap.Types.OCEAN_FLOOR, x, z)
+        val noLeavesH = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z)
+        val worldSurfH = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z)
         val minY = level.minBuildHeight
 
         var waterTopY = minY
         var hasLiquid = false
-        var groundY = (oceanFloor - 1).coerceAtLeast(minY)
+        var hasSnowCover = false
+        var groundY = minY
+        var surfaceBlock: BlockState = Blocks.GRASS_BLOCK.defaultBlockState()
 
-        val scanStart = (topH + 2).coerceAtMost(level.maxBuildHeight - 1)
-        val scanEnd = (minOf(groundY, topH) - 6).coerceAtLeast(minY)
+        val scanStart = (maxOf(noLeavesH, worldSurfH) + 3).coerceAtMost(level.maxBuildHeight - 1)
 
-        for (y in scanStart downTo scanEnd) {
+        for (y in scanStart downTo minY) {
             mutablePos.set(x, y, z)
             val state = level.getBlockState(mutablePos)
-            if (!state.fluidState.isEmpty) {
+            if (state.`is`(Blocks.SNOW)) {
+                hasSnowCover = true
+                continue
+            }
+            if (!state.fluidState.isEmpty || isFrozenWaterSurface(state, x, y, z)) {
                 if (!hasLiquid) {
                     hasLiquid = true
                     waterTopY = y
                 }
             } else if (isTerrainSolid(state)) {
                 groundY = y
+                surfaceBlock = normalizeNaturalSurface(state)
                 break
             }
         }
 
-        // Fallback if still in deep overhang or foliage
         if (groundY <= minY) {
-            for (y in scanStart downTo minY) {
-                mutablePos.set(x, y, z)
-                val state = level.getBlockState(mutablePos)
-                if (isTerrainSolid(state)) {
-                    groundY = y
-                    break
-                }
-            }
+            groundY = (level.getHeight(Heightmap.Types.OCEAN_FLOOR, x, z) - 1).coerceAtLeast(minY)
         }
 
-        val topSolidY = maxOf(groundY, topH - 1)
         return ColumnSample(
             groundY = groundY,
             waterTopY = waterTopY,
             hasLiquid = hasLiquid && waterTopY >= groundY,
-            topSolidY = topSolidY
+            topSolidY = groundY,
+            surfaceBlock = surfaceBlock,
+            hasSnowCover = hasSnowCover
         )
     }
 
+    private fun isFrozenWaterSurface(state: BlockState, x: Int, y: Int, z: Int): Boolean {
+        if (!state.`is`(Blocks.ICE) && !state.`is`(Blocks.FROSTED_ICE) && !state.`is`(Blocks.PACKED_ICE)) {
+            return false
+        }
+        // Check if water sits beneath the ice sheet (frozen river/lake!)
+        for (dy in 1..3) {
+            if (y - dy < level.minBuildHeight) break
+            mutablePos.set(x, y - dy, z)
+            val below = level.getBlockState(mutablePos)
+            if (!below.fluidState.isEmpty) return true
+        }
+        return false
+    }
+
+    private fun normalizeNaturalSurface(state: BlockState): BlockState {
+        val b = state.block
+        return when {
+            b == Blocks.DIRT || b == Blocks.COARSE_DIRT || b == Blocks.PODZOL || b == Blocks.GRASS_BLOCK ->
+                Blocks.GRASS_BLOCK.defaultBlockState()
+            b == Blocks.SNOW_BLOCK -> Blocks.SNOW_BLOCK.defaultBlockState()
+            b == Blocks.SAND || b == Blocks.SANDSTONE -> Blocks.SAND.defaultBlockState()
+            b == Blocks.RED_SAND || b == Blocks.RED_SANDSTONE -> Blocks.RED_SAND.defaultBlockState()
+            b == Blocks.TERRACOTTA -> Blocks.TERRACOTTA.defaultBlockState()
+            b == Blocks.STONE || b == Blocks.ANDESITE || b == Blocks.GRANITE || b == Blocks.DIORITE ->
+                Blocks.STONE.defaultBlockState()
+            b == Blocks.DEEPSLATE -> Blocks.DEEPSLATE.defaultBlockState()
+            else -> state
+        }
+    }
+
     companion object {
+        fun isTreeOrFoliage(state: BlockState): Boolean {
+            if (state.`is`(BlockTags.LOGS) || state.`is`(BlockTags.LEAVES)) return true
+            if (state.`is`(BlockTags.FLOWERS) || state.`is`(BlockTags.SAPLINGS)) return true
+            val b = state.block
+            return b == Blocks.MUSHROOM_STEM ||
+                b == Blocks.RED_MUSHROOM_BLOCK ||
+                b == Blocks.BROWN_MUSHROOM_BLOCK ||
+                b == Blocks.CACTUS ||
+                b == Blocks.BAMBOO ||
+                b == Blocks.SUGAR_CANE ||
+                b == Blocks.VINE ||
+                b == Blocks.MOSS_CARPET ||
+                b == Blocks.SHORT_GRASS ||
+                b == Blocks.TALL_GRASS ||
+                b == Blocks.FERN ||
+                b == Blocks.LARGE_FERN ||
+                b == Blocks.DEAD_BUSH ||
+                b == Blocks.AZALEA ||
+                b == Blocks.FLOWERING_AZALEA ||
+                b == Blocks.MANGROVE_ROOTS ||
+                b == Blocks.MUDDY_MANGROVE_ROOTS ||
+                b == Blocks.BEE_NEST ||
+                b == Blocks.SWEET_BERRY_BUSH ||
+                b == Blocks.HANGING_ROOTS ||
+                b == Blocks.GLOW_LICHEN ||
+                b == Blocks.COCOA
+        }
+
         fun isTerrainSolid(state: BlockState): Boolean {
             if (state.isAir || !state.fluidState.isEmpty) return false
+            if (state.`is`(Blocks.SNOW) || isTreeOrFoliage(state)) return false
+            if (state.`is`(BlockTags.FENCES) || state.`is`(BlockTags.WALLS) || state.`is`(BlockTags.PLANKS)) return false
             if (state.isSolidRender(EmptyGetter, BlockPos.ZERO)) return true
             val b = state.block
             if (b == Blocks.GRASS_BLOCK || b == Blocks.DIRT || b == Blocks.SAND || b == Blocks.RED_SAND ||
