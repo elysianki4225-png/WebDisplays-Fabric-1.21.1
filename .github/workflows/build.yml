@@ -191,31 +191,28 @@ jobs:
                   details.append(f"=== {cls} ===\n" + "\n".join(interesting[:60]))
 
               report = "\n\n".join(details)
-              inspect_classes = [
-                  "net.minecraft.client.MouseHandler",
-                  "net.minecraft.client.gui.components.events.AbstractContainerEventHandler",
-                  "net.minecraft.client.gui.components.events.GuiEventListener",
-                  "net.minecraft.client.renderer.entity.layers.PlayerItemInHandLayer",
-                  "net.minecraft.client.renderer.entity.layers.ItemInHandLayer",
-              ]
               inspect_out = []
-              with zipfile.ZipFile(mc_jar) as zf:
-                  hand_classes = [n for n in zf.namelist() if "Hand" in n or "Arm" in n]
-                  inspect_out.append("=== Hand/Arm classes ===\n" + "\n".join(hand_classes[:60]))
-              for ic in inspect_classes:
-                  args = ["javap", "-c" if ic == "net.minecraft.client.MouseHandler" else "-s", "-p", "-cp", mc_jar, ic]
-                  p = subprocess.run(args, capture_output=True, text=True, errors="replace")
-                  if p.returncode == 0:
-                      txt = p.stdout
-                      if ic == "net.minecraft.client.MouseHandler":
-                          idx = txt.find("onButton(")
-                          txt = txt[max(0, idx):idx + 6500] if idx >= 0 else txt[:2500]
-                      else:
-                          txt = "\n".join(txt.splitlines()[:120])
-                      inspect_out.append(f"=== {ic} ===\n" + txt)
-                  else:
-                      inspect_out.append(f"=== {ic} === NOT FOUND")
-              post_comment("### 26.3 API inspection 3\n```text\n" + "\n\n".join(inspect_out)[:58000] + "\n```")
+              p_ic = subprocess.run(["javap", "-constants", "-p", "-cp", mc_jar, "com.mojang.blaze3d.platform.InputConstants"], capture_output=True, text=True, errors="replace")
+              ic_lines = [l for l in p_ic.stdout.splitlines() if any(k in l for k in ("MOUSE_BUTTON", "PRESS", "RELEASE", "class "))]
+              inspect_out.append("=== InputConstants constants ===\n" + "\n".join(ic_lines[:50]))
+
+              p_mh = subprocess.run(["javap", "-c", "-p", "-cp", mc_jar, "net.minecraft.client.MouseHandler"], capture_output=True, text=True, errors="replace")
+              mh_txt = p_mh.stdout
+              idx1 = mh_txt.find("onButton(")
+              idx2 = mh_txt.find("onScroll(")
+              inspect_out.append("=== MouseHandler.onButton ===\n" + mh_txt[idx1:idx2 if idx2 > idx1 else idx1 + 5000])
+              idx3 = mh_txt.find("onMove(")
+              idx4 = mh_txt.find("handleAccumulatedMovement(")
+              inspect_out.append("=== MouseHandler.onMove ===\n" + mh_txt[idx3:idx4 if idx4 > idx3 else idx3 + 4500])
+
+              for ic in [
+                  "com.mojang.blaze3d.platform.SDLEventHandler",
+                  "net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer",
+                  "net.minecraft.client.renderer.entity.state.ArmedEntityRenderState",
+              ]:
+                  p = subprocess.run(["javap", "-s", "-p", "-cp", mc_jar, ic], capture_output=True, text=True, errors="replace")
+                  inspect_out.append(f"=== {ic} ===\n" + "\n".join(p.stdout.splitlines()[:100]))
+              post_comment("### 26.3 API inspection 4\n```text\n" + "\n\n".join(inspect_out)[:58000] + "\n```")
               if missing:
                   post_comment("### 26.3 Mixin / AccessWidener check FAILED\nMissing:\n" + "\n".join(f"- {m}" for m in missing) + "\n\n```text\n" + report[:50000] + "\n```")
                   sys.exit(1)
