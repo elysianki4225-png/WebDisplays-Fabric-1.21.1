@@ -658,7 +658,7 @@ class GuiServer(
     @CommandHandler("reconnect")
     fun commandReconnect() {
         Client.getInstance().stop()
-        WDNetworkRegistry.INSTANCE.sendToServer(Client.getInstance().beginConnection())
+        Client.getInstance().beginConnection()?.let { WDNetworkRegistry.INSTANCE.sendToServer(it) }
     }
 
     private fun startFileUpload(f: File, quit: Boolean) {

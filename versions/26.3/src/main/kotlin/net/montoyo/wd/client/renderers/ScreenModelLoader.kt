@@ -5,6 +5,7 @@ import net.fabricmc.fabric.api.client.model.loading.v1.CustomUnbakedBlockStateMo
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel
 import net.minecraft.client.resources.model.ModelBaker
 import net.minecraft.client.resources.model.ModelDebugName
+import net.minecraft.client.resources.model.ResolvableModel
 import net.minecraft.client.resources.model.sprite.Material
 import net.minecraft.resources.Identifier
 
@@ -28,7 +29,7 @@ object ScreenModelLoader {
     class Unbaked : CustomUnbakedBlockStateModel, ModelDebugName {
         override fun codec(): MapCodec<out CustomUnbakedBlockStateModel> = CODEC
 
-        override fun resolveDependencies(resolver: CustomUnbakedBlockStateModel.Resolver) {
+        override fun resolveDependencies(resolver: ResolvableModel.Resolver) {
         }
 
         override fun bake(baker: ModelBaker): BlockStateModel {

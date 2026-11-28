@@ -38,7 +38,7 @@ open class ScreenBaker(spriteGetter: Function<Material, TextureAtlasSprite>) : B
 
     init {
         for (i in texs.indices) {
-            texs[i] = spriteGetter.apply(ScreenModelLoader.MATERIALS_SIDES[i])
+            texs[i] = spriteGetter.apply(ScreenModelLoader.MATERIALS_SIDES[i]!!)
         }
 
         for (dirIdx in 0 until 6) {

@@ -40,7 +40,7 @@ import kotlin.math.max
 abstract class WDScreen(component: Component) : Screen(component) {
     protected val controls = ArrayList<Control>()
     protected val postDrawList = ArrayList<Control>()
-    private val eventMap = HashMap<Class<out Event>, Method>()
+    private val eventMap = HashMap<Class<out Event<*>>, Method>()
     protected var quitOnEscape = true
     protected var defaultBackground = true
     protected var syncTicks = 40
@@ -59,7 +59,7 @@ abstract class WDScreen(component: Component) : Screen(component) {
                 }
 
                 @Suppress("UNCHECKED_CAST")
-                eventMap[params[0] as Class<out Event>] = m
+                eventMap[params[0] as Class<out Event<*>>] = m
             }
         }
     }
@@ -255,15 +255,15 @@ abstract class WDScreen(component: Component) : Screen(component) {
         return up || super.keyReleased(event)
     }
 
-    open fun actionPerformed(ev: Event): Any? {
-        val m = eventMap[ev.javaClass]
+    open fun actionPerformed(ev: Event<*>): Any? {
+        val m = eventMap[ev::class.java]
         if (m != null) {
             try {
                 return m.invoke(this, ev)
             } catch (e: IllegalAccessException) {
-                Log.errorEx("Access to event %s of screen %s is denied", e, ev.javaClass.simpleName, javaClass.simpleName)
+                Log.errorEx("Access to event %s of screen %s is denied", e, ev::class.java.simpleName, this::class.java.simpleName)
             } catch (e: InvocationTargetException) {
-                Log.errorEx("Event %s of screen %s failed", e, ev.javaClass.simpleName, javaClass.simpleName)
+                Log.errorEx("Event %s of screen %s failed", e, ev::class.java.simpleName, this::class.java.simpleName)
             }
         }
         return null

@@ -322,17 +322,18 @@ class GuiScreenConfig(
 
     @GuiSubscribe
     fun onTextChanged(ev: TextField.TextChangedEvent) {
-        if (ev.getSource() === tfResX || ev.getSource() === tfResY) {
+        val src = ev.getSource() ?: return
+        if (src === tfResX || src === tfResY) {
             val newContent = ev.getNewContent()
             for (i in newContent.indices) {
                 if (!Character.isDigit(newContent[i])) {
-                    ev.getSource().setText(ev.getOldContent())
+                    src.setText(ev.getOldContent())
                     return
                 }
             }
 
             if (cbLockRatio.isChecked()) {
-                if (ev.getSource() === tfResX) {
+                if (src === tfResX) {
                     try {
                         var value = newContent.toInt().toFloat()
                         value /= aspectRatio
@@ -364,19 +365,20 @@ class GuiScreenConfig(
 
     @GuiSubscribe
     fun onCheckboxChanged(ev: CheckBox.CheckedEvent) {
-        if (isFriendCheckbox(ev.getSource())) {
-            val flag = ev.getSource().getUserdata() as Int
+        val src = ev.getSource() ?: return
+        if (isFriendCheckbox(src)) {
+            val flag = src.getUserdata() as Int
             if (ev.isChecked()) friendRights = friendRights or flag
             else friendRights = friendRights and flag.inv()
 
             requestSync()
-        } else if (isOtherCheckbox(ev.getSource())) {
-            val flag = ev.getSource().getUserdata() as Int
+        } else if (isOtherCheckbox(src)) {
+            val flag = src.getUserdata() as Int
             if (ev.isChecked()) otherRights = otherRights or flag
             else otherRights = otherRights and flag.inv()
 
             requestSync()
-        } else if (ev.getSource() === cbLockRatio && ev.isChecked()) {
+        } else if (src === cbLockRatio && ev.isChecked()) {
             try {
                 val x = tfResX.getText().toInt()
                 val y = tfResY.getText().toInt()
