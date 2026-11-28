@@ -92,6 +92,15 @@ object MobileEmulation {
     }
 
     private val loadHandler = object : CefLoadHandlerAdapter() {
+        override fun onLoadingStateChange(
+            browser: CefBrowser?,
+            isLoading: Boolean,
+            canGoBack: Boolean,
+            canGoForward: Boolean
+        ) {
+            applyMobileJs(browser, browser?.mainFrame)
+        }
+
         override fun onLoadStart(
             browser: CefBrowser?,
             frame: CefFrame?,
@@ -296,30 +305,107 @@ object MobileEmulation {
     }
   } catch (_) {}
 
-  var wdTouchState = { active: false, target: null, startX: 0, startY: 0, curX: 0, curY: 0 };
+  var wdTouchState = { active: false, target: null, offsetX: 0, offsetY: 0, win: window, startX: 0, startY: 0, curX: 0, curY: 0 };
 
-  function dispatchSyntheticTouch(type, target, x, y, includeTouches) {
+  function deepElementFromPoint(x, y) {
+    var doc = document;
+    var win = window;
+    var lx = x;
+    var ly = y;
+    var ox = 0;
+    var oy = 0;
+    var el = null;
+    for (var depth = 0; depth < 6; depth++) {
+      var hit = null;
+      try { hit = doc.elementFromPoint(lx, ly); } catch (_) { hit = null; }
+      if (!hit) break;
+      el = hit;
+      if (hit.tagName === 'IFRAME' || hit.tagName === 'FRAME') {
+        try {
+          var subDoc = hit.contentDocument;
+          var subWin = hit.contentWindow;
+          if (!subDoc || !subWin) break;
+          var rect = hit.getBoundingClientRect();
+          lx -= rect.left;
+          ly -= rect.top;
+          ox += rect.left;
+          oy += rect.top;
+          doc = subDoc;
+          win = subWin;
+          continue;
+        } catch (_) {
+          break;
+        }
+      }
+      break;
+    }
+    return {
+      el: el || document.body || document.documentElement,
+      localX: lx,
+      localY: ly,
+      offsetX: ox,
+      offsetY: oy,
+      win: win
+    };
+  }
+
+  function dispatchSyntheticPointer(type, target, lx, ly, win) {
     try {
-      if (!target || typeof TouchEvent === 'undefined' || typeof Touch === 'undefined') return false;
-      var t = new Touch({
+      var w = win || window;
+      var PE = w.PointerEvent || window.PointerEvent;
+      if (!target || typeof PE === 'undefined') return false;
+      var isUp = (type === 'pointerup' || type === 'pointercancel');
+      var ev = new PE(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        view: w,
+        pointerId: 1,
+        width: 24,
+        height: 24,
+        pressure: isUp ? 0 : 0.5,
+        pointerType: 'touch',
+        isPrimary: true,
+        clientX: lx,
+        clientY: ly,
+        screenX: lx,
+        screenY: ly,
+        button: isUp || type === 'pointerdown' ? 0 : -1,
+        buttons: isUp ? 0 : 1
+      });
+      target.dispatchEvent(ev);
+      return ev.defaultPrevented;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function dispatchSyntheticTouch(type, target, lx, ly, includeTouches, win) {
+    try {
+      var w = win || window;
+      var TE = w.TouchEvent || window.TouchEvent;
+      var TC = w.Touch || window.Touch;
+      if (!target || typeof TE === 'undefined' || typeof TC === 'undefined') return false;
+      var t = new TC({
         identifier: 1,
         target: target,
-        clientX: x,
-        clientY: y,
-        pageX: x + (window.scrollX || 0),
-        pageY: y + (window.scrollY || 0),
-        screenX: x,
-        screenY: y,
+        clientX: lx,
+        clientY: ly,
+        pageX: lx + (w.scrollX || 0),
+        pageY: ly + (w.scrollY || 0),
+        screenX: lx,
+        screenY: ly,
         radiusX: 12,
         radiusY: 12,
         rotationAngle: 0,
-        force: type === 'touchend' ? 0 : 1
+        force: (type === 'touchend' || type === 'touchcancel') ? 0 : 1
       });
       var touches = includeTouches ? [t] : [];
-      var ev = new TouchEvent(type, {
+      var ev = new TE(type, {
         cancelable: true,
         bubbles: true,
         composed: true,
+        view: w,
         touches: touches,
         targetTouches: touches,
         changedTouches: [t]
@@ -336,13 +422,15 @@ object MobileEmulation {
     var remX = deltaX;
     var remY = deltaY;
     while (cur) {
-      var isRoot = (cur === document.documentElement || cur === document.body);
+      var curDoc = cur.ownerDocument || document;
+      var curWin = curDoc.defaultView || window;
+      var isRoot = (cur === curDoc.documentElement || cur === curDoc.body);
       var st = null;
-      try { st = isRoot ? null : window.getComputedStyle(cur); } catch (_) {}
+      try { st = isRoot ? null : curWin.getComputedStyle(cur); } catch (_) {}
       if (Math.abs(remY) > 0.01) {
         var canY = isRoot || (st && (st.overflowY === 'auto' || st.overflowY === 'scroll' || st.overflowY === 'overlay'));
         if (canY && cur.scrollHeight > cur.clientHeight + 1) {
-          var targetY = isRoot ? (document.scrollingElement || document.documentElement || document.body) : cur;
+          var targetY = isRoot ? (curDoc.scrollingElement || curDoc.documentElement || curDoc.body) : cur;
           var beforeY = targetY.scrollTop;
           targetY.scrollTop = beforeY + remY;
           remY -= (targetY.scrollTop - beforeY);
@@ -351,14 +439,23 @@ object MobileEmulation {
       if (Math.abs(remX) > 0.01) {
         var canX = isRoot || (st && (st.overflowX === 'auto' || st.overflowX === 'scroll' || st.overflowX === 'overlay'));
         if (canX && cur.scrollWidth > cur.clientWidth + 1) {
-          var targetX = isRoot ? (document.scrollingElement || document.documentElement || document.body) : cur;
+          var targetX = isRoot ? (curDoc.scrollingElement || curDoc.documentElement || curDoc.body) : cur;
           var beforeX = targetX.scrollLeft;
           targetX.scrollLeft = beforeX + remX;
           remX -= (targetX.scrollLeft - beforeX);
         }
       }
-      if (isRoot || (Math.abs(remX) <= 0.01 && Math.abs(remY) <= 0.01)) break;
-      cur = cur.parentElement || document.documentElement;
+      if (Math.abs(remX) <= 0.01 && Math.abs(remY) <= 0.01) break;
+      if (isRoot) {
+        var frameEl = null;
+        try { frameEl = curWin.frameElement; } catch (_) { frameEl = null; }
+        if (frameEl) {
+          cur = frameEl;
+          continue;
+        }
+        break;
+      }
+      cur = cur.parentElement || curDoc.documentElement;
     }
     if (Math.abs(remY) > 0.01 || Math.abs(remX) > 0.01) {
       try { window.scrollBy(remX, remY); } catch (_) {}
@@ -366,16 +463,18 @@ object MobileEmulation {
   }
 
   window.__wdTouchStart = function(x, y) {
-    var el = null;
-    try { el = document.elementFromPoint(x, y); } catch (_) {}
-    el = el || document.body || document.documentElement;
+    var hit = deepElementFromPoint(x, y);
     wdTouchState.active = true;
-    wdTouchState.target = el;
+    wdTouchState.target = hit.el;
+    wdTouchState.offsetX = hit.offsetX;
+    wdTouchState.offsetY = hit.offsetY;
+    wdTouchState.win = hit.win;
     wdTouchState.startX = x;
     wdTouchState.startY = y;
     wdTouchState.curX = x;
     wdTouchState.curY = y;
-    dispatchSyntheticTouch('touchstart', el, x, y, true);
+    dispatchSyntheticPointer('pointerdown', hit.el, hit.localX, hit.localY, hit.win);
+    dispatchSyntheticTouch('touchstart', hit.el, hit.localX, hit.localY, true, hit.win);
   };
 
   window.__wdTouchMove = function(x, y, dx, dy) {
@@ -385,7 +484,11 @@ object MobileEmulation {
     wdTouchState.curX = x;
     wdTouchState.curY = y;
     var el = wdTouchState.target || document.body || document.documentElement;
-    var canceled = dispatchSyntheticTouch('touchmove', el, x, y, true);
+    var lx = x - wdTouchState.offsetX;
+    var ly = y - wdTouchState.offsetY;
+    var win = wdTouchState.win || window;
+    dispatchSyntheticPointer('pointermove', el, lx, ly, win);
+    var canceled = dispatchSyntheticTouch('touchmove', el, lx, ly, true, win);
     if (!canceled) {
       scrollChain(el, -dx, -dy);
     }
@@ -395,14 +498,26 @@ object MobileEmulation {
     if (!wdTouchState.active) return;
     wdTouchState.active = false;
     var el = wdTouchState.target || document.body || document.documentElement;
+    var lx = x - wdTouchState.offsetX;
+    var ly = y - wdTouchState.offsetY;
+    var win = wdTouchState.win || window;
     wdTouchState.target = null;
-    dispatchSyntheticTouch('touchend', el, x, y, false);
+    wdTouchState.offsetX = 0;
+    wdTouchState.offsetY = 0;
+    wdTouchState.win = window;
+    dispatchSyntheticPointer('pointerup', el, lx, ly, win);
+    dispatchSyntheticTouch('touchend', el, lx, ly, false, win);
+  };
+
+  window.__wdTouchTap = function(x, y) {
+    var hit = deepElementFromPoint(x, y);
+    dispatchSyntheticTouch('touchstart', hit.el, hit.localX, hit.localY, true, hit.win);
+    dispatchSyntheticTouch('touchend', hit.el, hit.localX, hit.localY, false, hit.win);
   };
 
   window.__wdWheelScroll = function(x, y, deltaX, deltaY) {
-    var el = null;
-    try { el = document.elementFromPoint(x, y); } catch (_) {}
-    scrollChain(el || document.body || document.documentElement, deltaX, deltaY);
+    var hit = deepElementFromPoint(x, y);
+    scrollChain(hit.el, deltaX, deltaY);
   };
 })();
 """

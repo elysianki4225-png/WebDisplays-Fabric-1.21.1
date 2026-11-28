@@ -20,22 +20,28 @@ class ClickControl : ScreenControl {
 
     internal var type: ControlType
     internal var coord: Vector2i?
+    internal var button: Int = 1
 
-    constructor(type: ControlType, coord: Vector2i?) : this(type, coord, -1)
+    constructor(type: ControlType, coord: Vector2i?) : this(type, coord, 1)
 
     constructor(type: ControlType, coord: Vector2i?, button: Int) : super(id) {
         this.type = type
         this.coord = coord
+        this.button = button
     }
 
     constructor(buf: FriendlyByteBuf) : super(id) {
         type = ControlType.entries[buf.readByte().toInt()]
-        coord = Vector2i(buf)
+        coord = if (type != ControlType.UP) Vector2i(buf) else null
+        button = buf.readInt()
     }
 
     override fun write(buf: FriendlyByteBuf) {
         buf.writeByte(type.ordinal)
-        coord!!.writeTo(buf)
+        if (type != ControlType.UP) {
+            coord!!.writeTo(buf)
+        }
+        buf.writeInt(button)
     }
 
     @Throws(MissingPermissionException::class)
@@ -52,9 +58,9 @@ class ClickControl : ScreenControl {
     @Environment(EnvType.CLIENT)
     override fun handleClient(pos: BlockPos, side: BlockSide?, tes: TileEntityScreen, ctx: WDContext) {
         if (coord != null) {
-            tes.handleMouseEvent(side!!, ControlType.MOVE, coord!!, -1)
+            tes.handleMouseEvent(side!!, ControlType.MOVE, coord, -1)
         }
-        tes.handleMouseEvent(side!!, type, coord!!, 1)
+        tes.handleMouseEvent(side!!, type, coord, button)
     }
 
     companion object {

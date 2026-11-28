@@ -26,6 +26,7 @@ import net.montoyo.wd.utilities.Log
 import net.montoyo.wd.utilities.TypeData
 import net.montoyo.wd.utilities.Util
 import org.lwjgl.sdl.SDLMouse
+import org.lwjgl.sdl.SDLScancode
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.File
@@ -105,6 +106,7 @@ class GuiKeyboard() : WDScreen(Component.nullToEmpty(null)) {
         } else {
             warningPanelBounds = null
             grabMouseKeepingScreen()
+            tes.getScreen(side)?.browser?.setFocus(true)
         }
 
         defaultBackground = showWarning
@@ -143,21 +145,40 @@ class GuiKeyboard() : WDScreen(Component.nullToEmpty(null)) {
         }
     }
 
+    private fun normalizeKeyCode(keyCode: Int): Int {
+        return if (
+            keyCode == InputConstants.KEY_RETURN ||
+            keyCode == InputConstants.KEY_NUMPADENTER ||
+            keyCode == SDLScancode.SDL_SCANCODE_RETURN ||
+            keyCode == SDLScancode.SDL_SCANCODE_KP_ENTER
+        ) {
+            10
+        } else {
+            keyCode
+        }
+    }
+
     override fun keyPressed(event: KeyEvent): Boolean {
         if (quitOnEscape && event.key() == InputConstants.KEY_ESCAPE) {
             closeRequested = true
         }
-        addKey(TypeData(TypeData.Action.PRESS, event.key(), event.modifiers(), event.key()))
+        if (!showWarning) {
+            addKey(TypeData(TypeData.Action.PRESS, normalizeKeyCode(event.key()), event.modifiers(), event.key()))
+        }
         return super.keyPressed(event)
     }
 
     override fun charTyped(event: CharacterEvent): Boolean {
-        addKey(TypeData(TypeData.Action.TYPE, event.codepoint(), currentModifiersMask(), 0))
+        if (!showWarning) {
+            addKey(TypeData(TypeData.Action.TYPE, event.codepoint(), currentModifiersMask(), 0))
+        }
         return super.charTyped(event)
     }
 
     override fun keyReleased(event: KeyEvent): Boolean {
-        addKey(TypeData(TypeData.Action.RELEASE, event.key(), event.modifiers(), event.key()))
+        if (!showWarning) {
+            addKey(TypeData(TypeData.Action.RELEASE, normalizeKeyCode(event.key()), event.modifiers(), event.key()))
+        }
         return super.keyReleased(event)
     }
 
@@ -192,6 +213,7 @@ class GuiKeyboard() : WDScreen(Component.nullToEmpty(null)) {
             showWarning = false
             defaultBackground = false
             grabMouseKeepingScreen()
+            tes.getScreen(side)?.browser?.setFocus(true)
         }
     }
 

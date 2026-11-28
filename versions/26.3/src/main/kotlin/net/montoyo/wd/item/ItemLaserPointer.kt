@@ -31,6 +31,10 @@ class ItemLaserPointer(properties: Properties) : Item(properties.stacksTo(1)), W
         private var pointedScreenSide: BlockSide? = null
         private var lastPointPacket: Long = 0
 
+        private var activePressScreen: TileEntityScreen? = null
+        private var activePressSide: BlockSide? = null
+        private var activePressBtn: Int = -1
+
         private var mouseDown = false
         private var left = false
         private var middle = false
@@ -86,6 +90,22 @@ class ItemLaserPointer(properties: Properties) : Item(properties.stacksTo(1)), W
         }
 
         private fun deselectScreen() {
+            val pressScr = activePressScreen
+            val pressSide = activePressSide
+            val pressBtn = activePressBtn
+            if (pressScr != null && pressSide != null && pressBtn in 0..1) {
+                pressScr.handleMouseEvent(pressSide, ClickControl.ControlType.UP, null, pressBtn)
+                if (Minecraft.getInstance().level != null) {
+                    WDNetworkRegistry.INSTANCE.sendToServer(C2SMessageScreenCtrl.laserUp(pressScr, pressSide, pressBtn))
+                }
+            }
+            activePressScreen = null
+            activePressSide = null
+            activePressBtn = -1
+            left = false
+            middle = false
+            right = false
+
             if (pointedScreen != null && pointedScreenSide != null) {
                 pointedScreen = null
                 pointedScreenSide = null
@@ -106,30 +126,61 @@ class ItemLaserPointer(properties: Properties) : Item(properties.stacksTo(1)), W
             val mc = Minecraft.getInstance()
             val level = mc.level ?: return
 
+            var handledOnHit = false
             val result = ClientProxy.raycast(64.0) // TODO: Make that distance configurable
-            val pos = Vector3i(result.blockPos)
-            val side = BlockSide.values()[result.direction.ordinal]
-            Multiblock.findOrigin(level, pos, side, null)
+            if (result.type == HitResult.Type.BLOCK && level.getBlockState(result.blockPos).block == BlockInit.blockScreen.get()) {
+                val pos = Vector3i(result.blockPos)
+                val side = BlockSide.values()[result.direction.ordinal]
+                Multiblock.findOrigin(level, pos, side, null)
 
-            val hitX = result.location.x.toFloat() - pos.x.toFloat()
-            val hitY = result.location.y.toFloat() - pos.y.toFloat()
-            val hitZ = result.location.z.toFloat() - pos.z.toFloat()
-            val tmp = Vector2i()
+                val hitX = result.location.x.toFloat() - pos.x.toFloat()
+                val hitY = result.location.y.toFloat() - pos.y.toFloat()
+                val hitZ = result.location.z.toFloat() - pos.z.toFloat()
+                val tmp = Vector2i()
 
-            val te = level.getBlockEntity(pos.toBlock()) as? TileEntityScreen ?: return
-            if (te.hasUpgrade(side, DefaultUpgrade.LASERMOUSE)) {
-                val scr = te.getScreen(side)
-                if (scr != null && scr.browser != null) {
-                    if (BlockScreen.hit2pixels(side, result.blockPos, Vector3i(result.blockPos), scr, hitX, hitY, hitZ, tmp)) {
-                        te.handleMouseEvent(side, ClickControl.ControlType.MOVE, tmp, -1)
-                        te.handleMouseEvent(side, if (press) ClickControl.ControlType.DOWN else ClickControl.ControlType.UP, tmp, btn)
+                val te = level.getBlockEntity(pos.toBlock()) as? TileEntityScreen
+                if (te != null && te.hasUpgrade(side, DefaultUpgrade.LASERMOUSE)) {
+                    val scr = te.getScreen(side)
+                    if (scr != null && scr.browser != null) {
+                        if (BlockScreen.hit2pixels(side, result.blockPos, Vector3i(result.blockPos), scr, hitX, hitY, hitZ, tmp)) {
+                            te.handleMouseEvent(side, ClickControl.ControlType.MOVE, tmp, -1)
+                            te.handleMouseEvent(side, if (press) ClickControl.ControlType.DOWN else ClickControl.ControlType.UP, tmp, btn)
 
-                        if (press) {
-                            WDNetworkRegistry.INSTANCE.sendToServer(C2SMessageScreenCtrl.laserDown(te, side, tmp, btn))
-                        } else {
-                            WDNetworkRegistry.INSTANCE.sendToServer(C2SMessageScreenCtrl.laserUp(te, side, btn))
+                            if (press) {
+                                if (btn <= 1) {
+                                    activePressScreen = te
+                                    activePressSide = side
+                                    activePressBtn = btn
+                                }
+                                WDNetworkRegistry.INSTANCE.sendToServer(C2SMessageScreenCtrl.laserDown(te, side, tmp, btn))
+                            } else {
+                                WDNetworkRegistry.INSTANCE.sendToServer(C2SMessageScreenCtrl.laserUp(te, side, btn))
+                                val prevScr = activePressScreen
+                                val prevSide = activePressSide
+                                if (prevScr != null && prevSide != null && (prevScr !== te || prevSide != side)) {
+                                    prevScr.handleMouseEvent(prevSide, ClickControl.ControlType.UP, null, btn)
+                                    WDNetworkRegistry.INSTANCE.sendToServer(C2SMessageScreenCtrl.laserUp(prevScr, prevSide, btn))
+                                }
+                            }
+                            handledOnHit = true
                         }
                     }
+                }
+            }
+
+            if (!press) {
+                if (!handledOnHit) {
+                    val prevScr = activePressScreen
+                    val prevSide = activePressSide
+                    if (prevScr != null && prevSide != null) {
+                        prevScr.handleMouseEvent(prevSide, ClickControl.ControlType.UP, null, btn)
+                        WDNetworkRegistry.INSTANCE.sendToServer(C2SMessageScreenCtrl.laserUp(prevScr, prevSide, btn))
+                    }
+                }
+                if (activePressBtn == btn || btn <= 1) {
+                    activePressScreen = null
+                    activePressSide = null
+                    activePressBtn = -1
                 }
             }
         }
