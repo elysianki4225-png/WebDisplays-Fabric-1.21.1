@@ -107,6 +107,7 @@
   "webdisplays.message.missingCC": "ComputerCraft is not available.",
   "webdisplays.message.missingOC": "OpenComputers is not available.",
   "webdisplays.message.newOwner": "You are now the owner of this screen!",
+  "webdisplays.message.noLaserMouse": "Install a Laser Sensor upgrade on this screen first!",
   "webdisplays.message.noMiniserv": "Server block is disabled on this server",
   "webdisplays.message.notAScreen": "Please right click on the screen first...",
   "webdisplays.message.notLinked": "This peripheral has not been linked yet.",

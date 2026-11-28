@@ -636,6 +636,7 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
                 (p.view as? MCEFBrowser)?.let { browser ->
                     browser.setFocus(true)
                     browser.sendMouseMove(touchDownRx, touchDownRy)
+                    browser.sendMousePress(touchDownRx, touchDownRy, 0)
                 }
                 return true
             }
@@ -662,6 +663,8 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
             val ry = toClampedBrowserY(mouseY, p.resY)
             if (!touchSwiped && hypot(mouseX - touchStartX, mouseY - touchStartY) > 8.0) {
                 touchSwiped = true
+                browser?.sendMouseMove(-1, -1)
+                browser?.sendMouseRelease(-1, -1, 0)
                 browser?.executeJavaScript(
                     "window.__wdTouchStart && window.__wdTouchStart($touchDownRx, $touchDownRy);",
                     browser.url ?: "",
@@ -713,14 +716,8 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
                     0
                 )
             } else {
-                browser?.executeJavaScript(
-                    "window.__wdTouchTap && window.__wdTouchTap($touchDownRx, $touchDownRy);",
-                    browser.url ?: "",
-                    0
-                )
-                browser?.sendMouseMove(touchDownRx, touchDownRy)
-                browser?.sendMousePress(touchDownRx, touchDownRy, 0)
-                browser?.sendMouseRelease(touchDownRx, touchDownRy, 0)
+                browser?.sendMouseMove(rx, ry)
+                browser?.sendMouseRelease(rx, ry, 0)
                 browser?.setFocus(true)
             }
             return true
@@ -770,7 +767,7 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
             if (btn == -1) browser.sendMouseMove(rx, ry)
             else if (pressed) browser.sendMousePress(rx, ry, btn)
             else browser.sendMouseRelease(rx, ry, btn)
-            if (!isRelease || (mx in 0.0..1.0 && my in 0.0..1.0)) {
+            if ((btn != -1 || urlBox?.isFocused != true) && (!isRelease || (mx in 0.0..1.0 && my in 0.0..1.0))) {
                 view.setFocus(true)
             }
         }
@@ -796,12 +793,16 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
     override fun isForBlock(bp: BlockPos, side: BlockSide): Boolean = false
 
     override fun removed() {
+        val hadPress = touchDown && !touchSwiped
         touchDown = false
         touchSwiped = false
         super.removed()
         val p = pad
         val view = p?.view
         if (view is MCEFBrowser) {
+            if (hadPress) {
+                view.sendMouseRelease(-1, -1, 0)
+            }
             view.setCursor(CefCursorType.POINTER)
             view.setCursorChangeListener { cursor -> p.activeCursor = cursor }
         }

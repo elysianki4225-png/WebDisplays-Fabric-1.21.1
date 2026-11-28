@@ -19,6 +19,7 @@ import net.montoyo.wd.net.WDNetworkRegistry
 import net.montoyo.wd.net.server_bound.C2SMessageScreenCtrl
 import net.montoyo.wd.utilities.BlockSide
 import net.montoyo.wd.utilities.Multiblock
+import net.montoyo.wd.utilities.Util
 import net.montoyo.wd.utilities.Vector2i
 import net.montoyo.wd.utilities.Vector3i
 
@@ -34,6 +35,7 @@ class ItemLaserPointer(properties: Properties) : Item(properties.stacksTo(1)), W
         private var activePressScreen: TileEntityScreen? = null
         private var activePressSide: BlockSide? = null
         private var activePressBtn: Int = -1
+        private var lastUpgradeToastMs: Long = 0
 
         private var mouseDown = false
         private var left = false
@@ -164,6 +166,12 @@ class ItemLaserPointer(properties: Properties) : Item(properties.stacksTo(1)), W
                             }
                             handledOnHit = true
                         }
+                    }
+                } else if (press && te != null && te.getScreen(side) != null && !te.hasUpgrade(side, DefaultUpgrade.LASERMOUSE)) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastUpgradeToastMs >= 2000L) {
+                        lastUpgradeToastMs = now
+                        mc.player?.let { Util.toast(it, "noLaserMouse") }
                     }
                 }
             }

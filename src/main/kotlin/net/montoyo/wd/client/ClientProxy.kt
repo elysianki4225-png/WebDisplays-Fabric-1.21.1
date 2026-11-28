@@ -69,6 +69,8 @@ import org.cef.CefSettings
 import org.cef.browser.CefBrowser
 import org.cef.browser.CefFrame
 import org.cef.handler.CefDisplayHandler
+import org.cef.handler.CefLifeSpanHandlerAdapter
+import org.cef.handler.CefRequestHandlerAdapter
 import org.cef.misc.CefCursorType
 import org.lwjgl.glfw.GLFW
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo
@@ -136,6 +138,7 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
     private val padList = ArrayList<PadData>()
     private var minePadTickCounter = 0
     private var outlineHiddenByMod = false
+    private var cefClientHandlersRegistered = false
 
     init {
         INSTANCE = this
@@ -161,7 +164,39 @@ class ClientProxy : SharedProxy(), CefDisplayHandler {
         if (!MCEF.isInitialized()) return
 
         ensureSchemeHandlers()
-        MCEF.getClient().addDisplayHandler(this)
+        if (!cefClientHandlersRegistered) {
+            cefClientHandlersRegistered = true
+            val client = MCEF.getClient()
+            client.addDisplayHandler(this)
+            client.addLifeSpanHandler(object : CefLifeSpanHandlerAdapter() {
+                override fun onBeforePopup(
+                    browser: CefBrowser?,
+                    frame: CefFrame?,
+                    targetUrl: String?,
+                    targetFrameName: String?
+                ): Boolean {
+                    if (!targetUrl.isNullOrBlank() && !targetUrl.equals("about:blank", ignoreCase = true)) {
+                        val safeUrl = WebDisplays.applyBlacklist(targetUrl) ?: targetUrl
+                        browser?.loadURL(safeUrl)
+                    }
+                    return true
+                }
+            })
+            client.addRequestHandler(object : CefRequestHandlerAdapter() {
+                override fun onOpenURLFromTab(
+                    browser: CefBrowser?,
+                    frame: CefFrame?,
+                    targetUrl: String?,
+                    userGesture: Boolean
+                ): Boolean {
+                    if (!targetUrl.isNullOrBlank() && !targetUrl.equals("about:blank", ignoreCase = true)) {
+                        val safeUrl = WebDisplays.applyBlacklist(targetUrl) ?: targetUrl
+                        browser?.loadURL(safeUrl)
+                    }
+                    return true
+                }
+            })
+        }
         findAdvancementToProgressField()
     }
 

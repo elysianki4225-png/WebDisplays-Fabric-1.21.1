@@ -31,6 +31,7 @@ import org.cef.callback.CefMenuModel;
 import org.cef.handler.CefAudioHandler;
 import org.cef.handler.CefContextMenuHandler;
 import org.cef.handler.CefDisplayHandler;
+import org.cef.handler.CefLifeSpanHandler;
 import org.cef.handler.CefLoadHandler;
 import org.cef.handler.CefRequestHandler;
 import org.cef.handler.CefResourceRequestHandler;
@@ -46,13 +47,14 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /**
  * A wrapper around {@link CefClient}
  */
-public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDisplayHandler, CefAudioHandler, CefRequestHandler {
+public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDisplayHandler, CefAudioHandler, CefRequestHandler, CefLifeSpanHandler {
     private final CefClient handle;
     private final List<CefLoadHandler> loadHandlers = new CopyOnWriteArrayList<>();
     private final List<CefContextMenuHandler> contextMenuHandlers = new ArrayList<>();
     private final List<CefDisplayHandler> displayHandlers = new ArrayList<>();
     private final List<CefAudioHandler> audioHandlers = new ArrayList<>();
     private final List<CefRequestHandler> requestHandlers = new CopyOnWriteArrayList<>();
+    private final List<CefLifeSpanHandler> lifeSpanHandlers = new CopyOnWriteArrayList<>();
 
     public MCEFClient(CefClient cefClient) {
         handle = cefClient;
@@ -61,6 +63,7 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
         cefClient.addDisplayHandler(this);
         cefClient.addAudioHandler(this);
         cefClient.addRequestHandler(this);
+        cefClient.addLifeSpanHandler(this);
     }
 
     public CefClient getHandle() {
@@ -266,6 +269,51 @@ public class MCEFClient implements CefLoadHandler, CefContextMenuHandler, CefDis
     public void onRenderProcessTerminated(CefBrowser browser, TerminationStatus status) {
         for (CefRequestHandler requestHandler : requestHandlers) {
             requestHandler.onRenderProcessTerminated(browser, status);
+        }
+    }
+
+    public void addLifeSpanHandler(CefLifeSpanHandler handler) {
+        lifeSpanHandlers.add(handler);
+    }
+
+    @Override
+    public boolean onBeforePopup(CefBrowser browser, CefFrame frame, String target_url, String target_frame_name) {
+        for (CefLifeSpanHandler lifeSpanHandler : lifeSpanHandlers) {
+            if (lifeSpanHandler.onBeforePopup(browser, frame, target_url, target_frame_name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public void onAfterCreated(CefBrowser browser) {
+        for (CefLifeSpanHandler lifeSpanHandler : lifeSpanHandlers) {
+            lifeSpanHandler.onAfterCreated(browser);
+        }
+    }
+
+    @Override
+    public void onAfterParentChanged(CefBrowser browser) {
+        for (CefLifeSpanHandler lifeSpanHandler : lifeSpanHandlers) {
+            lifeSpanHandler.onAfterParentChanged(browser);
+        }
+    }
+
+    @Override
+    public boolean doClose(CefBrowser browser) {
+        for (CefLifeSpanHandler lifeSpanHandler : lifeSpanHandlers) {
+            if (lifeSpanHandler.doClose(browser)) {
+                return true;
+            }
+        }
+        return browser != null && browser.doClose();
+    }
+
+    @Override
+    public void onBeforeClose(CefBrowser browser) {
+        for (CefLifeSpanHandler lifeSpanHandler : lifeSpanHandlers) {
+            lifeSpanHandler.onBeforeClose(browser);
         }
     }
 }
