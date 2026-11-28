@@ -195,28 +195,25 @@ jobs:
 
               report = "\n\n".join(details)
               inspect_classes = [
-                  "net.minecraft.client.renderer.texture.DynamicTexture",
-                  "net.minecraft.client.renderer.texture.AbstractTexture",
-                  "com.mojang.renderpearl.api.device.GpuDevice",
-                  "com.mojang.renderpearl.api.device.CommandEncoder",
-                  "com.mojang.renderpearl.api.textures.GpuTexture",
-                  "com.mojang.renderpearl.api.textures.FilterMode",
-                  "com.mojang.renderpearl.api.textures.TextureFormat",
-                  "com.mojang.renderpearl.api.samplers.Sampler",
+                  "com.mojang.renderpearl.api.commands.CommandEncoder",
+                  "com.mojang.renderpearl.api.GpuFormat",
+                  "com.mojang.renderpearl.api.buffers.GpuBuffer",
+                  "com.mojang.renderpearl.api.textures.AddressMode",
+                  "com.mojang.blaze3d.systems.SamplerCache",
               ]
               dump = []
               for c in inspect_classes:
                   p = subprocess.run(["javap", "-p", "-cp", mc_jar, c], capture_output=True, text=True, errors="replace")
                   dump.append(f"=== {c} ===\n" + p.stdout[:6000])
               p_dt = subprocess.run(["javap", "-c", "-p", "-cp", mc_jar, "net.minecraft.client.renderer.texture.DynamicTexture"], capture_output=True, text=True, errors="replace")
-              dump.append("=== DynamicTexture bytecode ===\n" + p_dt.stdout[:4500])
-              p_mc = subprocess.run(["javap", "-c", "-p", "-cp", mc_jar, "net.minecraft.client.Minecraft"], capture_output=True, text=True, errors="replace")
-              mc_txt = p_mc.stdout
-              for m in ["private boolean startAttack(", "private void startUseItem(", "private void continueAttack("]:
-                  idx = mc_txt.find(m)
-                  if idx >= 0:
-                      dump.append(f"=== {m} ===\n" + mc_txt[idx:idx+2500])
-              post_comment("### 26.3 RenderPearl GPU & Minecraft Input inspection\n```text\n" + "\n\n".join(dump)[:58000] + "\n```")
+              dt = p_dt.stdout
+              idx = dt.find("public void upload(")
+              if idx >= 0:
+                  dump.append("=== DynamicTexture.upload ===\n" + dt[idx:idx+2500])
+              idx2 = dt.find("private void createTexture(java.util.function.Supplier")
+              if idx2 >= 0:
+                  dump.append("=== DynamicTexture.createTexture ===\n" + dt[idx2:idx2+2500])
+              post_comment("### 26.3 CommandEncoder & GpuFormat inspection\n```text\n" + "\n\n".join(dump)[:58000] + "\n```")
               if missing:
                   post_comment("### 26.3 Mixin / AccessWidener check FAILED\nMissing:\n" + "\n".join(f"- {m}" for m in missing) + "\n\n```text\n" + report[:50000] + "\n```")
                   sys.exit(1)
