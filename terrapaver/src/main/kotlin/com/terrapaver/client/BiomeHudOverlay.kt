@@ -61,7 +61,9 @@ object BiomeHudOverlay {
             BiomeSplitMode.VORONOI_MIX -> " · ${I18n.get(cfg.splitMode.key)} (${cfg.splitPalette.size})"
         }
 
-        val line1 = "$targetName$splitSuffix"
+        val overwriteSuffix = if (!cfg.overwriteExisting) " · ${I18n.get("terrapaver.biome.hud.no_overwrite")}" else ""
+
+        val line1 = "$targetName$splitSuffix$overwriteSuffix"
         val line2 = "$shapeInfo · $dimBadge · ${I18n.get("terrapaver.biome.hud.standing", standingName)} · [B]"
 
         val cardW = (maxOf(font.width(line1), font.width(line2)) + 38).coerceIn(190, screenW - 24)

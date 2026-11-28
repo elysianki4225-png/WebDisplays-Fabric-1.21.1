@@ -157,6 +157,10 @@ object TerraPaverMod : ModInitializer {
                                 ServerBiomeManager.clearSelection(ctx.source.playerOrException)
                                 1
                             })
+                            .then(Commands.literal("unlock").executes { ctx ->
+                                ServerBiomeManager.clearProtectedLocks(ctx.source.playerOrException)
+                                1
+                            })
                     )
                     .then(Commands.literal("clear").executes { ctx ->
                         ServerPavingManager.clearSelection(ctx.source.playerOrException)

@@ -46,6 +46,7 @@ data class BiomeConfig(
     var filterSourceBiome: Boolean = false,
     var sourceBiomeFilter: String = "minecraft:plains",
     var preserveRiversAndOceans: Boolean = false,
+    var overwriteExisting: Boolean = true,
     var adaptSurfaceBlocks: Boolean = false,
     var adaptWeatherSnow: Boolean = false,
     var recentBiomes: MutableList<String> = mutableListOf(),

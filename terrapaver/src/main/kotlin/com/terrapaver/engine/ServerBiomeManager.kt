@@ -24,6 +24,14 @@ import net.minecraft.world.level.block.state.BlockState
 import net.minecraft.world.level.chunk.ChunkAccess
 import net.minecraft.world.level.chunk.status.ChunkStatus
 import net.minecraft.world.level.levelgen.Heightmap
+import net.minecraft.world.level.storage.LevelResource
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
+import java.io.DataInputStream
+import java.io.DataOutputStream
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.BitSet
 import java.util.UUID
 import kotlin.math.abs
 import kotlin.math.floor
@@ -42,11 +50,14 @@ object ServerBiomeManager {
     private data class UndoEntry(
         val level: ServerLevel,
         val chunkBackups: Map<ChunkPos, List<QuartBackup>>,
-        val blockBackups: Map<Long, BlockState>
+        val blockBackups: Map<Long, BlockState>,
+        val newlyLockedBits: Map<Long, List<Int>>
     )
 
     private val boxCorner1 = HashMap<UUID, BlockPos>()
     private val undoStacks = HashMap<UUID, ArrayDeque<UndoEntry>>()
+    private val paintedQuarts = HashMap<String, HashMap<Long, BitSet>>()
+    private var locksLoaded = false
 
     fun selectBoxPoint(player: ServerPlayer, pos: BlockPos, cfg: BiomeConfig) {
         val prev = boxCorner1[player.uuid]
@@ -240,6 +251,12 @@ object ServerBiomeManager {
         val modifiedChunks = ArrayList<ChunkAccess>()
         val chunkBackups = LinkedHashMap<ChunkPos, List<QuartBackup>>()
         val blockBackups = LinkedHashMap<Long, BlockState>()
+        val newlyLockedBits = LinkedHashMap<Long, MutableList<Int>>()
+
+        ensureLocksLoaded(level.server)
+        val dimId = level.dimension().location().toString()
+        val dimLocks = paintedQuarts.getOrPut(dimId) { HashMap() }
+
         val sampler = level.chunkSource.randomState().sampler()
         var changedQuarts = 0
         var changedBlocks = 0
@@ -247,6 +264,7 @@ object ServerBiomeManager {
         var filteredOutQuarts = 0
         var yOutOfRangeQuarts = 0
         var waterProtectedQuarts = 0
+        var skippedProtectedQuarts = 0
         var checkedChunks = 0
 
         fun pickHolderAt(bx: Int, bz: Int): Holder.Reference<Biome> {
@@ -282,6 +300,9 @@ object ServerBiomeManager {
             for (cz in minCz..maxCz) {
                 val chunk = level.chunkSource.getChunk(cx, cz, ChunkStatus.FULL, true) ?: continue
                 checkedChunks++
+                val chunkLong = ChunkPos.asLong(cx, cz)
+                val existingLockBits = dimLocks[chunkLong]
+                val pendingLockBits = ArrayList<Int>(64)
                 val backups = ArrayList<QuartBackup>(64)
 
                 val quartSurfaceY = if (cfg.verticalMode == BiomeVerticalMode.SURFACE_BAND) {
@@ -320,6 +341,12 @@ object ServerBiomeManager {
                         return@BiomeResolver existing
                     }
 
+                    val bitIdx = localQuartBit(qx, qy, qz)
+                    if (!cfg.overwriteExisting && existingLockBits != null && existingLockBits.get(bitIdx)) {
+                        skippedProtectedQuarts++
+                        return@BiomeResolver existing
+                    }
+
                     if (cfg.preserveRiversAndOceans && (existing.`is`(BiomeTags.IS_RIVER) || existing.`is`(BiomeTags.IS_OCEAN))) {
                         waterProtectedQuarts++
                         return@BiomeResolver existing
@@ -347,10 +374,18 @@ object ServerBiomeManager {
                     } else {
                         alreadyTargetQuarts++
                     }
+                    if (existingLockBits == null || !existingLockBits.get(bitIdx)) {
+                        pendingLockBits.add(bitIdx)
+                    }
                     chosen
                 }
 
                 chunk.fillBiomesFromNoise(resolver, sampler)
+                if (pendingLockBits.isNotEmpty()) {
+                    val bs = dimLocks.getOrPut(chunkLong) { BitSet(4096) }
+                    for (bit in pendingLockBits) bs.set(bit)
+                    newlyLockedBits[chunkLong] = pendingLockBits
+                }
                 if (backups.isNotEmpty()) {
                     chunk.setUnsaved(true)
                     modifiedChunks.add(chunk)
@@ -374,6 +409,7 @@ object ServerBiomeManager {
                         cMaxZ = cMaxZ,
                         inShapeFn = inShapeFn,
                         edgeAlphaFn = edgeAlphaFn,
+                        protectedLocks = if (cfg.overwriteExisting) null else existingLockBits,
                         blockBackups = blockBackups
                     )
                     if (chunkBlocks > 0) {
@@ -387,8 +423,11 @@ object ServerBiomeManager {
         if (modifiedChunks.isNotEmpty()) {
             level.chunkSource.chunkMap.resendBiomesForChunks(modifiedChunks)
         }
+        if (newlyLockedBits.isNotEmpty()) {
+            saveLocks(level.server)
+        }
         if (chunkBackups.isNotEmpty() || blockBackups.isNotEmpty()) {
-            pushUndo(player.uuid, UndoEntry(level, chunkBackups, blockBackups))
+            pushUndo(player.uuid, UndoEntry(level, chunkBackups, blockBackups, newlyLockedBits))
         }
         syncState(player)
 
@@ -415,6 +454,12 @@ object ServerBiomeManager {
                         changedBlocks,
                         ms
                     ),
+                    true
+                )
+            }
+            skippedProtectedQuarts > 0 && alreadyTargetQuarts == 0 -> {
+                player.displayClientMessage(
+                    Component.translatable("terrapaver.biome.msg.protected_zero", checkedChunks),
                     true
                 )
             }
@@ -458,6 +503,7 @@ object ServerBiomeManager {
         cMaxZ: Int,
         inShapeFn: (Int, Int) -> Boolean,
         edgeAlphaFn: (Int, Int) -> Double,
+        protectedLocks: BitSet?,
         blockBackups: MutableMap<Long, BlockState>
     ): Int {
         var count = 0
@@ -472,6 +518,9 @@ object ServerBiomeManager {
                 }
                 val groundY = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, bx and 15, bz and 15) - 1
                 if (groundY < level.minBuildHeight) continue
+                if (protectedLocks != null && protectedLocks.get(localQuartBit(bx shr 2, groundY shr 2, bz shr 2))) {
+                    continue
+                }
                 pos.set(bx, groundY, bz)
 
                 val curBiome = level.getBiome(pos)
@@ -570,11 +619,95 @@ object ServerBiomeManager {
             level.setBlock(pos, state, 2)
         }
 
+        if (entry.newlyLockedBits.isNotEmpty()) {
+            val dimId = level.dimension().location().toString()
+            val dimLocks = paintedQuarts[dimId]
+            if (dimLocks != null) {
+                for ((chunkLong, bits) in entry.newlyLockedBits) {
+                    val bs = dimLocks[chunkLong] ?: continue
+                    for (b in bits) bs.clear(b)
+                    if (bs.isEmpty) dimLocks.remove(chunkLong)
+                }
+                saveLocks(level.server)
+            }
+        }
+
         if (restoredChunks.isNotEmpty()) {
             level.chunkSource.chunkMap.resendBiomesForChunks(restoredChunks)
         }
         syncState(player)
         player.displayClientMessage(Component.translatable("terrapaver.biome.msg.undone", restoredChunks.size), true)
+    }
+
+    fun clearProtectedLocks(player: ServerPlayer) {
+        ensureLocksLoaded(player.server)
+        var totalChunks = 0
+        for (dimMap in paintedQuarts.values) {
+            totalChunks += dimMap.size
+            dimMap.clear()
+        }
+        paintedQuarts.clear()
+        saveLocks(player.server)
+        player.displayClientMessage(Component.translatable("terrapaver.biome.msg.locks_cleared", totalChunks), true)
+    }
+
+    private fun localQuartBit(qx: Int, qy: Int, qz: Int): Int {
+        val sy = (qy + 256).coerceIn(0, 1023)
+        return (sy shl 4) or ((qz and 3) shl 2) or (qx and 3)
+    }
+
+    private fun locksFile(server: MinecraftServer): Path =
+        server.getWorldPath(LevelResource.ROOT).resolve("data").resolve("terrapaver_biome_locks.dat")
+
+    private fun ensureLocksLoaded(server: MinecraftServer) {
+        if (locksLoaded) return
+        locksLoaded = true
+        paintedQuarts.clear()
+        val path = locksFile(server)
+        if (!Files.exists(path)) return
+        try {
+            DataInputStream(BufferedInputStream(Files.newInputStream(path))).use { din ->
+                val magic = din.readInt()
+                if (magic != 0x5450424C) return
+                val dimCount = din.readInt().coerceIn(0, 1024)
+                for (d in 0 until dimCount) {
+                    val dimId = din.readUTF()
+                    val chunkCount = din.readInt().coerceIn(0, 1_000_000)
+                    val dimMap = HashMap<Long, BitSet>(chunkCount)
+                    for (c in 0 until chunkCount) {
+                        val cLong = din.readLong()
+                        val wordCount = din.readInt().coerceIn(0, 4096)
+                        val words = LongArray(wordCount)
+                        for (w in 0 until wordCount) words[w] = din.readLong()
+                        dimMap[cLong] = BitSet.valueOf(words)
+                    }
+                    paintedQuarts[dimId] = dimMap
+                }
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun saveLocks(server: MinecraftServer) {
+        val path = locksFile(server)
+        try {
+            Files.createDirectories(path.parent)
+            DataOutputStream(BufferedOutputStream(Files.newOutputStream(path))).use { dout ->
+                dout.writeInt(0x5450424C)
+                dout.writeInt(paintedQuarts.size)
+                for ((dimId, dimMap) in paintedQuarts) {
+                    dout.writeUTF(dimId)
+                    dout.writeInt(dimMap.size)
+                    for ((cLong, bs) in dimMap) {
+                        dout.writeLong(cLong)
+                        val words = bs.toLongArray()
+                        dout.writeInt(words.size)
+                        for (w in words) dout.writeLong(w)
+                    }
+                }
+            }
+        } catch (_: Exception) {
+        }
     }
 
     fun syncState(player: ServerPlayer) {
@@ -614,6 +747,8 @@ object ServerBiomeManager {
     fun shutdown(@Suppress("UNUSED_PARAMETER") server: MinecraftServer) {
         boxCorner1.clear()
         undoStacks.clear()
+        paintedQuarts.clear()
+        locksLoaded = false
     }
 
     private fun pushUndo(uuid: UUID, entry: UndoEntry) {

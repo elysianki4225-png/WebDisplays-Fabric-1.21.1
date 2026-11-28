@@ -582,6 +582,52 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
             }
         }
 
+        // Overwrite vs Protect Already-Edited Chunks/Areas Card
+        y = drawSectionCard(g, contentX, y, cardW, 68, I18n.get("terrapaver.biome.sec.overwrite"), t) { cx, cy, cw ->
+            val clearLbl = I18n.get("terrapaver.biome.btn.clear_locks")
+            val clearW = max(78, font.width(clearLbl) + 20)
+            val segW = (cw - clearW - 8).coerceAtLeast(120)
+            val halfW = segW / 2
+            val h = 26
+
+            M3Draw.fillRoundedRect(g, cx, cy, segW, h, h / 2, t.surfaceLow)
+            M3Draw.strokeRoundedRect(g, cx, cy, segW, h, h / 2, M3Theme.withAlpha(t.outlineVariant, 160), 0.9f)
+
+            val opt0Sel = cfg.overwriteExisting
+            val opt0Hov = mouseX in cx..(cx + halfW) && mouseY in cy..(cy + h)
+            if (opt0Sel) {
+                M3Draw.fillRoundedRect(g, cx + 2, cy + 2, halfW - 3, h - 4, (h - 4) / 2, t.primaryContainer)
+            } else if (opt0Hov) {
+                M3Draw.fillRoundedRect(g, cx + 2, cy + 2, halfW - 3, h - 4, (h - 4) / 2, M3Theme.withAlpha(t.primary, 18))
+            }
+            val lbl0 = M3Draw.fitText(font, I18n.get("terrapaver.biome.overwrite.allow"), halfW - 10)
+            g.drawString(font, lbl0, cx + (halfW - font.width(lbl0)) / 2, cy + 9, if (opt0Sel) t.onPrimaryContainer else t.onSurfaceVariant, false)
+            registerClick(cx, cy, halfW, h) {
+                cfg.overwriteExisting = true
+                save()
+            }
+
+            val sx1 = cx + halfW
+            val sw1 = segW - halfW
+            val opt1Sel = !cfg.overwriteExisting
+            val opt1Hov = mouseX in sx1..(sx1 + sw1) && mouseY in cy..(cy + h)
+            if (opt1Sel) {
+                M3Draw.fillRoundedRect(g, sx1 + 1, cy + 2, sw1 - 3, h - 4, (h - 4) / 2, t.secondaryContainer)
+            } else if (opt1Hov) {
+                M3Draw.fillRoundedRect(g, sx1 + 1, cy + 2, sw1 - 3, h - 4, (h - 4) / 2, M3Theme.withAlpha(t.primary, 18))
+            }
+            val lbl1 = M3Draw.fitText(font, I18n.get("terrapaver.biome.overwrite.skip"), sw1 - 10)
+            g.drawString(font, lbl1, sx1 + (sw1 - font.width(lbl1)) / 2, cy + 9, if (opt1Sel) t.onSecondaryContainer else t.onSurfaceVariant, false)
+            registerClick(sx1, cy, sw1, h) {
+                cfg.overwriteExisting = false
+                save()
+            }
+
+            drawActionButton(g, mouseX, mouseY, cx + segW + 8, cy, clearW, h, clearLbl, ButtonStyle.OUTLINED, t) {
+                TerraPaverNet.sendToServer(TerraPaverNet.C2SBiomeControl(TerraPaverNet.BIOME_ACTION_CLEAR_LOCKS))
+            }
+        }
+
         y = drawSectionCard(g, contentX, y, cardW, 138, I18n.get("terrapaver.biome.sec.split"), t) { cx, cy, cw ->
             drawSegmentedEnum(
                 g, mouseX, mouseY, cx, cy, cw, 26,

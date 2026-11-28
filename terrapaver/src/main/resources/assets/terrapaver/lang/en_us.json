@@ -171,6 +171,10 @@
   "terrapaver.biome.cat.modded": "Modded",
 
   "terrapaver.biome.sec.shape": "Region Shape & Brush Radius (Up to 256m)",
+  "terrapaver.biome.sec.overwrite": "Existing Chunk Overwrite Mode",
+  "terrapaver.biome.overwrite.allow": "Overwrite",
+  "terrapaver.biome.overwrite.skip": "Keep Existing",
+  "terrapaver.biome.btn.clear_locks": "Unlock All",
   "terrapaver.biome.sec.split": "Biome Split & Voronoi Multi-Mix",
   "terrapaver.biome.sec.dimensions": "Target Dimension (All Vanilla + Modded)",
   "terrapaver.biome.dim_current": "Current",
@@ -214,6 +218,7 @@
 
   "terrapaver.biome.hud.standing": "Here: %s",
   "terrapaver.biome.hud.cross_dim": "Target Dim: %s",
+  "terrapaver.biome.hud.no_overwrite": "Keep Set",
   "terrapaver.biome.target": "Target Biome",
   "terrapaver.biome.filter_all": "Replacing: All Biomes in Region",
   "terrapaver.biome.tip_fast": "Right-Click with Biome Brush in hand to apply instantly!",
@@ -227,6 +232,8 @@
   "terrapaver.biome.msg.filtered_zero": "0 blocks matched Source Filter (%s) — check Dim & Y tab!",
   "terrapaver.biome.msg.y_empty": "Y range [%d..%d] missed biome layers — check Dim & Y tab!",
   "terrapaver.biome.msg.water_protected": "Area only contains protected rivers/oceans.",
+  "terrapaver.biome.msg.protected_zero": "Area already set — skipped under Keep-Existing mode (%d chunks protected).",
+  "terrapaver.biome.msg.locks_cleared": "Cleared overwrite protection across %d chunks.",
   "terrapaver.biome.msg.nothing_undo": "No biome edit to undo.",
   "terrapaver.biome.msg.undone": "Restored original biomes across %d chunks!"
 }

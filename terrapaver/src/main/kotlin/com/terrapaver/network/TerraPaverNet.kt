@@ -24,6 +24,7 @@ object TerraPaverNet {
 
     const val BIOME_ACTION_UNDO = 0
     const val BIOME_ACTION_CLEAR = 1
+    const val BIOME_ACTION_CLEAR_LOCKS = 2
 
     data class C2SStartPave(
         val waypoints: List<BlockPos>,
@@ -458,6 +459,7 @@ object TerraPaverNet {
                 when (payload.action) {
                     BIOME_ACTION_UNDO -> ServerBiomeManager.undoLast(player)
                     BIOME_ACTION_CLEAR -> ServerBiomeManager.clearSelection(player)
+                    BIOME_ACTION_CLEAR_LOCKS -> ServerBiomeManager.clearProtectedLocks(player)
                 }
             }
         }
