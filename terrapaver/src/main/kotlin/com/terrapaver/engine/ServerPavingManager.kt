@@ -8,28 +8,22 @@ import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.level.block.Block
-import net.minecraft.world.level.block.state.BlockState
 import java.util.UUID
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.roundToInt
 
 object ServerPavingManager {
-    private data class Selection(
-        var start: BlockPos? = null,
-        var end: BlockPos? = null
-    )
-
     private class ActiveJob(
         val playerId: UUID,
         val level: ServerLevel,
-        val start: BlockPos,
-        val end: BlockPos,
+        val waypoints: List<BlockPos>,
         val cfg: PavingConfig
     ) {
         val streamer = ChunkStreamer(level, cfg.enableUnloadedChunks)
-        val planner = IncrementalRoutePlanner(streamer, start, end, cfg)
+        val planner = IncrementalRoutePlanner(streamer, waypoints, cfg)
         val snapshot = UndoSnapshot()
-        val builder = BlockBuilder(level, cfg, snapshot)
+        val builder = BlockBuilder(level, cfg, snapshot, streamer)
 
         var paused = false
         var surveying = true
@@ -45,7 +39,7 @@ object ServerPavingManager {
         val snapshot: UndoSnapshot
     )
 
-    private val selections = HashMap<UUID, Selection>()
+    private val waypointLists = HashMap<UUID, ArrayList<BlockPos>>()
     private val activeJobs = HashMap<UUID, ActiveJob>()
     private val undoStacks = HashMap<UUID, ArrayDeque<UndoEntry>>()
 
@@ -56,31 +50,15 @@ object ServerPavingManager {
             return
         }
 
-        val sel = selections.getOrPut(player.uuid) { Selection() }
-        when {
-            sel.start == null -> {
-                sel.start = clickedPos.immutable()
-                sel.end = null
-                player.displayClientMessage(
-                    Component.translatable("terrapaver.msg.start_set", clickedPos.x, clickedPos.y, clickedPos.z),
-                    true
-                )
-                syncSelection(player)
-            }
-            sel.end == null -> {
-                sel.end = clickedPos.immutable()
-                player.displayClientMessage(
-                    Component.translatable("terrapaver.msg.end_set", clickedPos.x, clickedPos.y, clickedPos.z),
-                    true
-                )
-                syncSelection(player)
-                sendQuickPreview(player, sel.start!!, sel.end!!, PavingConfig.clientConfig)
-            }
-            else -> {
-                // 3rd click starts paving immediately with current config!
-                startJob(player, sel.start!!, sel.end!!, PavingConfig.clientConfig)
-            }
+        val list = waypointLists.getOrPut(player.uuid) { ArrayList() }
+        val last = list.lastOrNull()
+        // Clicking the same last waypoint again starts paving when >= 2 points exist
+        if (last != null && list.size >= 2 && last.distManhattan(clickedPos) <= 1) {
+            startJob(player, list.toList(), PavingConfig.clientConfig)
+            return
         }
+
+        addWaypoint(player, clickedPos)
     }
 
     fun handleSurveyorAirClick(player: ServerPlayer) {
@@ -89,60 +67,75 @@ object ServerPavingManager {
             togglePause(player)
             return
         }
-        val sel = selections.getOrPut(player.uuid) { Selection() }
-        if (sel.start != null && sel.end != null) {
-            startJob(player, sel.start!!, sel.end!!, PavingConfig.clientConfig)
+        val list = waypointLists[player.uuid]
+        if (list != null && list.size >= 2) {
+            startJob(player, list.toList(), PavingConfig.clientConfig)
         } else {
-            val pos = player.blockPosition().below()
-            handleSurveyorClick(player, pos)
+            addWaypoint(player, player.blockPosition().below())
+        }
+    }
+
+    fun addWaypoint(player: ServerPlayer, pos: BlockPos) {
+        val list = waypointLists.getOrPut(player.uuid) { ArrayList() }
+        val p = pos.immutable()
+        list.add(p)
+        syncSelection(player)
+        if (list.size >= 2) {
+            sendQuickPreview(player, list, PavingConfig.clientConfig)
+            player.displayClientMessage(
+                Component.translatable("terrapaver.msg.wp_added_ready", list.size, p.x, p.y, p.z),
+                true
+            )
+        } else {
+            player.displayClientMessage(
+                Component.translatable("terrapaver.msg.wp_added", list.size, p.x, p.y, p.z),
+                true
+            )
+        }
+    }
+
+    fun popWaypoint(player: ServerPlayer) {
+        val list = waypointLists[player.uuid]
+        if (list.isNullOrEmpty()) return
+        list.removeAt(list.lastIndex)
+        syncSelection(player)
+        if (list.size >= 2) {
+            sendQuickPreview(player, list, PavingConfig.clientConfig)
+        } else {
+            TerraPaverNet.sendToPlayer(
+                player,
+                TerraPaverNet.S2CRoutePreview(IntArray(0), IntArray(0), IntArray(0), ByteArray(0))
+            )
         }
     }
 
     fun setStart(player: ServerPlayer, pos: BlockPos) {
-        val sel = selections.getOrPut(player.uuid) { Selection() }
-        sel.start = pos.immutable()
+        val list = waypointLists.getOrPut(player.uuid) { ArrayList() }
+        list.clear()
+        list.add(pos.immutable())
+        syncSelection(player)
         player.displayClientMessage(
-            Component.translatable("terrapaver.msg.start_set", pos.x, pos.y, pos.z),
+            Component.translatable("terrapaver.msg.wp_added", 1, pos.x, pos.y, pos.z),
             true
         )
-        syncSelection(player)
     }
 
     fun setEndAndSync(player: ServerPlayer, pos: BlockPos) {
-        val sel = selections.getOrPut(player.uuid) { Selection() }
-        if (sel.start == null) {
-            sel.start = player.blockPosition().below().immutable()
-        }
-        sel.end = pos.immutable()
-        player.displayClientMessage(
-            Component.translatable("terrapaver.msg.end_set", pos.x, pos.y, pos.z),
-            true
-        )
-        syncSelection(player)
-        sendQuickPreview(player, sel.start!!, sel.end!!, PavingConfig.clientConfig)
+        addWaypoint(player, pos)
     }
 
     fun extendAhead(player: ServerPlayer, distance: Int) {
-        val sel = selections.getOrPut(player.uuid) { Selection() }
-        val s = sel.start ?: player.blockPosition().below().immutable().also { sel.start = it }
+        val list = waypointLists.getOrPut(player.uuid) { ArrayList() }
+        val base = list.lastOrNull() ?: player.blockPosition().below().immutable().also { list.add(it) }
         val look = player.lookAngle
-        val horizLen = kotlin.math.hypot(look.x, look.z).coerceAtLeast(1e-4)
-        val dx = look.x / horizLen
-        val dz = look.z / horizLen
-        val ex = (s.x + dx * distance).roundToInt()
-        val ez = (s.z + dz * distance).roundToInt()
-        val ey = s.y
-        sel.end = BlockPos(ex, ey, ez)
-        syncSelection(player)
-        sendQuickPreview(player, s, sel.end!!, PavingConfig.clientConfig)
-        player.displayClientMessage(
-            Component.translatable("terrapaver.msg.end_set", ex, ey, ez),
-            true
-        )
+        val horizLen = hypot(look.x, look.z).coerceAtLeast(1e-4)
+        val ex = (base.x + look.x / horizLen * distance).roundToInt()
+        val ez = (base.z + look.z / horizLen * distance).roundToInt()
+        addWaypoint(player, BlockPos(ex, base.y, ez))
     }
 
     fun clearSelection(player: ServerPlayer) {
-        selections.remove(player.uuid)
+        waypointLists.remove(player.uuid)
         syncSelection(player)
         TerraPaverNet.sendToPlayer(
             player,
@@ -150,16 +143,29 @@ object ServerPavingManager {
         )
     }
 
-    fun startJob(player: ServerPlayer, start: BlockPos, end: BlockPos, cfg: PavingConfig) {
+    fun startSelectedJob(player: ServerPlayer, cfg: PavingConfig) {
+        val list = waypointLists[player.uuid]
+        if (list == null || list.size < 2) {
+            player.displayClientMessage(Component.translatable("terrapaver.msg.need_two_points"), true)
+            return
+        }
+        startJob(player, list.toList(), cfg)
+    }
+
+    fun startJob(player: ServerPlayer, waypoints: List<BlockPos>, cfg: PavingConfig) {
+        if (waypoints.size < 2) {
+            player.displayClientMessage(Component.translatable("terrapaver.msg.need_two_points"), true)
+            return
+        }
         val sanitized = cfg.copySanitized()
         activeJobs.remove(player.uuid)?.streamer?.releaseAll()
 
-        val sel = selections.getOrPut(player.uuid) { Selection() }
-        sel.start = start.immutable()
-        sel.end = end.immutable()
+        val list = waypointLists.getOrPut(player.uuid) { ArrayList() }
+        list.clear()
+        for (wp in waypoints) list.add(wp.immutable())
 
         val level = player.serverLevel()
-        val job = ActiveJob(player.uuid, level, start.immutable(), end.immutable(), sanitized)
+        val job = ActiveJob(player.uuid, level, list.toList(), sanitized)
         activeJobs[player.uuid] = job
 
         player.displayClientMessage(Component.translatable("terrapaver.msg.started"), true)
@@ -183,6 +189,7 @@ object ServerPavingManager {
             pushUndo(player.uuid, job.level, job.snapshot)
         }
         syncSelection(player)
+        val first = job.waypoints.first()
         TerraPaverNet.sendToPlayer(
             player,
             TerraPaverNet.S2CPavingStatus(
@@ -196,9 +203,9 @@ object ServerPavingManager {
                 tunnelSegments = job.tunnelSegments,
                 viaductSegments = job.viaductSegments,
                 statusKey = "terrapaver.status.cancelled",
-                headX = job.start.x,
-                headY = job.start.y,
-                headZ = job.start.z
+                headX = first.x,
+                headY = first.y,
+                headZ = first.z
             )
         )
         player.displayClientMessage(Component.translatable("terrapaver.msg.cancelled"), true)
@@ -229,23 +236,37 @@ object ServerPavingManager {
         player.displayClientMessage(Component.translatable("terrapaver.msg.undone", restored), true)
     }
 
-    fun sendQuickPreview(player: ServerPlayer, start: BlockPos, end: BlockPos, cfg: PavingConfig) {
-        val dx = (end.x - start.x).toDouble()
-        val dz = (end.z - start.z).toDouble()
-        val dist = kotlin.math.hypot(dx, dz).coerceAtLeast(1.0)
-        val count = kotlin.math.ceil(dist / 4.0).toInt().coerceIn(2, 512)
-        val xs = IntArray(count)
-        val ys = IntArray(count)
-        val zs = IntArray(count)
-        val kinds = ByteArray(count)
-        for (i in 0 until count) {
-            val t = i.toDouble() / (count - 1).toDouble()
-            xs[i] = (start.x + dx * t).roundToInt()
-            ys[i] = (start.y + 1 + (end.y - start.y) * t).roundToInt()
-            zs[i] = (start.z + dz * t).roundToInt()
-            kinds[i] = StationType.SURFACE.code
+    fun sendQuickPreview(player: ServerPlayer, waypoints: List<BlockPos>, cfg: PavingConfig) {
+        if (waypoints.size < 2) return
+        val xsList = ArrayList<Int>()
+        val ysList = ArrayList<Int>()
+        val zsList = ArrayList<Int>()
+        val kindsList = ArrayList<Byte>()
+
+        for (w in 0 until waypoints.size - 1) {
+            val a = waypoints[w]
+            val b = waypoints[w + 1]
+            val dx = (b.x - a.x).toDouble()
+            val dz = (b.z - a.z).toDouble()
+            val dist = hypot(dx, dz).coerceAtLeast(1.0)
+            val count = kotlin.math.ceil(dist / 4.0).toInt().coerceIn(2, 160)
+            for (i in 0 until count) {
+                val t = i.toDouble() / (count - 1).toDouble()
+                xsList.add((a.x + dx * t).roundToInt())
+                ysList.add((a.y + 1 + (b.y - a.y) * t).roundToInt())
+                zsList.add((a.z + dz * t).roundToInt())
+                kindsList.add(StationType.SURFACE.code)
+            }
         }
-        TerraPaverNet.sendToPlayer(player, TerraPaverNet.S2CRoutePreview(xs, ys, zs, kinds))
+        TerraPaverNet.sendToPlayer(
+            player,
+            TerraPaverNet.S2CRoutePreview(
+                xsList.toIntArray(),
+                ysList.toIntArray(),
+                zsList.toIntArray(),
+                kindsList.toByteArray()
+            )
+        )
     }
 
     fun tick(server: MinecraftServer) {
@@ -275,7 +296,7 @@ object ServerPavingManager {
                 val startBlocks = job.builder.placedCount
                 while (job.cursor < job.stations.size && (job.builder.placedCount - startBlocks) < budget) {
                     val st = job.stations[job.cursor]
-                    job.streamer.ensureAreaLoaded(st.x.roundToInt(), st.z.roundToInt(), 20)
+                    job.streamer.ensureAreaLoaded(st.x.roundToInt(), st.z.roundToInt(), 24)
                     job.builder.buildStation(job.stations, job.cursor)
                     job.cursor++
                 }
@@ -289,6 +310,7 @@ object ServerPavingManager {
                 }
                 if (player != null) {
                     syncSelection(player)
+                    val end = job.waypoints.last()
                     TerraPaverNet.sendToPlayer(
                         player,
                         TerraPaverNet.S2CPavingStatus(
@@ -302,9 +324,9 @@ object ServerPavingManager {
                             tunnelSegments = job.tunnelSegments,
                             viaductSegments = job.viaductSegments,
                             statusKey = "terrapaver.status.done",
-                            headX = job.end.x,
-                            headY = job.end.y,
-                            headZ = job.end.z
+                            headX = end.x,
+                            headY = end.y,
+                            headZ = end.z
                         )
                     )
                     player.displayClientMessage(
@@ -342,18 +364,9 @@ object ServerPavingManager {
     }
 
     private fun syncSelection(player: ServerPlayer) {
-        val sel = selections[player.uuid]
+        val list = waypointLists[player.uuid] ?: emptyList()
         val canUndo = undoStacks[player.uuid]?.isNotEmpty() == true
-        TerraPaverNet.sendToPlayer(
-            player,
-            TerraPaverNet.S2CSyncSelection(
-                hasStart = sel?.start != null,
-                start = sel?.start ?: BlockPos.ZERO,
-                hasEnd = sel?.end != null,
-                end = sel?.end ?: BlockPos.ZERO,
-                canUndo = canUndo
-            )
-        )
+        TerraPaverNet.sendToPlayer(player, TerraPaverNet.S2CSyncSelection(list.toList(), canUndo))
     }
 
     private fun sendPlannedPreview(player: ServerPlayer, stations: List<RouteStation>) {
@@ -402,6 +415,7 @@ object ServerPavingManager {
             else -> "terrapaver.status.paving"
         }
 
+        val fallback = job.waypoints.first()
         TerraPaverNet.sendToPlayer(
             player,
             TerraPaverNet.S2CPavingStatus(
@@ -415,9 +429,9 @@ object ServerPavingManager {
                 tunnelSegments = job.tunnelSegments,
                 viaductSegments = job.viaductSegments,
                 statusKey = statusKey,
-                headX = curStation?.x?.roundToInt() ?: job.start.x,
-                headY = curStation?.roadY ?: job.start.y,
-                headZ = curStation?.z?.roundToInt() ?: job.start.z
+                headX = curStation?.x?.roundToInt() ?: fallback.x,
+                headY = curStation?.roadY ?: fallback.y,
+                headZ = curStation?.z?.roundToInt() ?: fallback.z
             )
         )
     }

@@ -14,10 +14,9 @@ import org.joml.Matrix4f
 object RoutePreviewRenderer {
     fun render(context: WorldRenderContext) {
         if (!PavingConfig.clientConfig.showRoutePreview) return
-        val hasStart = ClientPavingState.hasStart
-        val hasEnd = ClientPavingState.hasEnd
+        val wps = ClientPavingState.waypoints
         val preview = ClientPavingState.preview
-        if (!hasStart && !hasEnd && preview == null) return
+        if (wps.isEmpty() && preview == null) return
 
         val cam = context.camera().position
         val matrix = Matrix4f(context.matrixStack()?.last()?.pose() ?: return)
@@ -32,14 +31,14 @@ object RoutePreviewRenderer {
         val builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR)
         var hasVerts = false
 
-        if (hasStart) {
-            val s = ClientPavingState.startPos
-            drawMarkerPillar(builder, matrix, s.x + 0.5f, s.y + 1.0f, s.z + 0.5f, 0.18f, 3.0f, 0.10f, 0.45f, 0.91f, 0.85f)
-            hasVerts = true
-        }
-        if (hasEnd) {
-            val e = ClientPavingState.endPos
-            drawMarkerPillar(builder, matrix, e.x + 0.5f, e.y + 1.0f, e.z + 0.5f, 0.18f, 3.0f, 0.95f, 0.35f, 0.18f, 0.85f)
+        for (i in wps.indices) {
+            val wp = wps[i]
+            val (r, g, b) = when {
+                i == 0 -> Triple(0.10f, 0.45f, 0.91f) // Start: Blue
+                i == wps.lastIndex -> Triple(0.95f, 0.35f, 0.18f) // End: Coral Red
+                else -> Triple(0.98f, 0.74f, 0.05f) // Intermediate waypoints: Gold
+            }
+            drawMarkerPillar(builder, matrix, wp.x + 0.5f, wp.y + 1.0f, wp.z + 0.5f, 0.20f, 3.2f, r, g, b, 0.88f)
             hasVerts = true
         }
 
@@ -55,7 +54,7 @@ object RoutePreviewRenderer {
                     StationType.CUT.code -> Triple(0.96f, 0.65f, 0.15f)
                     else -> Triple(0.18f, 0.82f, 0.42f)
                 }
-                drawMarkerPillar(builder, matrix, px, py, pz, 0.22f, 0.45f, r, g, b, 0.75f)
+                drawMarkerPillar(builder, matrix, px, py, pz, 0.20f, 0.45f, r, g, b, 0.72f)
                 hasVerts = true
             }
         }
@@ -84,7 +83,6 @@ object RoutePreviewRenderer {
         val z1 = cz + halfW
         val y1 = y0 + height
 
-        // Front / back / left / right / top
         bb.addVertex(m, x0, y0, z1).setColor(r, g, b, a)
         bb.addVertex(m, x1, y0, z1).setColor(r, g, b, a)
         bb.addVertex(m, x1, y1, z1).setColor(r, g, b, a)

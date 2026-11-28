@@ -13,6 +13,15 @@ import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 object M3Draw {
+    fun fitText(font: Font, text: String, maxWidth: Int): String {
+        if (maxWidth <= 4) return ""
+        if (font.width(text) <= maxWidth) return text
+        val ell = "…"
+        val ellW = font.width(ell)
+        val trimmed = font.plainSubstrByWidth(text, (maxWidth - ellW).coerceAtLeast(1))
+        return trimmed + ell
+    }
+
     fun fillRoundedRect(g: GuiGraphics, x: Int, y: Int, w: Int, h: Int, radius: Int, color: Int) {
         if (w <= 0 || h <= 0) return
         val r = radius.coerceIn(0, min(w, h) / 2)
@@ -309,8 +318,31 @@ object M3Draw {
             g.fill(originX.roundToInt() - 1, (floorY - deckH).roundToInt(), originX.roundToInt() + 1, (floorY - deckH + 2).roundToInt(), 0xFFFFD54F.toInt())
         }
 
+        // Architectural street lamps on cross-section preview
+        val activeLayout = if (cfg.pavingMode == PavingMode.CREATE_RAIL) cfg.railLampLayout else cfg.roadLampLayout
+        if (activeLayout != com.terrapaver.config.LampLayout.OFF) {
+            val postH = max(8, (scale * 3.8).roundToInt())
+            val postY = (floorY - deckH - postH).roundToInt()
+            val leftPostX = (originX - halfRoadPx - 2).roundToInt()
+            val rightPostX = (originX + halfRoadPx + 1).roundToInt()
+            val poleColor = 0xFF455A64.toInt()
+            val glowColor = 0xFFFFCA28.toInt()
+
+            // Left lamp
+            g.fill(leftPostX, postY, leftPostX + 2, (floorY - deckH).roundToInt(), poleColor)
+            g.fill(leftPostX, postY, leftPostX + 6, postY + 2, poleColor)
+            g.fill(leftPostX + 4, postY + 2, leftPostX + 7, postY + 4, glowColor)
+
+            // Right lamp (dual paired or staggered)
+            if (activeLayout != com.terrapaver.config.LampLayout.SINGLE_SIDE) {
+                g.fill(rightPostX, postY, rightPostX + 2, (floorY - deckH).roundToInt(), poleColor)
+                g.fill(rightPostX - 4, postY, rightPostX + 2, postY + 2, poleColor)
+                g.fill(rightPostX - 5, postY + 2, rightPostX - 2, postY + 4, glowColor)
+            }
+        }
+
         // Bottom dimension badge
-        val dimText = "${roadW}W  |  Tunnel ${tunnelW}×${tunnelH}"
+        val dimText = fitText(font, "${roadW}W | Tunnel ${tunnelW}×${tunnelH}", w - 20)
         g.drawString(font, dimText, x + 10, y + h - 15, theme.primary, false)
     }
 }

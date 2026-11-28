@@ -1,5 +1,7 @@
 package com.terrapaver.engine
 
+import com.terrapaver.config.LampLayout
+import com.terrapaver.config.LampStyle
 import com.terrapaver.config.PavingConfig
 import com.terrapaver.config.PavingMode
 import com.terrapaver.config.RiverStrategy
@@ -10,17 +12,15 @@ import net.minecraft.core.BlockPos
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.Blocks
+import net.minecraft.world.level.block.LanternBlock
 import net.minecraft.world.level.block.SlabBlock
 import net.minecraft.world.level.block.state.BlockState
 import net.minecraft.world.level.block.state.properties.SlabType
 import kotlin.math.abs
-import kotlin.math.ceil
-import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.roundToInt
-import kotlin.math.sqrt
 
-class UndoSnapshot(val maxEntries: Int = 220_000) {
+class UndoSnapshot(val maxEntries: Int = 260_000) {
     private val map = LinkedHashMap<Long, BlockState>(4096)
 
     fun record(pos: BlockPos, oldState: BlockState) {
@@ -38,7 +38,8 @@ class UndoSnapshot(val maxEntries: Int = 220_000) {
 class BlockBuilder(
     private val level: ServerLevel,
     private val cfg: PavingConfig,
-    private val snapshot: UndoSnapshot
+    private val snapshot: UndoSnapshot,
+    private val streamer: ChunkStreamer
 ) {
     private val mPos = BlockPos.MutableBlockPos()
     var placedCount: Int = 0
@@ -52,8 +53,10 @@ class BlockBuilder(
         val subBase: BlockState,
         val curb: BlockState,
         val guardrail: BlockState,
+        val lampBase: BlockState,
         val lampPost: BlockState,
-        val lampBlock: BlockState,
+        val lampArm: BlockState,
+        val lampHead: BlockState,
         val tunnelWall: BlockState,
         val tunnelLight: BlockState,
         val viaductGirder: BlockState,
@@ -72,6 +75,31 @@ class BlockBuilder(
 
     private fun buildPalette(): Palette {
         val chosenTunnelWall = resolveTunnelWallBlock()
+        val topSlab = Blocks.SMOOTH_STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP)
+        val andesiteTopSlab = Blocks.POLISHED_ANDESITE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP)
+        val hangingLantern = Blocks.LANTERN.defaultBlockState().setValue(LanternBlock.HANGING, true)
+
+        val (lampBase, lampPost, lampArm, lampHead) = when (cfg.lampStyle) {
+            LampStyle.MODERN_CANTILEVER -> arrayOf(
+                Blocks.POLISHED_DEEPSLATE.defaultBlockState(),
+                Blocks.STONE_BRICK_WALL.defaultBlockState(),
+                topSlab,
+                hangingLantern
+            )
+            LampStyle.CLASSIC_POST -> arrayOf(
+                Blocks.CHISELED_STONE_BRICKS.defaultBlockState(),
+                Blocks.SPRUCE_FENCE.defaultBlockState(),
+                Blocks.SPRUCE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.TOP),
+                hangingLantern
+            )
+            LampStyle.INDUSTRIAL_BEACON -> arrayOf(
+                Blocks.POLISHED_ANDESITE.defaultBlockState(),
+                Blocks.ANDESITE_WALL.defaultBlockState(),
+                andesiteTopSlab,
+                Blocks.SEA_LANTERN.defaultBlockState()
+            )
+        }
+
         if (cfg.pavingMode == PavingMode.CREATE_RAIL || cfg.roadStyle == RoadStyle.CREATE_BALLAST) {
             return Palette(
                 deck = Blocks.GRAVEL.defaultBlockState(),
@@ -81,8 +109,10 @@ class BlockBuilder(
                 subBase = Blocks.COBBLED_DEEPSLATE.defaultBlockState(),
                 curb = Blocks.POLISHED_ANDESITE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM),
                 guardrail = Blocks.ANDESITE_WALL.defaultBlockState(),
-                lampPost = Blocks.ANDESITE_WALL.defaultBlockState(),
-                lampBlock = Blocks.LANTERN.defaultBlockState(),
+                lampBase = lampBase,
+                lampPost = lampPost,
+                lampArm = lampArm,
+                lampHead = lampHead,
                 tunnelWall = chosenTunnelWall,
                 tunnelLight = Blocks.SEA_LANTERN.defaultBlockState(),
                 viaductGirder = Blocks.POLISHED_DEEPSLATE.defaultBlockState(),
@@ -100,8 +130,10 @@ class BlockBuilder(
                 subBase = Blocks.COBBLESTONE.defaultBlockState(),
                 curb = Blocks.SMOOTH_STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM),
                 guardrail = Blocks.STONE_BRICK_WALL.defaultBlockState(),
-                lampPost = Blocks.STONE_BRICK_WALL.defaultBlockState(),
-                lampBlock = Blocks.LANTERN.defaultBlockState(),
+                lampBase = lampBase,
+                lampPost = lampPost,
+                lampArm = lampArm,
+                lampHead = lampHead,
                 tunnelWall = chosenTunnelWall,
                 tunnelLight = Blocks.SEA_LANTERN.defaultBlockState(),
                 viaductGirder = Blocks.POLISHED_DEEPSLATE.defaultBlockState(),
@@ -116,8 +148,10 @@ class BlockBuilder(
                 subBase = Blocks.COBBLESTONE.defaultBlockState(),
                 curb = Blocks.SMOOTH_STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM),
                 guardrail = Blocks.STONE_BRICK_WALL.defaultBlockState(),
-                lampPost = Blocks.STONE_BRICK_WALL.defaultBlockState(),
-                lampBlock = Blocks.LANTERN.defaultBlockState(),
+                lampBase = lampBase,
+                lampPost = lampPost,
+                lampArm = lampArm,
+                lampHead = lampHead,
                 tunnelWall = chosenTunnelWall,
                 tunnelLight = Blocks.SEA_LANTERN.defaultBlockState(),
                 viaductGirder = Blocks.STONE_BRICKS.defaultBlockState(),
@@ -132,8 +166,10 @@ class BlockBuilder(
                 subBase = Blocks.COBBLESTONE.defaultBlockState(),
                 curb = Blocks.COBBLESTONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM),
                 guardrail = Blocks.SPRUCE_FENCE.defaultBlockState(),
-                lampPost = Blocks.SPRUCE_FENCE.defaultBlockState(),
-                lampBlock = Blocks.LANTERN.defaultBlockState(),
+                lampBase = lampBase,
+                lampPost = lampPost,
+                lampArm = lampArm,
+                lampHead = lampHead,
                 tunnelWall = chosenTunnelWall,
                 tunnelLight = Blocks.GLOWSTONE.defaultBlockState(),
                 viaductGirder = Blocks.STONE_BRICKS.defaultBlockState(),
@@ -148,7 +184,6 @@ class BlockBuilder(
         mPos.set(x, y, z)
         val old = level.getBlockState(mPos)
         if (old == state) return
-        // Protect bedrock
         if (old.`is`(Blocks.BEDROCK)) return
         snapshot.record(mPos, old)
         val flags = Block.UPDATE_CLIENTS or Block.UPDATE_KNOWN_SHAPE
@@ -159,23 +194,17 @@ class BlockBuilder(
         placedCount++
     }
 
-    fun buildStation(
-        stations: List<RouteStation>,
-        index: Int
-    ) {
+    fun buildStation(stations: List<RouteStation>, index: Int) {
         val st = stations[index]
         val prev = stations.getOrNull(index - 1)
         val next = stations.getOrNull(index + 1)
-        val isSteppingUp = prev != null && st.roadY > prev.roadY
-        val isSteppingDown = next != null && next.roadY < st.roadY
-
         val roadHalfW = cfg.roadWidth / 2.0
         val outerHalfW = roadHalfW + if (cfg.addGuardrails && (st.type == StationType.VIADUCT || st.type == StationType.CUT)) 1.0 else 0.5
 
         when (st.type) {
             StationType.TUNNEL -> buildTunnelSlice(st, prev, next, index)
             StationType.VIADUCT -> buildViaductSlice(st, prev, next, index, outerHalfW)
-            StationType.SURFACE, StationType.CUT -> buildSurfaceSlice(st, prev, next, index, isSteppingUp, isSteppingDown)
+            StationType.SURFACE, StationType.CUT -> buildSurfaceSlice(st, prev, next, index)
         }
     }
 
@@ -183,49 +212,108 @@ class BlockBuilder(
         st: RouteStation,
         prev: RouteStation?,
         next: RouteStation?,
-        index: Int,
-        stepUp: Boolean,
-        stepDown: Boolean
+        index: Int
     ) {
         val roadHalfW = cfg.roadWidth / 2.0
         val clearHalfW = roadHalfW + if (st.type == StationType.CUT) 1.5 else 0.75
         val clearHeight = if (cfg.pavingMode == PavingMode.CREATE_RAIL) 6 else 5
+        val stepUpHere = prev != null && st.roadY > prev.roadY
+        val stepDownNext = next != null && next.roadY < st.roadY
 
         forEachOffsetPoint(st, clearHalfW, 0.5) { bx, bz, t ->
             val absT = abs(t)
             val isOnRoad = absT <= roadHalfW + 0.05
 
-            // Clear headroom above road
             for (dy in 1..clearHeight) {
                 setBlockSafe(bx, st.roadY + dy, bz, Blocks.AIR.defaultBlockState())
             }
-            // Cutback slope walls if in CUT
             if (st.type == StationType.CUT && absT > roadHalfW + 0.25) {
                 setBlockSafe(bx, st.roadY, bz, palette.subBase)
-                setBlockSafe(bx, st.roadY + 1, bz, palette.curb)
                 if (cfg.addGuardrails) {
                     setBlockSafe(bx, st.roadY + 1, bz, palette.guardrail)
                 }
             } else if (isOnRoad) {
                 val deckBlock = pickDeckBlock(absT, roadHalfW, index)
                 setBlockSafe(bx, st.roadY, bz, deckBlock)
-                // Compacted sub-base down to solid ground (max 4 deep)
+                // Smooth half-slab slope transition on road grade steps
+                if (cfg.smoothSlabs && cfg.pavingMode == PavingMode.ROAD && (stepUpHere || stepDownNext) && absT < roadHalfW - 0.3) {
+                    setBlockSafe(bx, st.roadY - 1, bz, palette.subBase)
+                }
                 for (d in 1..4) {
                     mPos.set(bx, st.roadY - d, bz)
                     val cur = level.getBlockState(mPos)
                     if (ChunkStreamer.isTerrainSolid(cur)) break
                     setBlockSafe(bx, st.roadY - d, bz, palette.subBase)
                 }
-                if (cfg.pavingMode == PavingMode.ROAD && (stepUp || stepDown) && absT < roadHalfW - 0.5) {
-                    // Optional smooth half-slab step at leading edge when climbing
-                    // Keep full block at st.roadY so continuous riding works smoothly
-                }
             }
         }
 
-        // Embankment slope taper & optional street lights (separately configurable for Road vs Create Railbed)
-        if (cfg.shouldPlaceStreetLights() && index % cfg.lightInterval == 0 && cfg.roadWidth >= 3) {
-            placeLampPost(st, roadHalfW + 1.0)
+        // Smooth natural earthwork terrain blending beyond the roadbed/cut so road integrates naturally into Earth!
+        if (cfg.terrainBlending) {
+            applyTerrainBlending(st, clearHalfW)
+        }
+
+        placeStationStreetLights(st, index, roadHalfW + 0.85, isViaduct = false)
+    }
+
+    private fun isProtectedRoadBlock(state: BlockState): Boolean {
+        return state == palette.deck ||
+            state == palette.shoulder ||
+            state == palette.centerMark ||
+            state == palette.edgeMark ||
+            state == palette.curb ||
+            state == palette.guardrail ||
+            state == palette.lampBase ||
+            state == palette.viaductGirder
+    }
+
+    private fun applyTerrainBlending(st: RouteStation, edgeHalfW: Double) {
+        val blendW = cfg.blendRadius
+
+        for (side in intArrayOf(-1, 1)) {
+            for (step in 1..blendW) {
+                val t = (edgeHalfW + step.toDouble()) * side
+                val bx = (st.x + st.px * t).roundToInt()
+                val bz = (st.z + st.pz * t).roundToInt()
+                mPos.set(bx, st.roadY, bz)
+                if (isProtectedRoadBlock(level.getBlockState(mPos))) continue
+                val col = streamer.sampleColumn(bx, bz)
+                if (col.hasLiquid) continue
+
+                val desiredTopY = when {
+                    // Embankment sloping down gently toward ground
+                    col.groundY < st.roadY - step -> st.roadY - step
+                    // Cut hillside terraced gently upward away from road
+                    col.topSolidY > st.roadY + step + 1 -> st.roadY + step + 1
+                    else -> continue
+                }
+
+                val naturalTop = col.surfaceBlock
+                val naturalSub = if (naturalTop.`is`(Blocks.GRASS_BLOCK)) Blocks.DIRT.defaultBlockState() else naturalTop
+
+                if (col.groundY < st.roadY - step) {
+                    // Fill embankment smoothly
+                    for (y in (col.groundY + 1)..desiredTopY) {
+                        mPos.set(bx, y, bz)
+                        if (isProtectedRoadBlock(level.getBlockState(mPos))) break
+                        setBlockSafe(bx, y, bz, if (y == desiredTopY) naturalTop else naturalSub)
+                    }
+                    if (col.hasSnowCover && naturalTop.`is`(Blocks.GRASS_BLOCK)) {
+                        setBlockSafe(bx, desiredTopY + 1, bz, Blocks.SNOW.defaultBlockState())
+                    }
+                } else {
+                    // Grade down steep cut face into smooth 45-deg terraced slope
+                    for (y in (desiredTopY + 1)..(col.topSolidY + 2)) {
+                        mPos.set(bx, y, bz)
+                        if (isProtectedRoadBlock(level.getBlockState(mPos))) continue
+                        setBlockSafe(bx, y, bz, Blocks.AIR.defaultBlockState())
+                    }
+                    setBlockSafe(bx, desiredTopY, bz, naturalTop)
+                    if (col.hasSnowCover && naturalTop.`is`(Blocks.GRASS_BLOCK)) {
+                        setBlockSafe(bx, desiredTopY + 1, bz, Blocks.SNOW.defaultBlockState())
+                    }
+                }
+            }
         }
     }
 
@@ -242,7 +330,6 @@ class BlockBuilder(
             val absT = abs(t)
             val isEdge = absT > roadHalfW + 0.05
 
-            // Clear deck headroom
             val clearH = if (cfg.pavingMode == PavingMode.CREATE_RAIL) 6 else 5
             for (dy in 1..clearH) {
                 if (!(isEdge && dy == 1 && cfg.addGuardrails)) {
@@ -259,7 +346,6 @@ class BlockBuilder(
             } else {
                 setBlockSafe(bx, st.roadY, bz, pickDeckBlock(absT, roadHalfW, index))
                 setBlockSafe(bx, st.roadY - 1, bz, palette.viaductGirder)
-                // Under-deck central structural spine
                 if (absT <= max(1.0, roadHalfW - 1.5)) {
                     setBlockSafe(bx, st.roadY - 2, bz, palette.viaductGirder)
                 }
@@ -274,9 +360,7 @@ class BlockBuilder(
             buildViaductPier(st, roadHalfW)
         }
 
-        if (cfg.shouldPlaceStreetLights() && index % cfg.lightInterval == 0) {
-            placeLampPost(st, outerHalfW)
-        }
+        placeStationStreetLights(st, index, outerHalfW, isViaduct = true)
     }
 
     private fun buildViaductPier(st: RouteStation, roadHalfW: Double) {
@@ -290,14 +374,12 @@ class BlockBuilder(
             val cx = (st.x + st.px * off).roundToInt()
             val cz = (st.z + st.pz * off).roundToInt()
 
-            // Flared capital directly beneath girder
             for (dx in -1..1) {
                 for (dz in -1..1) {
                     setBlockSafe(cx + dx, st.roadY - 2, cz + dz, palette.viaductGirder)
                 }
             }
 
-            // Pier shaft down to solid riverbed/ground (+ 1 block anchor)
             var bottomY = st.roadY - 3
             for (y in (st.roadY - 3) downTo level.minBuildHeight) {
                 bottomY = y
@@ -310,7 +392,6 @@ class BlockBuilder(
                     setBlockSafe(cx, y, cz + 1, palette.viaductPillar)
                 }
                 if (isSolid && y <= st.groundY) {
-                    // Footing cap
                     for (fx in -1..1) {
                         for (fz in -1..1) {
                             setBlockSafe(cx + fx, y, cz + fz, palette.viaductGirder)
@@ -319,7 +400,6 @@ class BlockBuilder(
                     break
                 }
             }
-            // Extra anchor below footing
             setBlockSafe(cx, bottomY - 1, cz, palette.viaductGirder)
         }
     }
@@ -343,7 +423,6 @@ class BlockBuilder(
         val isLightStation = cfg.addTunnelLights && (index % cfg.tunnelLightInterval == 0)
         val wallLightDy = (innerH / 2).coerceIn(2, max(2, innerH - 1))
 
-        // Sample transverse offsets + sub-steps along tangent to eliminate any diagonal shell leaks
         for (fwdStep in 0..1) {
             val sx = st.x + st.tx * (fwdStep * 0.5)
             val sz = st.z + st.tz * (fwdStep * 0.5)
@@ -363,7 +442,6 @@ class BlockBuilder(
                         )
 
                     if (dy == -1) {
-                        // Tunnel invert / foundation slab
                         if (absT <= shellHalfW) {
                             setBlockSafe(bx, wy, bz, palette.subBase)
                         }
@@ -373,11 +451,9 @@ class BlockBuilder(
                         } else if (absT <= innerHalfW + 0.05) {
                             setBlockSafe(bx, wy, bz, palette.shoulder)
                         } else if (placeWalls && absT <= shellHalfW) {
-                            // Solid wall footing at floor level
                             setBlockSafe(bx, wy, bz, palette.tunnelWall)
                         }
                     } else if (inside) {
-                        // Clear air inside bore (and recessed ceiling light strip at crown)
                         val isCeilingLight = isLightStation && dy == innerH && absT <= 0.75
                         if (isCeilingLight) {
                             setBlockSafe(bx, wy, bz, palette.tunnelLight)
@@ -404,7 +480,6 @@ class BlockBuilder(
             }
         }
 
-        // Portal warning lights at tunnel entrances/exits
         if (isPortal && cfg.addTunnelLights) {
             for (side in intArrayOf(-1, 1)) {
                 val lx = (st.x + st.px * (innerHalfW + 0.6) * side).roundToInt()
@@ -417,9 +492,7 @@ class BlockBuilder(
     private fun isInsideTunnelSection(absT: Double, dy: Int, halfW: Double, height: Int): Boolean {
         if (dy <= 0 || dy > height || absT > halfW) return false
         return when (cfg.tunnelShape) {
-            TunnelShape.RECTANGULAR -> {
-                !(dy == height && absT > halfW - 0.8)
-            }
+            TunnelShape.RECTANGULAR -> !(dy == height && absT > halfW - 0.8)
             TunnelShape.ARCH -> {
                 val wallH = max(2.0, height * 0.45)
                 if (dy <= wallH) {
@@ -442,7 +515,6 @@ class BlockBuilder(
 
     private fun pickDeckBlock(absT: Double, roadHalfW: Double, index: Int): BlockState {
         if (cfg.pavingMode == PavingMode.CREATE_RAIL || cfg.roadStyle == RoadStyle.CREATE_BALLAST) {
-            // Sleepers-spaced ballast accent while leaving top flat for player-placed Create Tracks
             return when {
                 absT <= 0.6 -> if (index % 2 == 0) palette.centerMark else palette.deck
                 absT >= roadHalfW - 0.6 -> palette.shoulder
@@ -454,24 +526,83 @@ class BlockBuilder(
             return if (absT >= roadHalfW - 0.5) palette.shoulder else palette.deck
         }
 
-        val isCenter = absT <= 0.55 && cfg.roadWidth >= 5
-        val isEdgeLine = cfg.roadWidth >= 7 && absT in (roadHalfW - 1.2)..(roadHalfW - 0.45)
+        // Smooth centerline markings (only place clean dashed line when near true center <= 0.45)
+        val isCenter = cfg.roadWidth >= 5 && absT <= 0.48
+        val isEdgeLine = cfg.roadWidth >= 7 && absT in (roadHalfW - 1.15)..(roadHalfW - 0.45)
         return when {
             isCenter && (index % 6 < 3) -> palette.centerMark
             isEdgeLine -> palette.edgeMark
-            absT >= roadHalfW - 0.4 -> palette.shoulder
+            absT >= roadHalfW - 0.42 -> palette.shoulder
             else -> palette.deck
         }
     }
 
-    private fun placeLampPost(st: RouteStation, offset: Double) {
-        val side = if (((st.x.toInt() + st.z.toInt()) and 1) == 0) 1.0 else 1.0
-        val lx = (st.x + st.px * offset * side).roundToInt()
-        val lz = (st.z + st.pz * offset * side).roundToInt()
-        setBlockSafe(lx, st.roadY + 1, lz, palette.lampPost)
-        setBlockSafe(lx, st.roadY + 2, lz, palette.lampPost)
-        setBlockSafe(lx, st.roadY + 3, lz, palette.lampPost)
-        setBlockSafe(lx, st.roadY + 4, lz, palette.lampBlock)
+    private fun placeStationStreetLights(st: RouteStation, index: Int, edgeOffset: Double, isViaduct: Boolean) {
+        val layout = cfg.activeLampLayout()
+        if (layout == LampLayout.OFF) return
+        val interval = cfg.lightInterval
+        val halfInterval = max(2, interval / 2)
+
+        when (layout) {
+            LampLayout.DUAL_PAIRED -> {
+                if (index % interval == 0) {
+                    placeArchitecturalLamp(st, edgeOffset, 1, isViaduct)
+                    placeArchitecturalLamp(st, edgeOffset, -1, isViaduct)
+                }
+            }
+            LampLayout.DUAL_STAGGERED -> {
+                if (index % interval == 0) {
+                    placeArchitecturalLamp(st, edgeOffset, 1, isViaduct)
+                } else if (index % interval == halfInterval) {
+                    placeArchitecturalLamp(st, edgeOffset, -1, isViaduct)
+                }
+            }
+            LampLayout.SINGLE_SIDE -> {
+                if (index % interval == 0) {
+                    placeArchitecturalLamp(st, edgeOffset, 1, isViaduct)
+                }
+            }
+            LampLayout.OFF -> Unit
+        }
+    }
+
+    private fun placeArchitecturalLamp(st: RouteStation, edgeOffset: Double, sideSign: Int, isViaduct: Boolean) {
+        val postOff = edgeOffset * sideSign
+        val armOff = (edgeOffset - 1.0) * sideSign
+
+        val lx = (st.x + st.px * postOff).roundToInt()
+        val lz = (st.z + st.pz * postOff).roundToInt()
+        val ax = (st.x + st.px * armOff).roundToInt()
+        val az = (st.z + st.pz * armOff).roundToInt()
+
+        // Ground foundation column beneath lamp plinth if on slope or beside viaduct
+        if (!isViaduct) {
+            for (d in 1..4) {
+                mPos.set(lx, st.roadY - d, lz)
+                if (ChunkStreamer.isTerrainSolid(level.getBlockState(mPos))) break
+                setBlockSafe(lx, st.roadY - d, lz, palette.subBase)
+            }
+            setBlockSafe(lx, st.roadY, lz, palette.lampBase)
+        } else {
+            setBlockSafe(lx, st.roadY + 1, lz, palette.lampBase)
+        }
+
+        val baseY = if (isViaduct) st.roadY + 2 else st.roadY + 1
+        setBlockSafe(lx, baseY, lz, palette.lampBase)
+        setBlockSafe(lx, baseY + 1, lz, palette.lampPost)
+        setBlockSafe(lx, baseY + 2, lz, palette.lampPost)
+        setBlockSafe(lx, baseY + 3, lz, palette.lampPost)
+
+        if (cfg.lampStyle == LampStyle.INDUSTRIAL_BEACON) {
+            setBlockSafe(lx, baseY + 4, lz, palette.lampBase)
+            setBlockSafe(ax, baseY + 4, az, palette.lampArm)
+            setBlockSafe(ax, baseY + 3, az, palette.lampHead)
+        } else {
+            // Architectural horizontal cantilever arm reaching inward over road shoulder + hanging lantern!
+            setBlockSafe(lx, baseY + 4, lz, palette.lampBase)
+            setBlockSafe(ax, baseY + 4, az, palette.lampArm)
+            setBlockSafe(ax, baseY + 3, az, palette.lampHead)
+        }
     }
 
     private inline fun forEachOffsetPoint(

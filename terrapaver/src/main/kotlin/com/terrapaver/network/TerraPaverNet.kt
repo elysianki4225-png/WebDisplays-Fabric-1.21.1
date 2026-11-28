@@ -16,12 +16,12 @@ object TerraPaverNet {
     const val ACTION_TOGGLE_PAUSE = 0
     const val ACTION_CANCEL = 1
     const val ACTION_UNDO = 2
-    const val ACTION_PREVIEW = 3
+    const val ACTION_POP_WAYPOINT = 3
     const val ACTION_CLEAR_SELECTION = 4
+    const val ACTION_START_SELECTED = 5
 
     data class C2SStartPave(
-        val start: BlockPos,
-        val end: BlockPos,
+        val waypoints: List<BlockPos>,
         val configJson: String
     ) : CustomPacketPayload {
         override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = TYPE
@@ -32,20 +32,22 @@ object TerraPaverNet {
             )
             val CODEC: StreamCodec<RegistryFriendlyByteBuf, C2SStartPave> = StreamCodec.of(
                 { buf, p ->
-                    buf.writeBlockPos(p.start)
-                    buf.writeBlockPos(p.end)
+                    buf.writeVarInt(p.waypoints.size)
+                    for (wp in p.waypoints) buf.writeBlockPos(wp)
                     buf.writeUtf(p.configJson, 32767)
                 },
                 { buf ->
-                    C2SStartPave(buf.readBlockPos(), buf.readBlockPos(), buf.readUtf(32767))
+                    val n = buf.readVarInt().coerceIn(0, 512)
+                    val list = ArrayList<BlockPos>(n)
+                    for (i in 0 until n) list.add(buf.readBlockPos())
+                    C2SStartPave(list, buf.readUtf(32767))
                 }
             )
         }
     }
 
     data class C2SPreviewRoute(
-        val start: BlockPos,
-        val end: BlockPos,
+        val waypoints: List<BlockPos>,
         val configJson: String
     ) : CustomPacketPayload {
         override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = TYPE
@@ -56,12 +58,15 @@ object TerraPaverNet {
             )
             val CODEC: StreamCodec<RegistryFriendlyByteBuf, C2SPreviewRoute> = StreamCodec.of(
                 { buf, p ->
-                    buf.writeBlockPos(p.start)
-                    buf.writeBlockPos(p.end)
+                    buf.writeVarInt(p.waypoints.size)
+                    for (wp in p.waypoints) buf.writeBlockPos(wp)
                     buf.writeUtf(p.configJson, 32767)
                 },
                 { buf ->
-                    C2SPreviewRoute(buf.readBlockPos(), buf.readBlockPos(), buf.readUtf(32767))
+                    val n = buf.readVarInt().coerceIn(0, 512)
+                    val list = ArrayList<BlockPos>(n)
+                    for (i in 0 until n) list.add(buf.readBlockPos())
+                    C2SPreviewRoute(list, buf.readUtf(32767))
                 }
             )
         }
@@ -81,16 +86,16 @@ object TerraPaverNet {
         }
     }
 
-    data class C2SSetEndPos(val end: BlockPos) : CustomPacketPayload {
+    data class C2SAddWaypoint(val pos: BlockPos) : CustomPacketPayload {
         override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = TYPE
 
         companion object {
-            val TYPE = CustomPacketPayload.Type<C2SSetEndPos>(
-                ResourceLocation.fromNamespaceAndPath("terrapaver", "set_end_pos")
+            val TYPE = CustomPacketPayload.Type<C2SAddWaypoint>(
+                ResourceLocation.fromNamespaceAndPath("terrapaver", "add_waypoint")
             )
-            val CODEC: StreamCodec<RegistryFriendlyByteBuf, C2SSetEndPos> = StreamCodec.of(
-                { buf, p -> buf.writeBlockPos(p.end) },
-                { buf -> C2SSetEndPos(buf.readBlockPos()) }
+            val CODEC: StreamCodec<RegistryFriendlyByteBuf, C2SAddWaypoint> = StreamCodec.of(
+                { buf, p -> buf.writeBlockPos(p.pos) },
+                { buf -> C2SAddWaypoint(buf.readBlockPos()) }
             )
         }
     }
@@ -159,10 +164,7 @@ object TerraPaverNet {
     }
 
     data class S2CSyncSelection(
-        val hasStart: Boolean,
-        val start: BlockPos,
-        val hasEnd: Boolean,
-        val end: BlockPos,
+        val waypoints: List<BlockPos>,
         val canUndo: Boolean
     ) : CustomPacketPayload {
         override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = TYPE
@@ -173,20 +175,15 @@ object TerraPaverNet {
             )
             val CODEC: StreamCodec<RegistryFriendlyByteBuf, S2CSyncSelection> = StreamCodec.of(
                 { buf, p ->
-                    buf.writeBoolean(p.hasStart)
-                    buf.writeBlockPos(p.start)
-                    buf.writeBoolean(p.hasEnd)
-                    buf.writeBlockPos(p.end)
+                    buf.writeVarInt(p.waypoints.size)
+                    for (wp in p.waypoints) buf.writeBlockPos(wp)
                     buf.writeBoolean(p.canUndo)
                 },
                 { buf ->
-                    S2CSyncSelection(
-                        buf.readBoolean(),
-                        buf.readBlockPos(),
-                        buf.readBoolean(),
-                        buf.readBlockPos(),
-                        buf.readBoolean()
-                    )
+                    val n = buf.readVarInt().coerceIn(0, 512)
+                    val list = ArrayList<BlockPos>(n)
+                    for (i in 0 until n) list.add(buf.readBlockPos())
+                    S2CSyncSelection(list, buf.readBoolean())
                 }
             )
         }
@@ -255,7 +252,7 @@ object TerraPaverNet {
             PayloadTypeRegistry.playC2S().register(C2SStartPave.TYPE, C2SStartPave.CODEC)
             PayloadTypeRegistry.playC2S().register(C2SPreviewRoute.TYPE, C2SPreviewRoute.CODEC)
             PayloadTypeRegistry.playC2S().register(C2SControlPave.TYPE, C2SControlPave.CODEC)
-            PayloadTypeRegistry.playC2S().register(C2SSetEndPos.TYPE, C2SSetEndPos.CODEC)
+            PayloadTypeRegistry.playC2S().register(C2SAddWaypoint.TYPE, C2SAddWaypoint.CODEC)
 
             PayloadTypeRegistry.playS2C().register(S2CPavingStatus.TYPE, S2CPavingStatus.CODEC)
             PayloadTypeRegistry.playS2C().register(S2CSyncSelection.TYPE, S2CSyncSelection.CODEC)
@@ -266,7 +263,7 @@ object TerraPaverNet {
             val player = ctx.player()
             ctx.server().execute {
                 val cfg = PavingConfig.fromJson(payload.configJson)
-                ServerPavingManager.startJob(player, payload.start, payload.end, cfg)
+                ServerPavingManager.startJob(player, payload.waypoints, cfg)
             }
         }
 
@@ -274,7 +271,7 @@ object TerraPaverNet {
             val player = ctx.player()
             ctx.server().execute {
                 val cfg = PavingConfig.fromJson(payload.configJson)
-                ServerPavingManager.sendQuickPreview(player, payload.start, payload.end, cfg)
+                ServerPavingManager.sendQuickPreview(player, payload.waypoints, cfg)
             }
         }
 
@@ -285,15 +282,16 @@ object TerraPaverNet {
                     ACTION_TOGGLE_PAUSE -> ServerPavingManager.togglePause(player)
                     ACTION_CANCEL -> ServerPavingManager.cancelJob(player)
                     ACTION_UNDO -> ServerPavingManager.undoLast(player)
+                    ACTION_POP_WAYPOINT -> ServerPavingManager.popWaypoint(player)
                     ACTION_CLEAR_SELECTION -> ServerPavingManager.clearSelection(player)
                 }
             }
         }
 
-        ServerPlayNetworking.registerGlobalReceiver(C2SSetEndPos.TYPE) { payload, ctx ->
+        ServerPlayNetworking.registerGlobalReceiver(C2SAddWaypoint.TYPE) { payload, ctx ->
             val player = ctx.player()
             ctx.server().execute {
-                ServerPavingManager.setEndAndSync(player, payload.end)
+                ServerPavingManager.addWaypoint(player, payload.pos)
             }
         }
     }

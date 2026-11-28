@@ -20,7 +20,9 @@ enum class RoadStyle(val key: String) {
 }
 
 enum class AlignmentMode(val key: String) {
+    AI_AUTO("terrapaver.align.ai_auto"),
     TERRAIN_SMART("terrapaver.align.smart"),
+    CONTOUR_SWITCHBACK("terrapaver.align.switchback"),
     DIRECT("terrapaver.align.direct")
 }
 
@@ -42,11 +44,24 @@ enum class TunnelWallStyle(val key: String) {
     WHITE_CONCRETE("terrapaver.wall.concrete")
 }
 
+enum class LampLayout(val key: String) {
+    DUAL_PAIRED("terrapaver.lamp.dual_paired"),
+    DUAL_STAGGERED("terrapaver.lamp.dual_staggered"),
+    SINGLE_SIDE("terrapaver.lamp.single"),
+    OFF("terrapaver.lamp.off")
+}
+
+enum class LampStyle(val key: String) {
+    MODERN_CANTILEVER("terrapaver.lamp_style.cantilever"),
+    CLASSIC_POST("terrapaver.lamp_style.classic"),
+    INDUSTRIAL_BEACON("terrapaver.lamp_style.industrial")
+}
+
 data class PavingConfig(
     var pavingMode: PavingMode = PavingMode.ROAD,
     var roadWidth: Int = 5,
     var roadStyle: RoadStyle = RoadStyle.ASPHALT,
-    var alignmentMode: AlignmentMode = AlignmentMode.TERRAIN_SMART,
+    var alignmentMode: AlignmentMode = AlignmentMode.AI_AUTO,
     var maxSlopeRun: Int = 4,
     var riverStrategy: RiverStrategy = RiverStrategy.AUTO_VIADUCT,
     var autoTunnelSize: Boolean = true,
@@ -61,9 +76,13 @@ data class PavingConfig(
     var viaductPillarSpacing: Int = 8,
     var addGuardrails: Boolean = true,
     var addLaneMarkings: Boolean = true,
-    var addRoadLights: Boolean = true,
-    var addRailLights: Boolean = false,
+    var roadLampLayout: LampLayout = LampLayout.DUAL_PAIRED,
+    var railLampLayout: LampLayout = LampLayout.DUAL_STAGGERED,
+    var lampStyle: LampStyle = LampStyle.MODERN_CANTILEVER,
     var lightInterval: Int = 12,
+    var terrainBlending: Boolean = true,
+    var blendRadius: Int = 3,
+    var smoothSlabs: Boolean = true,
     var blocksPerTick: Int = 128,
     var enableUnloadedChunks: Boolean = true,
     var dropExcavatedBlocks: Boolean = false,
@@ -79,13 +98,14 @@ data class PavingConfig(
         tunnelCutThreshold = tunnelCutThreshold.coerceIn(2, 12)
         viaductPillarSpacing = viaductPillarSpacing.coerceIn(4, 16)
         lightInterval = lightInterval.coerceIn(6, 24)
+        blendRadius = blendRadius.coerceIn(1, 5)
         blocksPerTick = blocksPerTick.coerceIn(24, 512)
         m3SeedTheme = m3SeedTheme.coerceIn(0, 3)
         return this
     }
 
-    fun shouldPlaceStreetLights(): Boolean =
-        if (pavingMode == PavingMode.CREATE_RAIL) addRailLights else addRoadLights
+    fun activeLampLayout(): LampLayout =
+        if (pavingMode == PavingMode.CREATE_RAIL) railLampLayout else roadLampLayout
 
     fun effectiveTunnelWidth(): Int {
         if (!autoTunnelSize) return tunnelWidth.coerceIn(5, 21)

@@ -8,12 +8,10 @@ import java.util.PriorityQueue
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.ceil
-import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
-import kotlin.math.sin
 
 enum class StationType(val code: Byte) {
     SURFACE(0),
@@ -38,30 +36,32 @@ data class RouteStation(
 
 class IncrementalRoutePlanner(
     private val streamer: ChunkStreamer,
-    private val start: BlockPos,
-    private val end: BlockPos,
+    private val waypoints: List<BlockPos>,
     private val cfg: PavingConfig
 ) {
     private data class Point2D(val x: Double, val z: Double)
 
     private enum class Stage {
-        INIT,
-        ASTAR_SAMPLING,
-        ASTAR_SOLVE,
+        INIT_LEG,
+        LEG_ASTAR_SAMPLE,
+        LEG_ASTAR_SOLVE,
         RESAMPLE,
         SURVEY_STATIONS,
         OPTIMIZE_PROFILE,
         DONE
     }
 
-    private var stage = Stage.INIT
-    private var pathNodes = ArrayList<Point2D>()
+    private var stage = Stage.INIT_LEG
+    private var legIndex = 0
+    private val allPathNodes = ArrayList<Point2D>()
     private var rawStations = ArrayList<Point2D>()
     private var samples = ArrayList<ColumnSample>()
     private var finalStations = ArrayList<RouteStation>()
     private var surveyCursor = 0
 
-    // Coarse A* grid data
+    // Per-leg coarse grid for A* / AI terrain evaluation
+    private var legStart = BlockPos.ZERO
+    private var legEnd = BlockPos.ZERO
     private var gridStep = 12
     private var minGx = 0
     private var maxGx = 0
@@ -83,9 +83,9 @@ class IncrementalRoutePlanner(
 
     fun stepBudget(budgetOps: Int) {
         when (stage) {
-            Stage.INIT -> initPlanning()
-            Stage.ASTAR_SAMPLING -> stepGridSampling(budgetOps)
-            Stage.ASTAR_SOLVE -> solveAStar()
+            Stage.INIT_LEG -> initLeg()
+            Stage.LEG_ASTAR_SAMPLE -> stepGridSampling(budgetOps)
+            Stage.LEG_ASTAR_SOLVE -> solveLegPath()
             Stage.RESAMPLE -> resampleCenterline()
             Stage.SURVEY_STATIONS -> stepSurveyStations(budgetOps)
             Stage.OPTIMIZE_PROFILE -> optimizeProfile()
@@ -93,45 +93,51 @@ class IncrementalRoutePlanner(
         }
     }
 
-    private fun initPlanning() {
-        val dx = (end.x - start.x).toDouble()
-        val dz = (end.z - start.z).toDouble()
-        val dist = hypot(dx, dz)
-
-        if (cfg.alignmentMode == AlignmentMode.DIRECT || dist < 24.0) {
-            pathNodes = arrayListOf(
-                Point2D(start.x + 0.5, start.z + 0.5),
-                Point2D(end.x + 0.5, end.z + 0.5)
-            )
+    private fun initLeg() {
+        if (waypoints.size < 2 || legIndex >= waypoints.size - 1) {
+            if (allPathNodes.isEmpty() && waypoints.isNotEmpty()) {
+                allPathNodes.add(Point2D(waypoints.first().x + 0.5, waypoints.first().z + 0.5))
+            }
             stage = Stage.RESAMPLE
-            progress = 0.25f
+            progress = 0.35f
             return
         }
 
-        // Adaptive coarse A* grid covering a generous corridor around start -> end
+        legStart = waypoints[legIndex]
+        legEnd = waypoints[legIndex + 1]
+        val dx = (legEnd.x - legStart.x).toDouble()
+        val dz = (legEnd.z - legStart.z).toDouble()
+        val dist = hypot(dx, dz)
+
+        if (cfg.alignmentMode == AlignmentMode.DIRECT || dist < 24.0) {
+            appendLegNodes(listOf(Point2D(legStart.x + 0.5, legStart.z + 0.5), Point2D(legEnd.x + 0.5, legEnd.z + 0.5)))
+            legIndex++
+            progress = 0.35f * (legIndex.toFloat() / (waypoints.size - 1).toFloat())
+            return
+        }
+
         gridStep = when {
-            dist < 250.0 -> 8
-            dist < 800.0 -> 12
+            dist < 220.0 -> 8
+            dist < 700.0 -> 12
             else -> 16
         }
         val pad = min(144, max(48, (dist * 0.25).toInt()))
-        val minX = min(start.x, end.x) - pad
-        val maxX = max(start.x, end.x) + pad
-        val minZ = min(start.z, end.z) - pad
-        val maxZ = max(start.z, end.z) + pad
+        val minX = min(legStart.x, legEnd.x) - pad
+        val maxX = max(legStart.x, legEnd.x) + pad
+        val minZ = min(legStart.z, legEnd.z) - pad
+        val maxZ = max(legStart.z, legEnd.z) + pad
 
-        minGx = floorDiv(minX, gridStep)
-        maxGx = floorDiv(maxX, gridStep)
-        minGz = floorDiv(minZ, gridStep)
-        maxGz = floorDiv(maxZ, gridStep)
+        minGx = Math.floorDiv(minX, gridStep)
+        maxGx = Math.floorDiv(maxX, gridStep)
+        minGz = Math.floorDiv(minZ, gridStep)
+        maxGz = Math.floorDiv(maxZ, gridStep)
         gridW = (maxGx - minGx + 1).coerceAtLeast(3)
         gridH = (maxGz - minGz + 1).coerceAtLeast(3)
         totalGridCells = gridW * gridH
         gridGround = IntArray(totalGridCells)
         gridWater = BooleanArray(totalGridCells)
         gridSampleCursor = 0
-        stage = Stage.ASTAR_SAMPLING
-        progress = 0.05f
+        stage = Stage.LEG_ASTAR_SAMPLE
     }
 
     private fun stepGridSampling(budgetOps: Int) {
@@ -148,17 +154,67 @@ class IncrementalRoutePlanner(
             gridSampleCursor++
             done++
         }
-        progress = 0.05f + 0.25f * (gridSampleCursor.toFloat() / totalGridCells.coerceAtLeast(1))
+        val legBase = legIndex.toFloat() / max(1, waypoints.size - 1).toFloat()
+        val legSpan = 1f / max(1, waypoints.size - 1).toFloat()
+        progress = 0.30f * (legBase + legSpan * (gridSampleCursor.toFloat() / totalGridCells.coerceAtLeast(1)))
         if (gridSampleCursor >= totalGridCells) {
-            stage = Stage.ASTAR_SOLVE
+            stage = Stage.LEG_ASTAR_SOLVE
         }
     }
 
-    private fun solveAStar() {
-        val sx = (floorDiv(start.x, gridStep) - minGx).coerceIn(0, gridW - 1)
-        val sz = (floorDiv(start.z, gridStep) - minGz).coerceIn(0, gridH - 1)
-        val ex = (floorDiv(end.x, gridStep) - minGx).coerceIn(0, gridW - 1)
-        val ez = (floorDiv(end.z, gridStep) - minGz).coerceIn(0, gridH - 1)
+    private fun solveLegPath() {
+        // AI_AUTO inspects straight-line terrain relief to decide:
+        // 1. Flat / gentle river / narrow ridge -> Straight engineering / tunnel / viaduct (no awkward squiggly snakes!)
+        // 2. Massive mountain / steep plateau -> Contour / Switchback mountain road or smart A* detour!
+        val dx = (legEnd.x - legStart.x).toDouble()
+        val dz = (legEnd.z - legStart.z).toDouble()
+        val dist = hypot(dx, dz).coerceAtLeast(1.0)
+
+        var maxRelief = 0
+        var highGain = 0
+        var waterCells = 0
+        val lineSamples = max(6, (dist / gridStep).toInt())
+        for (k in 0..lineSamples) {
+            val t = k.toDouble() / lineSamples.toDouble()
+            val wx = (legStart.x + dx * t).roundToInt()
+            val wz = (legStart.z + dz * t).roundToInt()
+            val gx = (Math.floorDiv(wx, gridStep) - minGx).coerceIn(0, gridW - 1)
+            val gz = (Math.floorDiv(wz, gridStep) - minGz).coerceIn(0, gridH - 1)
+            val idx = gz * gridW + gx
+            val gy = gridGround[idx]
+            val baseLine = legStart.y + (legEnd.y - legStart.y) * t
+            val gain = (gy - baseLine).roundToInt()
+            if (gain > highGain) highGain = gain
+            maxRelief = max(maxRelief, abs(gain))
+            if (gridWater[idx]) waterCells++
+        }
+
+        // If terrain is mostly flat/gentle or mostly river crossing, keep engineering alignment clean & straight!
+        if (cfg.alignmentMode == AlignmentMode.AI_AUTO && highGain <= 6 && maxRelief <= 8) {
+            appendLegNodes(listOf(Point2D(legStart.x + 0.5, legStart.z + 0.5), Point2D(legEnd.x + 0.5, legEnd.z + 0.5)))
+            legIndex++
+            stage = Stage.INIT_LEG
+            return
+        }
+
+        // If CONTOUR_SWITCHBACK or AI_AUTO encounters a towering wide mountain (>16 blocks high and long)
+        if ((cfg.alignmentMode == AlignmentMode.CONTOUR_SWITCHBACK || cfg.alignmentMode == AlignmentMode.AI_AUTO) &&
+            highGain >= 16 && dist >= 70.0 && waterCells < lineSamples / 3
+        ) {
+            val switchback = buildContourOrSwitchback(dx, dz, dist, highGain)
+            if (switchback != null) {
+                appendLegNodes(switchback)
+                legIndex++
+                stage = Stage.INIT_LEG
+                return
+            }
+        }
+
+        // Smart A* with direction momentum (prevents squiggly zig-zags on uniform flat/water terrain!)
+        val sx = (Math.floorDiv(legStart.x, gridStep) - minGx).coerceIn(0, gridW - 1)
+        val sz = (Math.floorDiv(legStart.z, gridStep) - minGz).coerceIn(0, gridH - 1)
+        val ex = (Math.floorDiv(legEnd.x, gridStep) - minGx).coerceIn(0, gridW - 1)
+        val ez = (Math.floorDiv(legEnd.z, gridStep) - minGz).coerceIn(0, gridH - 1)
 
         val startIdx = sz * gridW + sx
         val endIdx = ez * gridW + ex
@@ -194,6 +250,9 @@ class IncrementalRoutePlanner(
             val cx = ci % gridW
             val cz = ci / gridW
             val cg = gridGround[ci]
+            val prevIdx = cameFrom[ci]
+            val prevDx = if (prevIdx >= 0) cx - (prevIdx % gridW) else 0
+            val prevDz = if (prevIdx >= 0) cz - (prevIdx / gridW) else 0
 
             for (d in dirs) {
                 val nx = cx + d[0]
@@ -206,12 +265,18 @@ class IncrementalRoutePlanner(
                 val ng = gridGround[ni]
                 val dh = abs(ng - cg).toDouble()
                 val waterPenalty = if (gridWater[ni]) {
-                    if (cfg.riverStrategy == RiverStrategy.SHIELD_TUNNEL) stepDist * 0.65 else stepDist * 0.45
+                    if (cfg.riverStrategy == RiverStrategy.SHIELD_TUNNEL) stepDist * 0.4 else stepDist * 0.25
                 } else 0.0
                 val slopePenalty = (dh * dh) * 0.14
-                val highMountainPenalty = max(0, ng - start.y - 18) * 0.45
+                val highMountainPenalty = if (cfg.alignmentMode == AlignmentMode.CONTOUR_SWITCHBACK) {
+                    max(0, ng - legStart.y - 10) * 1.1
+                } else {
+                    max(0, ng - legStart.y - 18) * 0.45
+                }
+                // Momentum penalty keeps flat segments arrow-straight!
+                val turnPenalty = if (prevIdx >= 0 && (prevDx != d[0] || prevDz != d[1])) gridStep * 0.35 else 0.0
 
-                val tentativeG = gScore[ci] + stepDist + waterPenalty + slopePenalty + highMountainPenalty
+                val tentativeG = gScore[ci] + stepDist + waterPenalty + slopePenalty + highMountainPenalty + turnPenalty
                 if (tentativeG < gScore[ni]) {
                     cameFrom[ni] = ci
                     gScore[ni] = tentativeG
@@ -231,7 +296,7 @@ class IncrementalRoutePlanner(
                 c = cameFrom[c]
             }
             rev.reverse()
-            rawPoints.add(Point2D(start.x + 0.5, start.z + 0.5))
+            rawPoints.add(Point2D(legStart.x + 0.5, legStart.z + 0.5))
             for (k in 1 until rev.size - 1) {
                 val idx = rev[k]
                 val ix = idx % gridW
@@ -243,31 +308,93 @@ class IncrementalRoutePlanner(
                     )
                 )
             }
-            rawPoints.add(Point2D(end.x + 0.5, end.z + 0.5))
+            rawPoints.add(Point2D(legEnd.x + 0.5, legEnd.z + 0.5))
         } else {
-            rawPoints.add(Point2D(start.x + 0.5, start.z + 0.5))
-            rawPoints.add(Point2D(end.x + 0.5, end.z + 0.5))
+            rawPoints.add(Point2D(legStart.x + 0.5, legStart.z + 0.5))
+            rawPoints.add(Point2D(legEnd.x + 0.5, legEnd.z + 0.5))
         }
 
-        // Simplify & apply 2 passes of Chaikin smoothing for silky-smooth road/rail curves
         var pts: List<Point2D> = simplifyCollinear(rawPoints)
-        repeat(2) {
-            pts = chaikinSmooth(pts)
+        repeat(2) { pts = chaikinSmooth(pts) }
+        appendLegNodes(pts)
+
+        legIndex++
+        stage = Stage.INIT_LEG
+    }
+
+    private fun buildContourOrSwitchback(dx: Double, dz: Double, dist: Double, highGain: Int): List<Point2D>? {
+        // Test flanking left vs right contour arc; if side elevation is lower, route gently around the flank,
+        // otherwise weave graceful switchbacks up the mountainside!
+        val ux = dx / dist
+        val uz = dz / dist
+        val px = -uz
+        val pz = ux
+
+        val midX = legStart.x + dx * 0.5
+        val midZ = legStart.z + dz * 0.5
+        val offset = min(96.0, max(28.0, dist * 0.35))
+
+        fun sampleGridHeight(wx: Double, wz: Double): Int {
+            val gx = (Math.floorDiv(wx.roundToInt(), gridStep) - minGx).coerceIn(0, gridW - 1)
+            val gz = (Math.floorDiv(wz.roundToInt(), gridStep) - minGz).coerceIn(0, gridH - 1)
+            return gridGround[gz * gridW + gx]
         }
-        pathNodes = ArrayList(pts)
-        progress = 0.35f
-        stage = Stage.RESAMPLE
+
+        val leftH = sampleGridHeight(midX + px * offset, midZ + pz * offset)
+        val rightH = sampleGridHeight(midX - px * offset, midZ - pz * offset)
+        val centerH = sampleGridHeight(midX, midZ)
+
+        // If flanking valley avoids the mountain peak cleanly, take a sweeping mountain contour curve
+        if (min(leftH, rightH) + 8 < centerH) {
+            val side = if (leftH <= rightH) 1.0 else -1.0
+            val ctrl = listOf(
+                Point2D(legStart.x + 0.5, legStart.z + 0.5),
+                Point2D(legStart.x + dx * 0.33 + px * offset * 0.85 * side, legStart.z + dz * 0.33 + pz * offset * 0.85 * side),
+                Point2D(legStart.x + dx * 0.67 + px * offset * 0.85 * side, legStart.z + dz * 0.67 + pz * offset * 0.85 * side),
+                Point2D(legEnd.x + 0.5, legEnd.z + 0.5)
+            )
+            var pts = ctrl
+            repeat(3) { pts = chaikinSmooth(pts) }
+            return pts
+        }
+
+        // If user explicitly requested switchbacks (or slope requires extra length for gentle climbing)
+        if (cfg.alignmentMode == AlignmentMode.CONTOUR_SWITCHBACK && highGain >= 14) {
+            val amp = min(48.0, max(22.0, highGain * 1.4))
+            val ctrl = listOf(
+                Point2D(legStart.x + 0.5, legStart.z + 0.5),
+                Point2D(legStart.x + dx * 0.25 + px * amp, legStart.z + dz * 0.25 + pz * amp),
+                Point2D(legStart.x + dx * 0.50 - px * amp, legStart.z + dz * 0.50 - pz * amp),
+                Point2D(legStart.x + dx * 0.75 + px * amp, legStart.z + dz * 0.75 + pz * amp),
+                Point2D(legEnd.x + 0.5, legEnd.z + 0.5)
+            )
+            var pts = ctrl
+            repeat(3) { pts = chaikinSmooth(pts) }
+            return pts
+        }
+
+        return null
+    }
+
+    private fun appendLegNodes(pts: List<Point2D>) {
+        if (pts.isEmpty()) return
+        for (p in pts) {
+            val prev = allPathNodes.lastOrNull()
+            if (prev == null || hypot(p.x - prev.x, p.z - prev.z) > 0.4) {
+                allPathNodes.add(p)
+            }
+        }
     }
 
     private fun resampleCenterline() {
         val out = ArrayList<Point2D>()
-        out.add(pathNodes.first())
+        out.add(allPathNodes.first())
         var carry = 0.0
         val step = 1.0
 
-        for (i in 0 until pathNodes.size - 1) {
-            val a = pathNodes[i]
-            val b = pathNodes[i + 1]
+        for (i in 0 until allPathNodes.size - 1) {
+            val a = allPathNodes[i]
+            val b = allPathNodes[i + 1]
             val dx = b.x - a.x
             val dz = b.z - a.z
             val segLen = hypot(dx, dz)
@@ -282,7 +409,7 @@ class IncrementalRoutePlanner(
             }
             carry = segLen - (d - step)
         }
-        val last = pathNodes.last()
+        val last = allPathNodes.last()
         val prev = out.last()
         if (hypot(last.x - prev.x, last.z - prev.z) > 0.25) {
             out.add(last)
@@ -332,10 +459,28 @@ class IncrementalRoutePlanner(
                 else -> (s.groundY + 1).toDouble()
             }
         }
-        target[0] = (start.y + 1).toDouble()
-        target[n - 1] = (end.y + 1).toDouble()
+        target[0] = (waypoints.first().y + 1).toDouble()
+        target[n - 1] = (waypoints.last().y + 1).toDouble()
 
-        // Smooth noise with moving window while pinning endpoints
+        // Pin intermediate user waypoints gently near their chosen Y
+        val wpIndices = ArrayList<Int>()
+        wpIndices.add(0)
+        for (w in 1 until waypoints.size - 1) {
+            val wp = waypoints[w]
+            var bestIdx = 0
+            var bestDist = Double.POSITIVE_INFINITY
+            for (i in 0 until n) {
+                val d = hypot(rawStations[i].x - (wp.x + 0.5), rawStations[i].z - (wp.z + 0.5))
+                if (d < bestDist) {
+                    bestDist = d
+                    bestIdx = i
+                }
+            }
+            target[bestIdx] = (wp.y + 1).toDouble()
+            wpIndices.add(bestIdx)
+        }
+        wpIndices.add(n - 1)
+
         val smoothed = target.copyOf()
         for (pass in 0 until 2) {
             val src = smoothed.copyOf()
@@ -354,7 +499,6 @@ class IncrementalRoutePlanner(
             smoothed[n - 1] = target[n - 1]
         }
 
-        // Bidirectional slope clamping to respect maxSlopeRun (e.g., 1:4 for Create trains)
         val maxStep = 1.0 / cfg.maxSlopeRun.toDouble()
         val fwd = smoothed.copyOf()
         for (i in 1 until n) {
@@ -371,7 +515,6 @@ class IncrementalRoutePlanner(
                 else -> (fwd[i] + bwd[i]) * 0.5
             }
         }
-        // Final strict forward clamp if endpoints are very close vs height diff
         val neededTotalSlope = abs(target[n - 1] - target[0]) / max(1, n - 1).toDouble()
         val strictStep = max(maxStep, neededTotalSlope + 0.02)
         for (i in 1 until n) {
@@ -398,7 +541,7 @@ class IncrementalRoutePlanner(
             }
         }
 
-        // Merge tiny 1-2 block flickers for clean engineering continuity
+        // Merge tiny 1-2 block flickers
         for (i in 1 until n - 1) {
             if (types[i - 1] == types[i + 1] && types[i] != types[i - 1]) {
                 types[i] = types[i - 1]
@@ -451,8 +594,6 @@ class IncrementalRoutePlanner(
     }
 
     companion object {
-        private fun floorDiv(a: Int, b: Int): Int = Math.floorDiv(a, b)
-
         private fun simplifyCollinear(pts: List<Point2D>): List<Point2D> {
             if (pts.size <= 2) return pts
             val out = ArrayList<Point2D>()
@@ -482,30 +623,6 @@ class IncrementalRoutePlanner(
             }
             out.add(pts.last())
             return out
-        }
-
-        fun buildQuickPreview(
-            start: BlockPos,
-            end: BlockPos,
-            cfg: PavingConfig
-        ): Triple<IntArray, IntArray, ByteArray> {
-            val dx = (end.x - start.x).toDouble()
-            val dz = (end.z - start.z).toDouble()
-            val dist = hypot(dx, dz).coerceAtLeast(1.0)
-            val count = ceil(dist / 4.0).toInt().coerceIn(2, 512)
-            val xs = IntArray(count)
-            val ys = IntArray(count)
-            val zs = IntArray(count)
-            val kinds = ByteArray(count)
-            for (i in 0 until count) {
-                val t = i.toDouble() / (count - 1).toDouble()
-                xs[i] = (start.x + dx * t).roundToInt()
-                ys[i] = (start.y + 1 + (end.y - start.y) * t).roundToInt()
-                zs[i] = (start.z + dz * t).roundToInt()
-                kinds[i] = StationType.SURFACE.code
-            }
-            // Pack xs/zs/ys cleanly via helper in manager
-            return Triple(xs, zs, kinds)
         }
     }
 }

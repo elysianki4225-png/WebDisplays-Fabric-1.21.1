@@ -96,6 +96,19 @@ object TerraPaverMod : ModInitializer {
                                     )
                             )
                     )
+                    .then(Commands.literal("add").executes { ctx ->
+                        val player = ctx.source.playerOrException
+                        ServerPavingManager.addWaypoint(player, player.blockPosition().below())
+                        1
+                    })
+                    .then(Commands.literal("pop").executes { ctx ->
+                        ServerPavingManager.popWaypoint(ctx.source.playerOrException)
+                        1
+                    })
+                    .then(Commands.literal("start").executes { ctx ->
+                        ServerPavingManager.startSelectedJob(ctx.source.playerOrException, com.terrapaver.config.PavingConfig.clientConfig)
+                        1
+                    })
                     .then(Commands.literal("ahead")
                         .then(Commands.argument("blocks", IntegerArgumentType.integer(16, 2500)).executes { ctx ->
                             val player = ctx.source.playerOrException

@@ -2,12 +2,11 @@ package com.terrapaver.client
 
 import com.terrapaver.network.TerraPaverNet
 import net.minecraft.core.BlockPos
+import kotlin.math.hypot
+import kotlin.math.roundToInt
 
 object ClientPavingState {
-    var hasStart = false
-    var startPos: BlockPos = BlockPos.ZERO
-    var hasEnd = false
-    var endPos: BlockPos = BlockPos.ZERO
+    val waypoints = ArrayList<BlockPos>()
     var canUndo = false
 
     var status: TerraPaverNet.S2CPavingStatus? = null
@@ -15,11 +14,22 @@ object ClientPavingState {
 
     var preview: TerraPaverNet.S2CRoutePreview? = null
 
+    fun hasEnoughWaypoints(): Boolean = waypoints.size >= 2
+
+    fun totalSpanBlocks(): Int {
+        if (waypoints.size < 2) return 0
+        var sum = 0.0
+        for (i in 0 until waypoints.size - 1) {
+            val a = waypoints[i]
+            val b = waypoints[i + 1]
+            sum += hypot((b.x - a.x).toDouble(), (b.z - a.z).toDouble())
+        }
+        return sum.roundToInt()
+    }
+
     fun updateSelection(pkt: TerraPaverNet.S2CSyncSelection) {
-        hasStart = pkt.hasStart
-        startPos = pkt.start
-        hasEnd = pkt.hasEnd
-        endPos = pkt.end
+        waypoints.clear()
+        waypoints.addAll(pkt.waypoints)
         canUndo = pkt.canUndo
     }
 
