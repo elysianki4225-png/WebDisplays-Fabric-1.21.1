@@ -159,6 +159,7 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
 
         val view = p?.view
         if (view is MCEFBrowser) {
+            view.setFocus(true)
             view.setCursor(CefCursorType.fromId(p.activeCursor))
             view.setCursorChangeListener { id ->
                 p.activeCursor = id
@@ -502,7 +503,9 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
         }
         val view = p?.view
         if (view != null) {
-            (view as MCEFBrowser).sendKeyTyped(event.codepoint().toChar(), currentModifiersMask())
+            val browser = view as MCEFBrowser
+            browser.setFocus(true)
+            browser.sendKeyTyped(event.codepoint().toChar(), currentModifiersMask())
             return true
         }
         return super.charTyped(event)
@@ -523,7 +526,13 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
         if (keystr.isEmpty()) return false
 
         var key = keystr[keystr.length - 1]
-        if (keystr == "Enter") {
+        if (
+            keystr == "Enter" ||
+            keyCode == InputConstants.KEY_RETURN ||
+            keyCode == InputConstants.KEY_NUMPADENTER ||
+            keyCode == SDLScancode.SDL_SCANCODE_RETURN ||
+            keyCode == SDLScancode.SDL_SCANCODE_KP_ENTER
+        ) {
             keyCode = 10
             key = '\n'
         }
@@ -531,6 +540,7 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
         val view = pad?.view
         if (view != null) {
             val browser = view as MCEFBrowser
+            browser.setFocus(true)
             if (pressed) browser.sendKeyPress(keyCode, scanCode.toLong(), modifiers)
             else browser.sendKeyRelease(keyCode, scanCode.toLong(), modifiers)
 
@@ -623,7 +633,10 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
                 touchLastY = mouseY
                 touchDownRx = toClampedBrowserX(mouseX, p.resX)
                 touchDownRy = toClampedBrowserY(mouseY, p.resY)
-                p.view?.setFocus(true)
+                (p.view as? MCEFBrowser)?.let { browser ->
+                    browser.setFocus(true)
+                    browser.sendMouseMove(touchDownRx, touchDownRy)
+                }
                 return true
             }
         }
@@ -647,7 +660,7 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
             val browser = p.view as? MCEFBrowser
             val rx = toClampedBrowserX(mouseX, p.resX)
             val ry = toClampedBrowserY(mouseY, p.resY)
-            if (!touchSwiped && hypot(mouseX - touchStartX, mouseY - touchStartY) > 4.0) {
+            if (!touchSwiped && hypot(mouseX - touchStartX, mouseY - touchStartY) > 8.0) {
                 touchSwiped = true
                 browser?.executeJavaScript(
                     "window.__wdTouchStart && window.__wdTouchStart($touchDownRx, $touchDownRy);",
@@ -700,6 +713,11 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
                     0
                 )
             } else {
+                browser?.executeJavaScript(
+                    "window.__wdTouchTap && window.__wdTouchTap($touchDownRx, $touchDownRy);",
+                    browser.url ?: "",
+                    0
+                )
                 browser?.sendMouseMove(touchDownRx, touchDownRy)
                 browser?.sendMousePress(touchDownRx, touchDownRy, 0)
                 browser?.sendMouseRelease(touchDownRx, touchDownRy, 0)
@@ -738,19 +756,23 @@ class GuiMinePad() : WDScreen(Component.nullToEmpty(null)) {
     fun mouse(btn: Int, pressed: Boolean, sx: Int, sy: Int, scrollAmount: Double) {
         val p = pad ?: return
         val view = p.view ?: return
+        if (vw <= 0.0 || vh <= 0.0) return
 
         val mx = (sx - vx) / vw
         val my = (sy - vy) / vh
+        val isRelease = (btn != -1 && !pressed)
 
-        if (mx in 0.0..1.0 && my in 0.0..1.0) {
-            val rx = (mx * p.resX).toInt()
-            val ry = (my * p.resY).toInt()
+        if (isRelease || (mx in 0.0..1.0 && my in 0.0..1.0)) {
+            val rx = (mx.coerceIn(0.0, 1.0) * p.resX).toInt().coerceIn(0, max(0, p.resX - 1))
+            val ry = (my.coerceIn(0.0, 1.0) * p.resY).toInt().coerceIn(0, max(0, p.resY - 1))
             val browser = view as MCEFBrowser
 
             if (btn == -1) browser.sendMouseMove(rx, ry)
             else if (pressed) browser.sendMousePress(rx, ry, btn)
             else browser.sendMouseRelease(rx, ry, btn)
-            view.setFocus(true)
+            if (!isRelease || (mx in 0.0..1.0 && my in 0.0..1.0)) {
+                view.setFocus(true)
+            }
         }
     }
 

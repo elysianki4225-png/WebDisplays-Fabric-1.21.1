@@ -92,6 +92,7 @@ class GuiKeyboard() : WDScreen(Component.nullToEmpty(null)) {
             }
         } else {
             grabMouseKeepingScreen()
+            tes.getScreen(side)?.browser?.setFocus(true)
         }
 
         defaultBackground = showWarning
@@ -113,21 +114,31 @@ class GuiKeyboard() : WDScreen(Component.nullToEmpty(null)) {
         }
     }
 
+    private fun normalizeKeyCode(keyCode: Int): Int {
+        return if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) 10 else keyCode
+    }
+
     override fun keyPressed(keyCode: Int, scanCode: Int, modifiers: Int): Boolean {
         if (quitOnEscape && keyCode == GLFW.GLFW_KEY_ESCAPE) {
             closeRequested = true
         }
-        addKey(TypeData(TypeData.Action.PRESS, keyCode, modifiers, scanCode))
+        if (!showWarning) {
+            addKey(TypeData(TypeData.Action.PRESS, normalizeKeyCode(keyCode), modifiers, scanCode))
+        }
         return super.keyPressed(keyCode, scanCode, modifiers)
     }
 
     override fun charTyped(codePoint: Char, modifiers: Int): Boolean {
-        addKey(TypeData(TypeData.Action.TYPE, codePoint.code, modifiers, 0))
+        if (!showWarning) {
+            addKey(TypeData(TypeData.Action.TYPE, codePoint.code, modifiers, 0))
+        }
         return super.charTyped(codePoint, modifiers)
     }
 
     override fun keyReleased(keyCode: Int, scanCode: Int, modifiers: Int): Boolean {
-        addKey(TypeData(TypeData.Action.RELEASE, keyCode, modifiers, scanCode))
+        if (!showWarning) {
+            addKey(TypeData(TypeData.Action.RELEASE, normalizeKeyCode(keyCode), modifiers, scanCode))
+        }
         return super.keyReleased(keyCode, scanCode, modifiers)
     }
 
@@ -163,6 +174,7 @@ class GuiKeyboard() : WDScreen(Component.nullToEmpty(null)) {
             defaultBackground = false
             minecraft!!.isWindowActive = true
             grabMouseKeepingScreen()
+            tes.getScreen(side)?.browser?.setFocus(true)
         }
     }
 

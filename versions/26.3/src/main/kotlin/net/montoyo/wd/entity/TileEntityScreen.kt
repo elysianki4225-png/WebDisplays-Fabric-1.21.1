@@ -858,6 +858,7 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
             val browser = scr.browser
             if (browser is MCEFBrowser) {
                 try {
+                    browser.setFocus(true)
                     if (text.startsWith("t")) {
                         for (i in 1 until text.length) {
                             val chr = text[i]
@@ -871,7 +872,7 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
                         val data = WebDisplays.GSON.fromJson(text, Array<TypeData>::class.java)
 
                         for (ev in data) {
-                            val actualEv = if (ev.getKeyCode() == 257) {
+                            val actualEv = if (ev.getKeyCode() == 257 || ev.getKeyCode() == 335) {
                                 TypeData(ev.getAction(), 10, ev.getModifier(), ev.getScanCode())
                             } else {
                                 ev
@@ -1099,19 +1100,30 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
         val scr = getScreenForLaserOp(side, ply)
 
         if (scr != null) {
+            val currentLaserUser = getLaserUser(scr)
+            if (currentLaserUser != null && currentLaserUser !== ply) {
+                return
+            }
+
             when {
                 button == -1 -> WDNetworkRegistry.INSTANCE.send(
                     WDDistributor.NEAR.with { point(ply, lvl, blockPos) },
-                    S2CMessageScreenUpdate.click(this, side, ClickControl.ControlType.MOVE, pos)
+                    S2CMessageScreenUpdate.click(this, side, ClickControl.ControlType.MOVE, pos, -1)
                 )
-                down -> WDNetworkRegistry.INSTANCE.send(
-                    WDDistributor.NEAR.with { point(ply, lvl, blockPos) },
-                    S2CMessageScreenUpdate.click(this, side, ClickControl.ControlType.DOWN, pos)
-                )
-                else -> WDNetworkRegistry.INSTANCE.send(
-                    WDDistributor.NEAR.with { point(ply, lvl, blockPos) },
-                    S2CMessageScreenUpdate.click(this, side, ClickControl.ControlType.UP, pos)
-                )
+                down -> {
+                    scr.laserUser = ply
+                    WDNetworkRegistry.INSTANCE.send(
+                        WDDistributor.NEAR.with { point(ply, lvl, blockPos) },
+                        S2CMessageScreenUpdate.click(this, side, ClickControl.ControlType.DOWN, pos, button)
+                    )
+                }
+                else -> {
+                    scr.laserUser = null
+                    WDNetworkRegistry.INSTANCE.send(
+                        WDDistributor.NEAR.with { point(ply, lvl, blockPos) },
+                        S2CMessageScreenUpdate.click(this, side, ClickControl.ControlType.UP, pos, button)
+                    )
+                }
             }
         }
     }
@@ -1124,7 +1136,7 @@ class TileEntityScreen(arg2: BlockPos, arg3: BlockState) :
             scr.laserUser = null
             WDNetworkRegistry.INSTANCE.send(
                 WDDistributor.NEAR.with { point(ply, lvl, blockPos) },
-                S2CMessageScreenUpdate.click(this, side, ClickControl.ControlType.UP, null)
+                S2CMessageScreenUpdate.click(this, side, ClickControl.ControlType.UP, null, button)
             )
         }
     }

@@ -108,14 +108,16 @@ class S2CMessageScreenUpdate : Packet {
         }
 
         @JvmStatic
+        @JvmOverloads
         fun click(
             screen: TileEntityScreen,
             side: BlockSide?,
             mouseMove: ClickControl.ControlType,
-            pos: Vector2i?
+            pos: Vector2i?,
+            button: Int = 1
         ): S2CMessageScreenUpdate {
             val screenUpdate = S2CMessageScreenUpdate(screen.blockPos, side)
-            screenUpdate.control = ClickControl(mouseMove, pos)
+            screenUpdate.control = ClickControl(mouseMove, pos, button)
             return screenUpdate
         }
 
