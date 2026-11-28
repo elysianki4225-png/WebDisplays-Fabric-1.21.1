@@ -43,8 +43,8 @@ import net.montoyo.wd.utilities.Log
 import net.montoyo.wd.utilities.Multiblock
 import net.montoyo.wd.utilities.Util
 import net.montoyo.wd.utilities.Vector2i
+import net.montoyo.wd.utilities.Vector3f
 import net.montoyo.wd.utilities.Vector3i
-import org.joml.Vector3f
 
 class BlockScreen(properties: Properties) :
     BaseEntityBlock(properties.strength(1.5f, 10.0f).pushReaction(PushReaction.IGNORE)) {
@@ -169,7 +169,7 @@ class BlockScreen(properties: Properties) :
                         if (!player.isCreative) heldItem.shrink(1)
                         Util.toast(player, ChatFormatting.AQUA, "upgradeOk")
                         if (player is ServerPlayer) {
-                            WebDisplays.INSTANCE.criterionUpgradeScreen.trigger(player.advancements)
+                            WebDisplays.INSTANCE.criterionUpgradeScreen?.trigger(player.advancements)
                         }
                     } else {
                         Util.toast(player, "upgradeError")

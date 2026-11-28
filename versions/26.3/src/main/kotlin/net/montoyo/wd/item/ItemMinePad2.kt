@@ -83,7 +83,7 @@ open class ItemMinePad2(properties: Properties) :
 
                     val ply = entity.level().getPlayerByUUID(thrower)
                     if (ply is ServerPlayer) {
-                        WebDisplays.INSTANCE.criterionPadBreak.trigger(ply)
+                        WebDisplays.INSTANCE.criterionPadBreak?.trigger(ply)
                     }
                 }
             }

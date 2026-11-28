@@ -41,7 +41,7 @@ class BlockKeyboardLeft : BlockPeripheral {
     override fun codec(): MapCodec<BlockKeyboardLeft> = CODEC
 
     override fun createBlockStateDefinition(builder: StateDefinition.Builder<Block, BlockState>) {
-        builder.add(*properties)
+        builder.add(*Companion.properties)
     }
 
     override fun entityInside(state: BlockState, world: Level, pos: BlockPos, entity: Entity) {

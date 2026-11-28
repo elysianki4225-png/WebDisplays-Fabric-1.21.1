@@ -57,7 +57,7 @@ class ItemLinker(properties: Properties) : Item(properties.stacksTo(1)), WDItem 
                 if (target.connect(context.level, context.clickedPos, state, tePos, scrSide)) {
                     Util.toast(player, ChatFormatting.AQUA, "linked")
                     if (player is ServerPlayer) {
-                        WebDisplays.INSTANCE.criterionLinkPeripheral.trigger(player.advancements)
+                        WebDisplays.INSTANCE.criterionLinkPeripheral?.trigger(player.advancements)
                     }
                 } else {
                     Util.toast(player, "linkError")
