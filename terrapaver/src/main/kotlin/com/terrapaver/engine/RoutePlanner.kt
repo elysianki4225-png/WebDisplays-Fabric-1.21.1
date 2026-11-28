@@ -1,7 +1,9 @@
 package com.terrapaver.engine
 
 import com.terrapaver.config.AlignmentMode
+import com.terrapaver.config.ObstacleMode
 import com.terrapaver.config.PavingConfig
+import com.terrapaver.config.PavingMode
 import com.terrapaver.config.RiverStrategy
 import net.minecraft.core.BlockPos
 import java.util.PriorityQueue
@@ -31,7 +33,9 @@ data class RouteStation(
     val groundY: Int,
     val waterTopY: Int,
     val hasLiquid: Boolean,
-    val type: StationType
+    val type: StationType,
+    val isHalfSlab: Boolean = false,
+    val arcLength: Double = 0.0
 )
 
 class IncrementalRoutePlanner(
@@ -190,17 +194,18 @@ class IncrementalRoutePlanner(
         }
 
         // If terrain is mostly flat/gentle or mostly river crossing, keep engineering alignment clean & straight!
-        if (cfg.alignmentMode == AlignmentMode.AI_AUTO && highGain <= 6 && maxRelief <= 8) {
+        if (cfg.alignmentMode == AlignmentMode.AI_AUTO && highGain <= 7 && maxRelief <= 9) {
             appendLegNodes(listOf(Point2D(legStart.x + 0.5, legStart.z + 0.5), Point2D(legEnd.x + 0.5, legEnd.z + 0.5)))
             legIndex++
             stage = Stage.INIT_LEG
             return
         }
 
-        // If CONTOUR_SWITCHBACK or AI_AUTO encounters a towering wide mountain (>16 blocks high and long)
-        if ((cfg.alignmentMode == AlignmentMode.CONTOUR_SWITCHBACK || cfg.alignmentMode == AlignmentMode.AI_AUTO) &&
-            highGain >= 16 && dist >= 70.0 && waterCells < lineSamples / 3
-        ) {
+        // If CONTOUR_SWITCHBACK, SURFACE_ONLY on a mountain, or AI_AUTO encounters a towering wide mountain
+        val wantBypass = cfg.alignmentMode == AlignmentMode.CONTOUR_SWITCHBACK ||
+            cfg.alignmentMode == AlignmentMode.AI_AUTO ||
+            cfg.obstacleMode == ObstacleMode.SURFACE_ONLY
+        if (wantBypass && highGain >= 14 && dist >= 60.0 && waterCells < lineSamples / 3) {
             val switchback = buildContourOrSwitchback(dx, dz, dist, highGain)
             if (switchback != null) {
                 appendLegNodes(switchback)
@@ -358,9 +363,11 @@ class IncrementalRoutePlanner(
             return pts
         }
 
-        // If user explicitly requested switchbacks (or slope requires extra length for gentle climbing)
-        if (cfg.alignmentMode == AlignmentMode.CONTOUR_SWITCHBACK && highGain >= 14) {
-            val amp = min(48.0, max(22.0, highGain * 1.4))
+        // If user chose switchbacks OR SURFACE_ONLY on a tall mountain with no easy valley flank, weave graceful climbs
+        if ((cfg.alignmentMode == AlignmentMode.CONTOUR_SWITCHBACK || cfg.obstacleMode == ObstacleMode.SURFACE_ONLY) &&
+            highGain >= 14
+        ) {
+            val amp = min(52.0, max(24.0, highGain * 1.45))
             val ctrl = listOf(
                 Point2D(legStart.x + 0.5, legStart.z + 0.5),
                 Point2D(legStart.x + dx * 0.25 + px * amp, legStart.z + dz * 0.25 + pz * amp),
@@ -521,23 +528,71 @@ class IncrementalRoutePlanner(
             grade[i] = grade[i].coerceIn(grade[i - 1] - strictStep, grade[i - 1] + strictStep)
         }
 
+        // In SURFACE_ONLY (No Tunnels) mode, prevent deep trenching into tall mountains by hugging surface smoothly
+        if (cfg.obstacleMode == ObstacleMode.SURFACE_ONLY) {
+            for (i in 1 until n - 1) {
+                val s = samples[i]
+                if (!s.hasLiquid && s.groundY - grade[i] > 3.0) {
+                    grade[i] = (s.groundY - 1.0)
+                }
+            }
+            for (pass in 0 until 2) {
+                val src = grade.copyOf()
+                for (i in 1 until n - 1) {
+                    grade[i] = (src[i - 1] + src[i] * 2.0 + src[i + 1]) * 0.25
+                }
+            }
+            for (i in 1 until n) {
+                grade[i] = grade[i].coerceIn(grade[i - 1] - 1.0, grade[i - 1] + 1.0)
+            }
+        }
+
+        // Compute 5-station median ground envelope so tiny dirt bumps never falsely trigger tunnels
+        val terrainEnv = IntArray(n) { i ->
+            val win = IntArray(5)
+            for (k in -2..2) {
+                win[k + 2] = samples[(i + k).coerceIn(0, n - 1)].topSolidY
+            }
+            win.sort()
+            win[2]
+        }
+
         val types = Array(n) { StationType.SURFACE }
         for (i in 0 until n) {
             val s = samples[i]
             val ry = grade[i].roundToInt()
             val clearance = ry - s.groundY
-            val overburden = s.topSolidY - (ry + tunnelH)
+            val overburden = terrainEnv[i] - (ry + tunnelH)
+            val allowMountainTunnel = cfg.obstacleMode != ObstacleMode.SURFACE_ONLY
             types[i] = when {
                 s.hasLiquid && cfg.riverStrategy == RiverStrategy.SHIELD_TUNNEL && ry <= s.waterTopY + 1 ->
                     StationType.TUNNEL
                 clearance >= 2 ->
                     StationType.VIADUCT
-                overburden >= cfg.tunnelCutThreshold ->
+                allowMountainTunnel && overburden >= cfg.tunnelCutThreshold ->
                     StationType.TUNNEL
                 s.topSolidY > ry ->
                     StationType.CUT
                 else ->
                     StationType.SURFACE
+            }
+        }
+
+        // Reject short fake tunnels (small dirt mounds/ridges) unless underwater shield tunnel
+        val minTunnelLen = if (cfg.obstacleMode == ObstacleMode.AI_AUTO) 8 else 4
+        var runStart = -1
+        for (i in 0..n) {
+            val isMountainTunnel = i < n && types[i] == StationType.TUNNEL && !samples[i].hasLiquid
+            if (isMountainTunnel) {
+                if (runStart < 0) runStart = i
+            } else if (runStart >= 0) {
+                if (i - runStart < minTunnelLen) {
+                    for (j in runStart until i) {
+                        val ry = grade[j].roundToInt()
+                        types[j] = if (samples[j].topSolidY > ry) StationType.CUT else StationType.SURFACE
+                    }
+                }
+                runStart = -1
             }
         }
 
@@ -555,8 +610,12 @@ class IncrementalRoutePlanner(
         }
 
         finalStations = ArrayList(n)
+        var accArc = 0.0
         for (i in 0 until n) {
             val cur = rawStations[i]
+            if (i > 0) {
+                accArc += hypot(cur.x - rawStations[i - 1].x, cur.z - rawStations[i - 1].z)
+            }
             val prev = rawStations[(i - 1).coerceAtLeast(0)]
             val next = rawStations[(i + 1).coerceAtMost(n - 1)]
             var dx = next.x - prev.x
@@ -572,6 +631,22 @@ class IncrementalRoutePlanner(
             val px = -dz
             val pz = dx
             val s = samples[i]
+
+            var roadY = grade[i].roundToInt()
+            var isHalfSlab = false
+            if (cfg.smoothSlabs && cfg.pavingMode == PavingMode.ROAD &&
+                (types[i] == StationType.SURFACE || types[i] == StationType.CUT)
+            ) {
+                val halfStep = (grade[i] * 2.0).roundToInt()
+                if (halfStep % 2 != 0) {
+                    roadY = (halfStep + 1) / 2
+                    isHalfSlab = true
+                } else {
+                    roadY = halfStep / 2
+                    isHalfSlab = false
+                }
+            }
+
             finalStations.add(
                 RouteStation(
                     x = cur.x,
@@ -580,11 +655,13 @@ class IncrementalRoutePlanner(
                     tz = dz,
                     px = px,
                     pz = pz,
-                    roadY = grade[i].roundToInt(),
+                    roadY = roadY,
                     groundY = s.groundY,
                     waterTopY = s.waterTopY,
                     hasLiquid = s.hasLiquid,
-                    type = types[i]
+                    type = types[i],
+                    isHalfSlab = isHalfSlab,
+                    arcLength = accArc
                 )
             )
         }

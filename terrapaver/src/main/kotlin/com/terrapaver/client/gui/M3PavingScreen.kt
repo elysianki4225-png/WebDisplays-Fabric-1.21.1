@@ -4,6 +4,7 @@ import com.terrapaver.client.ClientPavingState
 import com.terrapaver.config.AlignmentMode
 import com.terrapaver.config.LampLayout
 import com.terrapaver.config.LampStyle
+import com.terrapaver.config.ObstacleMode
 import com.terrapaver.config.PavingConfig
 import com.terrapaver.config.PavingMode
 import com.terrapaver.config.RiverStrategy
@@ -419,8 +420,8 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
         val sy = rightY + rightH - 58
         g.drawString(font, M3Draw.fitText(font, "${I18n.get("terrapaver.cfg.mode")}: ${I18n.get(cfg.pavingMode.key)}", rightW - 24), rightX + 12, sy, t.onSurface, false)
         g.drawString(font, M3Draw.fitText(font, "${I18n.get("terrapaver.cfg.align")}: ${I18n.get(cfg.alignmentMode.key)}", rightW - 24), rightX + 12, sy + 14, t.onSurfaceVariant, false)
-        g.drawString(font, M3Draw.fitText(font, "${I18n.get("terrapaver.cfg.river")}: ${I18n.get(cfg.riverStrategy.key)}", rightW - 24), rightX + 12, sy + 28, t.onSurfaceVariant, false)
-        g.drawString(font, M3Draw.fitText(font, "Grade 1:${cfg.maxSlopeRun} · Blend ${if (cfg.terrainBlending) "${cfg.blendRadius}m" else "Off"}", rightW - 24), rightX + 12, sy + 42, t.primary, false)
+        g.drawString(font, M3Draw.fitText(font, "${I18n.get("terrapaver.cfg.obstacle")}: ${I18n.get(cfg.obstacleMode.key)}", rightW - 24), rightX + 12, sy + 28, t.onSurfaceVariant, false)
+        g.drawString(font, M3Draw.fitText(font, "Grade 1:${cfg.maxSlopeRun} · Smooth ${if (cfg.terrainBlending) "${cfg.blendRadius}m" else "Off"}", rightW - 24), rightX + 12, sy + 42, t.primary, false)
 
         return max(leftBottom, rightY + rightH) - y
     }
@@ -551,10 +552,24 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
         g: GuiGraphics, mouseX: Int, mouseY: Int,
         x: Int, y: Int, w: Int, t: M3Palette
     ): Int {
-        val cardH = 368
+        val cardH = 352
         M3Draw.drawCard(g, x, y, w, cardH, t, elevated = true)
         var cy = y + 10
         val halfW = (w - 36) / 2
+
+        g.drawString(font, I18n.get("terrapaver.cfg.obstacle"), x + 14, cy, t.onSurface, false)
+        cy += 12
+        val obsModes = ObstacleMode.entries
+        drawSegmentedRow(
+            g, mouseX, mouseY, x + 14, cy, w - 28, 22,
+            obsModes.map { I18n.get(it.key) },
+            obsModes.indexOf(cfg.obstacleMode),
+            t
+        ) { idx ->
+            cfg.obstacleMode = obsModes[idx]
+            save()
+        }
+        cy += 30
 
         drawSwitchTile(
             g, mouseX, mouseY, x + 14, cy, w - 28,
@@ -672,7 +687,7 @@ class M3PavingScreen : Screen(Component.translatable("terrapaver.gui.title")) {
         drawSliderRow(
             g, mouseX, mouseY, x + 22 + halfW, cy + 1, halfW,
             I18n.get("terrapaver.cfg.blend_radius"),
-            2, 8, { cfg.blendRadius }, "${cfg.blendRadius}m", t
+            2, 10, { cfg.blendRadius }, "${cfg.blendRadius}m", t
         ) { v -> cfg.blendRadius = v; save() }
 
         return cardH

@@ -2,6 +2,7 @@ package com.terrapaver.engine
 
 import net.minecraft.core.BlockPos
 import net.minecraft.server.level.ServerLevel
+import net.minecraft.tags.BlockTags
 import net.minecraft.tags.FluidTags
 import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.level.block.state.BlockState
@@ -83,19 +84,17 @@ class ChunkStreamer(private val level: ServerLevel, private val allowUnloaded: B
     fun sampleColumn(x: Int, z: Int): ColumnSample {
         ensureLoaded(x, z)
         val topH = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z)
-        val oceanFloor = level.getHeight(Heightmap.Types.OCEAN_FLOOR, x, z)
         val minY = level.minBuildHeight
 
         var waterTopY = minY
         var hasLiquid = false
         var hasSnowCover = false
-        var groundY = (oceanFloor - 1).coerceAtLeast(minY)
+        var groundY = minY
         var surfaceBlock: BlockState = Blocks.GRASS_BLOCK.defaultBlockState()
 
         val scanStart = (topH + 2).coerceAtMost(level.maxBuildHeight - 1)
-        val scanEnd = (minOf(groundY, topH) - 8).coerceAtLeast(minY)
 
-        for (y in scanStart downTo scanEnd) {
+        for (y in scanStart downTo minY) {
             mutablePos.set(x, y, z)
             val state = level.getBlockState(mutablePos)
             if (state.`is`(Blocks.SNOW)) {
@@ -115,23 +114,14 @@ class ChunkStreamer(private val level: ServerLevel, private val allowUnloaded: B
         }
 
         if (groundY <= minY) {
-            for (y in scanStart downTo minY) {
-                mutablePos.set(x, y, z)
-                val state = level.getBlockState(mutablePos)
-                if (isTerrainSolid(state) && !isFrozenWaterSurface(state, x, y, z)) {
-                    groundY = y
-                    surfaceBlock = normalizeNaturalSurface(state)
-                    break
-                }
-            }
+            groundY = (level.getHeight(Heightmap.Types.OCEAN_FLOOR, x, z) - 1).coerceAtLeast(minY)
         }
 
-        val topSolidY = maxOf(groundY, topH - 1)
         return ColumnSample(
             groundY = groundY,
             waterTopY = waterTopY,
             hasLiquid = hasLiquid && waterTopY >= groundY,
-            topSolidY = topSolidY,
+            topSolidY = groundY,
             surfaceBlock = surfaceBlock,
             hasSnowCover = hasSnowCover
         )
@@ -168,9 +158,24 @@ class ChunkStreamer(private val level: ServerLevel, private val allowUnloaded: B
     }
 
     companion object {
+        fun isTreeOrFoliage(state: BlockState): Boolean {
+            if (state.`is`(BlockTags.LOGS) || state.`is`(BlockTags.LEAVES)) return true
+            if (state.`is`(BlockTags.FLOWERS) || state.`is`(BlockTags.SAPLINGS)) return true
+            val b = state.block
+            return b == Blocks.MUSHROOM_STEM ||
+                b == Blocks.RED_MUSHROOM_BLOCK ||
+                b == Blocks.BROWN_MUSHROOM_BLOCK ||
+                b == Blocks.CACTUS ||
+                b == Blocks.BAMBOO ||
+                b == Blocks.SUGAR_CANE ||
+                b == Blocks.VINE ||
+                b == Blocks.MOSS_CARPET
+        }
+
         fun isTerrainSolid(state: BlockState): Boolean {
             if (state.isAir || !state.fluidState.isEmpty) return false
-            if (state.`is`(Blocks.SNOW)) return false
+            if (state.`is`(Blocks.SNOW) || isTreeOrFoliage(state)) return false
+            if (state.`is`(BlockTags.FENCES) || state.`is`(BlockTags.WALLS) || state.`is`(BlockTags.PLANKS)) return false
             if (state.isSolidRender(EmptyGetter, BlockPos.ZERO)) return true
             val b = state.block
             if (b == Blocks.GRASS_BLOCK || b == Blocks.DIRT || b == Blocks.SAND || b == Blocks.RED_SAND ||
