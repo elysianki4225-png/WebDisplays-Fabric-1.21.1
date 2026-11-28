@@ -243,7 +243,7 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
 
         val closeY = winY + (barH - 22) / 2
         val hoverClose = mouseX in closeX..(closeX + 22) && mouseY in closeY..(closeY + 22)
-        M3Draw.fillRoundedRect(g, closeX, closeY, 22, 22, 11, if (hoverClose) t.surfaceHighest else t.surfaceHigh)
+        M3Draw.fillRoundedRect(g, closeX, closeY, 22, 22, 11, if (hoverClose) t.surfaceHigh else t.surfaceContainer)
         g.drawString(font, "X", closeX + 8, closeY + 7, t.onSurfaceVariant, false)
         registerClick(closeX, closeY, 22, 22) { onClose() }
     }
@@ -698,7 +698,7 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
         val sh = 20
         val sx = x + w - sw
         val sy = y + 2
-        M3Draw.fillRoundedRect(g, sx, sy, sw, sh, 10, if (checked) t.primary else t.surfaceHighest)
+        M3Draw.fillRoundedRect(g, sx, sy, sw, sh, 10, if (checked) t.primary else t.surfaceHigh)
         M3Draw.strokeRoundedRect(g, sx, sy, sw, sh, 10, if (checked) t.primary else t.outline)
         val thumbR = if (checked) 7 else 5
         val thumbX = if (checked) sx + sw - 10 else sx + 10
@@ -732,7 +732,7 @@ class M3BiomeScreen : Screen(Component.translatable("terrapaver.biome.gui.title"
         val ratio = ((current() - minVal).toFloat() / max(1, maxVal - minVal).toFloat()).coerceIn(0f, 1f)
         val activeW = (w * ratio).roundToInt()
 
-        M3Draw.fillRoundedRect(g, x, trackY, w, trackH, 3, t.surfaceHighest)
+        M3Draw.fillRoundedRect(g, x, trackY, w, trackH, 3, t.surfaceHigh)
         if (activeW > 0) {
             M3Draw.fillRoundedRect(g, x, trackY, activeW, trackH, 3, t.primary)
         }
