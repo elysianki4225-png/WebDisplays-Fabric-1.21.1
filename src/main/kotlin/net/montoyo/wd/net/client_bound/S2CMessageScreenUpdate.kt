@@ -56,7 +56,7 @@ class S2CMessageScreenUpdate : Packet {
         BufferUtils.writeEnum(buf, side, 1.toByte())
 
         val ctrl = control!!
-        buf.writeUtf(ctrl.id.toString())
+        buf.writeUtf(ctrl.getId().toString())
         ctrl.write(buf)
     }
 

@@ -79,7 +79,7 @@ class C2SMessageScreenCtrl : Packet {
         BufferUtils.writeEnum(buf, side, 1.toByte())
 
         val ctrl = control!!
-        buf.writeUtf(ctrl.id.toString())
+        buf.writeUtf(ctrl.getId().toString())
         ctrl.write(buf)
     }
 
@@ -175,7 +175,7 @@ class C2SMessageScreenCtrl : Packet {
             tes: TileEntityScreen,
             side: BlockSide?,
             text: String,
-            soundPos: BlockPos?
+            soundPos: BlockPos
         ): C2SMessageScreenCtrl {
             val ret = base(tes, side)
             ret.control = KeyTypedControl(text, soundPos)
@@ -211,6 +211,7 @@ class C2SMessageScreenCtrl : Packet {
 
         @Deprecated("Legacy control", level = DeprecationLevel.WARNING)
         @JvmStatic
+        @Suppress("UNCHECKED_CAST")
         fun jsRequest(
             tes: TileEntityScreen,
             side: BlockSide?,
@@ -219,7 +220,7 @@ class C2SMessageScreenCtrl : Packet {
             vararg data: Any?
         ): C2SMessageScreenCtrl {
             val ret = base(tes, side)
-            ret.control = JSRequestControl(reqId, reqType, *data)
+            ret.control = JSRequestControl(reqId, reqType, data as Array<Any>)
             return ret
         }
 
