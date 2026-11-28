@@ -131,10 +131,11 @@ object Util {
     }
 
     @JvmStatic
+    @Suppress("UNCHECKED_CAST")
     fun toast(player: Player, color: ChatFormatting, key: String, vararg data: Any?) {
         val root = Component.translatable("[WebDisplays] ")
             .setStyle(Style.EMPTY.withColor(color))
-            .append(Component.translatable("webdisplays.message.$key", *data))
+            .append(Component.translatable("webdisplays.message.$key", *(data as Array<out Any>)))
         player.sendSystemMessage(root)
     }
 

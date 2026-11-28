@@ -34,6 +34,7 @@ class DeferredRegister<T : Any> private constructor(
         return RegistryObject(Registry.register(registry(), ResourceLocation.fromNamespaceAndPath(namespace, name), value))
     }
 
+    @JvmSynthetic
     inline fun <U : T> register(name: String, crossinline factory: () -> U): RegistryObject<U> =
         register(name, Supplier { factory() })
 
